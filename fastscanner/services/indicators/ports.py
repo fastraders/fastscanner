@@ -5,7 +5,9 @@ from fastscanner.pkg.types import CandlesDataFrame
 
 
 class CandleStore(Protocol):
-    def get(self, symbol: str, start: date, end: date) -> CandlesDataFrame: ...
+    def get(
+        self, symbol: str, start: date, end: date, freq: str
+    ) -> CandlesDataFrame: ...
 
 
 class FundamentalDataStore(Protocol):
