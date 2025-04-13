@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "fastscanner"
+version = "0.1.0"
+description = ""
+authors = ["Daniel Fonnegra <dfonnegrag@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.3"
+numpy = "^2.2.4"
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^9.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
