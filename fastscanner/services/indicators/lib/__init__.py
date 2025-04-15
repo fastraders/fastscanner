@@ -1,11 +1,11 @@
 from datetime import date, datetime
 from typing import Any, Protocol
 
-from fastscanner.pkg.types import TimeSeries
+import pandas as pd
 
 
 class Indicator:
-    def calculate(self, start: datetime, end: datetime | None) -> TimeSeries: ...
+    def calculate(self, start: datetime, end: datetime | None) -> pd.Series: ...
 
 
 class IndicatorsLibrary:

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from fastscanner.pkg.types import TimeSeries
+import pandas as pd
 
 from .ports import CandleStore, FundamentalDataStore
 from .registry import ApplicationRegistry
@@ -17,8 +17,8 @@ class IndicatorsCalculator:
 
     def calculate(
         self, type_: str, start: datetime, end: datetime, params: dict[str, Any]
-    ) -> TimeSeries: ...
+    ) -> pd.Series: ...
 
     def calculate_after(
         self, type_: str, start: datetime, params: dict[str, Any]
-    ) -> TimeSeries: ...
+    ) -> pd.Series: ...

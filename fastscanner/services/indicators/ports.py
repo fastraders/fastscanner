@@ -1,13 +1,11 @@
 from datetime import date
 from typing import Protocol
 
-from fastscanner.pkg.types import CandlesDataFrame
+import pandas as pd
 
 
 class CandleStore(Protocol):
-    def get(
-        self, symbol: str, start: date, end: date, freq: str
-    ) -> CandlesDataFrame: ...
+    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame: ...
 
 
 class FundamentalDataStore(Protocol):
