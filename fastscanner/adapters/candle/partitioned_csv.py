@@ -4,70 +4,27 @@ import logging
 import os
 import re
 import zoneinfo
-from abc import ABC, abstractmethod
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
-from urllib.parse import urljoin
 
 import httpx
 import pandas as pd
 import pytz
 
-from fastscanner.pkg.http import MaxRetryError, retry_request
+from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 
 from . import config
+from .polygon import CandleCol, PolygonBarsProvider, split_freq
 
 logger = logging.getLogger(__name__)
 
 
-class BarCol:
-    DATETIME = "datetime"
-    OPEN = "open"
-    HIGH = "high"
-    LOW = "low"
-    CLOSE = "close"
-    VOLUME = "volume"
-
-    RESAMPLE_MAP = {
-        OPEN: "first",
-        HIGH: "max",
-        LOW: "min",
-        CLOSE: "last",
-        VOLUME: "sum",
-    }
-
-
-class BarsProvider(ABC):
-    INDEX = BarCol.DATETIME
-    COLUMNS = [BarCol.OPEN, BarCol.HIGH, BarCol.LOW, BarCol.CLOSE, BarCol.VOLUME]
-
-    def __init__(self, tz: str = "US/Eastern") -> None:
-        self.tz = tz
-
-    @abstractmethod
-    def _get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        pass
-
-    def _check(self, df: pd.DataFrame) -> None:
-        if set(df.columns) != set(self.COLUMNS):
-            raise ValueError(f"Columns mismatch: {df.columns} != {self.COLUMNS}")
+class PartitionedCSVBarsProvider(PolygonBarsProvider):
+    CACHE_DIR = os.path.join("data", "candles")
+    tz: str = LOCAL_TIMEZONE_STR
 
     def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        if type(start) != type(end):
-            raise ValueError("start and end must be of the same type")
-        df = self._get(symbol, start, end, freq)
-        self._check(df)
-        return df
-
-
-class BarsCache:
-    CACHE_DIR: str
-    tz: str
-
-    def _get_from_cache(
-        self, symbol: str, start: date, end: date, freq: str
-    ) -> pd.DataFrame:
-        _, unit = _split_freq(freq)
+        _, unit = split_freq(freq)
         keys = self._partition_keys_in_range(start, end, unit)
 
         dfs: list[pd.DataFrame] = []
@@ -82,23 +39,31 @@ class BarsCache:
                 f"No data fetched for {symbol} in the entire date range {start} to {end}."
             )
             return pd.DataFrame(
-                columns=list(BarCol.RESAMPLE_MAP.keys()),
-                index=pd.DatetimeIndex([], name=BarCol.DATETIME),
+                columns=list(CandleCol.RESAMPLE_MAP.keys()),
+                index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
             ).tz_localize(self.tz)
 
         df = pd.concat(dfs)
-        start_dt = pytz.timezone(self.tz).localize(datetime.combine(start, time(4, 0)))
-        end_dt = pytz.timezone(self.tz).localize(datetime.combine(end, time(20, 0)))
+        start_dt = pytz.timezone(self.tz).localize(datetime.combine(start, time(0, 0)))
+        end_dt = pytz.timezone(self.tz).localize(
+            datetime.combine(end, time(23, 59, 59))
+        )
+        df = df.loc[start_dt:end_dt]
 
-        return df.loc[(df.index >= start_dt) & (df.index <= end_dt)].resample(freq).aggregate(BarCol.RESAMPLE_MAP).dropna()  # type: ignore
+        if freq in ("1min", "1h", "1d"):
+            return df
+
+        return df.resample(freq).aggregate(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
 
     def _cache(self, symbol: str, key: str, unit: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, unit)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
             try:
                 df = pd.read_csv(partition_path)
-                df[BarCol.DATETIME] = pd.to_datetime(df[BarCol.DATETIME], utc=True)
-                return df.set_index(BarCol.DATETIME).tz_convert(self.tz)
+                df[CandleCol.DATETIME] = pd.to_datetime(
+                    df[CandleCol.DATETIME], utc=True
+                )
+                return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
             except Exception as e:
                 logger.error(
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
@@ -156,17 +121,6 @@ class BarsCache:
             return date(year, month, 1), date(year, month, days)
         raise ValueError(f"Invalid unit: {unit}")
 
-    @abstractmethod
-    def _fetch(
-        self,
-        client: httpx.Client,
-        symbol: str,
-        start: date,
-        end: date,
-        freq: str,
-    ) -> pd.DataFrame:
-        pass
-
     _expirations: dict[str, dict[str, date]]
 
     def _is_expired(self, symbol: str, key: str, unit: str) -> bool:
@@ -216,123 +170,3 @@ class BarsCache:
                 }
         except FileNotFoundError:
             self._expirations[symbol] = {}
-
-
-class PolygonBarsProvider(BarsProvider):
-    def __init__(self, tz: str = "US/Eastern"):
-        super().__init__(tz)
-        self._base_url = config.POLYGON_BASE_URL
-        self._api_key = config.POLYGON_API_KEY
-
-    def _fetch(
-        self,
-        client: httpx.Client,
-        symbol: str,
-        start: date,
-        end: date,
-        freq: str,
-    ) -> pd.DataFrame:
-        mult, unit = _split_freq(freq)
-        unit_mappers = {
-            "min": "minute",
-            "h": "hour",
-            "t": "minute",
-            "d": "day",
-        }
-        max_days_per_unit = {
-            "min": 60,
-            "t": 60,
-            "h": 2000,
-            "d": 50000,
-        }
-        max_days = max_days_per_unit[unit]
-        curr_start = start
-        curr_end = min(end, start + timedelta(days=max_days))
-        dfs: list[pd.DataFrame] = []
-        while curr_start <= end:
-            url = urljoin(
-                self._base_url,
-                f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start.isoformat()}/{curr_end.isoformat()}",
-            )
-            try:
-                response = retry_request(
-                    client,
-                    "GET",
-                    url,
-                    params={"apiKey": self._api_key, "limit": 50000},
-                    headers={"Accept": "text/csv"},
-                )
-                response.raise_for_status()
-            except (MaxRetryError, httpx.HTTPStatusError) as exc:
-                logger.error(f"Failed to get ticker details for {symbol}")
-                raise exc
-
-            try:
-                df = pd.read_csv(io.BytesIO(response.content))
-            except pd.errors.EmptyDataError:
-                logger.warning(
-                    f"No data returned for {symbol} between {curr_start} and {curr_end}. Skipping this interval."
-                )
-                curr_start = curr_end + timedelta(days=1)
-                curr_end = min(end, curr_start + timedelta(days=max_days))
-                continue
-
-            df[BarCol.DATETIME] = pd.to_datetime(df["t"], unit="ms")
-            df = df.set_index(BarCol.DATETIME)
-            df = df.tz_localize("utc").tz_convert(self.tz)
-            df = (
-                df.resample(freq)
-                .first()
-                .rename(
-                    columns={
-                        "v": BarCol.VOLUME,
-                        "o": BarCol.OPEN,
-                        "h": BarCol.HIGH,
-                        "c": BarCol.CLOSE,
-                        "l": BarCol.LOW,
-                    }
-                )[self.COLUMNS]
-            )
-            if unit in ["min", "t", "h"]:
-                df = df[
-                    (df.index.time >= pd.Timestamp("04:00").time()) & (df.index.time <= pd.Timestamp("20:00").time())  # type: ignore
-                ]
-            dfs.append(df)
-
-            curr_start = curr_end + timedelta(days=1)
-            curr_end = min(end, curr_start + timedelta(days=max_days))
-
-        if not dfs:
-            logger.warning(
-                f"No data fetched for {symbol} in the entire date range {start} to {end}."
-            )
-            return pd.DataFrame(
-                columns=self.COLUMNS,
-                index=pd.DatetimeIndex([], name=BarCol.DATETIME),
-            ).tz_localize(self.tz)
-
-        df = pd.concat(dfs)
-        assert isinstance(df.index, pd.DatetimeIndex)
-        if df.index.tz is None:
-            df = df.tz_localize("utc").tz_convert(self.tz)
-        return df
-
-    def _get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        with httpx.Client() as client:
-            return self._fetch(client, symbol, start, end, freq)
-
-
-class PartitionedCSVBarsProvider(PolygonBarsProvider, BarsCache):
-    CACHE_DIR = os.path.join("data", "candles")
-
-    def _get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        return self._get_from_cache(symbol, start, end, freq)
-
-
-def _split_freq(freq: str) -> tuple[int, str]:
-    match = re.match(r"(\d+)(\w+)", freq)
-    if match is None:
-        raise ValueError(f"Invalid frequency: {freq}")
-    mult = int(match.groups()[0])
-    unit = match.groups()[1].lower()
-    return mult, unit
