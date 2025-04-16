@@ -3,13 +3,16 @@ import time
 from datetime import date
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
+from fastscanner.adapters.candle.partitioned_parquet import PartitionedParquetBarsProvider
+from fastscanner.adapters.candle.partitioned_memmap import PartitionedMemmapBarsProvider
+
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = PartitionedCSVBarsProvider()
+    provider = PartitionedParquetBarsProvider()
     start_dt = date(2023, 1, 1)
     end_dt = date(2023, 10, 1)
     freq = "1h"
@@ -21,7 +24,6 @@ if __name__ == "__main__":
         end=end_dt,
         freq=freq,
     )
-
     n = 100
     start = time.time()
     logger.info(f"Starting {n} requests...")

@@ -1,0 +1,7 @@
+pandas==2.2.3
+httpx==0.28.1
+pytz==2025.2
+dotenv==0.9.9
+pyyaml
+pyarrow==19.0.1
+memory-profiler== 0.61.0
