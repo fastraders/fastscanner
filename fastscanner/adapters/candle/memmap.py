@@ -1,15 +1,24 @@
 import os
 import numpy as np
 import pandas as pd
-import logging
+import httpx
 from datetime import datetime, time
 import pytz
-import httpx
+import logging
 
-from .polygon import CandleCol, PolygonBarsProvider
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from .polygon import CandleCol, PolygonBarsProvider
 
 logger = logging.getLogger(__name__)
+
+MEMMAP_DTYPE = np.dtype([
+    ("timestamp", "int64"),
+    ("open", "float32"),
+    ("high", "float32"),
+    ("low", "float32"),
+    ("close", "float32"),
+    ("volume", "float32"),
+])
 
 class MemmapBarsProvider(PolygonBarsProvider):
     CACHE_DIR = os.path.join("data", "candles_memmap")
@@ -22,6 +31,7 @@ class MemmapBarsProvider(PolygonBarsProvider):
             self._fetch_and_save(symbol, freq, file_path)
 
         df = self._load_memmap(file_path)
+        df.index = df.index.tz_convert(self.tz)
 
         start_dt = pytz.timezone(self.tz).localize(datetime.combine(start, time.min))
         end_dt = pytz.timezone(self.tz).localize(datetime.combine(end, time.max))
@@ -39,13 +49,24 @@ class MemmapBarsProvider(PolygonBarsProvider):
             df = self._fetch(client, symbol, start, end, freq).dropna()
 
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        df = df.tz_convert("utc").tz_convert(None).reset_index()
-        df.to_csv(file_path, index=False)
+        df = df.tz_convert("utc")
+
+        memmap_data = np.empty(len(df), dtype=MEMMAP_DTYPE)
+        memmap_data["timestamp"] = df.index.view("int64")
+        memmap_data["open"] = df[CandleCol.OPEN]
+        memmap_data["high"] = df[CandleCol.HIGH]
+        memmap_data["low"] = df[CandleCol.LOW]
+        memmap_data["close"] = df[CandleCol.CLOSE]
+        memmap_data["volume"] = df[CandleCol.VOLUME]
+
+        with open(file_path, "wb") as f:
+            f.write(memmap_data.tobytes())
 
     def _load_memmap(self, file_path):
-        df = pd.read_csv(file_path)
-        df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME], utc=True)
-        df = df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
+        mm = np.memmap(file_path, dtype=MEMMAP_DTYPE, mode="r")
+        df = pd.DataFrame(mm)
+        df.index = pd.to_datetime(df["timestamp"], utc=True)
+        df = df.drop(columns=["timestamp"])
         return df
 
     def _file_path(self, symbol: str, freq: str) -> str:
