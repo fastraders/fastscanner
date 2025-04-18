@@ -4,7 +4,6 @@ from datetime import date
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
 from fastscanner.adapters.candle.parquet import ParquetBarsProvider
-from fastscanner.adapters.candle.partitioned_parquet import PartitionedParquetBarsProvider
 
 from fastscanner.pkg.logging import load_logging_config
 import sys

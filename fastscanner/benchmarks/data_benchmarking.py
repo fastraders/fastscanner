@@ -1,35 +1,35 @@
 import time
 from datetime import date, timedelta
+from itertools import product
+
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
 from fastscanner.adapters.candle.parquet import ParquetBarsProvider
+from fastscanner.adapters.candle.partitioned_parquet import PartitionedParquetBarsProvider
 
 SYMBOL = "AAPL"
+START_DATE = date(2020, 1, 1)
 
-# Frequency and duration pairs
-TEST_CASES = {
-    "1min-1D":  ("1min", timedelta(days=1)),
-    "2min-1M":  ("2min", timedelta(days=30)),
-    "15min-1Y": ("15min", timedelta(days=365)),
-    "1h-3Y":    ("1h", timedelta(days=365 * 3)),
-    "5h":       ("5h", timedelta(days=180)),  # Approx 6 months (fallback default)
-    "1d":       ("1d", timedelta(days=365)),  # 1 year
+FREQUENCIES = ["1min", "2min", "15min", "1h", "5h", "1d"]
+
+DURATION_MAP = {
+    "1D": timedelta(days=1),
+    "1M": timedelta(days=30),
+    "1Y": timedelta(days=365),
+    "3Y": timedelta(days=3 * 365),
 }
-
-START_DATE = date(2020, 1, 1)  # Base start date
 
 def benchmark(provider_cls, label):
     provider = provider_cls()
     print(f"\n=== {label} Benchmark ===")
 
-    for case_name, (freq, duration) in TEST_CASES.items():
+    for freq, (duration_label, delta) in product(FREQUENCIES, DURATION_MAP.items()):
+        case_name = f"{freq}-{duration_label}"
         start = START_DATE
-        end = START_DATE + duration
+        end = START_DATE + delta
 
-        # Prime cache
         print(f"Priming cache for {case_name}...")
         provider.get(SYMBOL, start, end, freq)
 
-        # Benchmark
         t0 = time.perf_counter()
         df = provider.get(SYMBOL, start, end, freq)
         t1 = time.perf_counter()
