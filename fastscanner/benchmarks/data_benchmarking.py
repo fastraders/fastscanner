@@ -1,61 +1,33 @@
 import time
-import statistics
 from datetime import date
-
-import pandas as pd
-
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
 from fastscanner.adapters.candle.parquet import ParquetBarsProvider
-from fastscanner.adapters.candle.memmap import MemmapBarsProvider
+from fastscanner.adapters.candle.partitioned_parquet import PartitionedParquetBarsProvider
 
 SYMBOL = "AAPL"
-START_DATE = date(2023, 1, 1)
-END_DATE = date(2023, 3, 31)
-FREQ = "1min"  # You can also test with "1h" or "1d"
-REPEATS = 5
-BULK_REQUESTS = 100
+FREQ = "1h"
 
+RANGES = {
+    "Start (Jan)": (date(2013, 1, 1), date(2023, 1, 31)),
+    "Mid (May)":   (date(2014, 5, 1), date(2023, 5, 31)),
+    "End (Sep)":   (date(2016, 9, 1), date(2023, 9, 30)),
+}
 
 def benchmark(provider_cls, label):
-    print(f"\nPriming {label} (cold read)...")
     provider = provider_cls()
-    provider.get(SYMBOL, START_DATE, END_DATE, FREQ)
+    print(f"\nBenchmarking {label}")
 
-    print(f"\nBenchmarking {label} for {REPEATS} repeated reads (warm cache)...")
-    times = []
-    row_counts = []
+    print("Priming full range...")
+    provider.get(SYMBOL, date(2013, 1, 1), date(2023, 10, 1), FREQ)
 
-    for i in range(REPEATS):
-        start = time.perf_counter()
-        df = provider.get(SYMBOL, START_DATE, END_DATE, FREQ)
-        end = time.perf_counter()
-
-        duration = end - start
-        times.append(duration)
-        row_counts.append(len(df))
-
-        print(f"[{label}] Run {i+1}: {duration:.4f}s — Rows: {len(df)}")
-
-    print(f"\n{label} Stats ")
-    print(f"Min:     {min(times):.4f}s")
-    print(f"Max:     {max(times):.4f}s")
-    print(f"Average: {statistics.mean(times):.4f}s")
-    print(f"Median:  {statistics.median(times):.4f}s")
-    print(f"Avg Rows: {int(statistics.mean(row_counts))}")
-    print("-" * 40)
-
-    print(f"\nBulk Read Test ({BULK_REQUESTS} requests) — {label}")
-    start = time.perf_counter()
-    for _ in range(BULK_REQUESTS):
-        provider.get(SYMBOL, START_DATE, END_DATE, FREQ)
-    end = time.perf_counter()
-    total_time = end - start
-    print(f"Total Time:{total_time:.2f} seconds")
-    print(f"Avg Time/Request: {total_time / BULK_REQUESTS:.4f}s")
-    print("=" * 50)
+    for desc, (start_date, end_date) in RANGES.items():
+        t0 = time.perf_counter()
+        df = provider.get(SYMBOL, start_date, end_date, FREQ)
+        t1 = time.perf_counter()
+        print(f"[{desc}] {label}: {t1 - t0:.4f}s — Rows: {len(df)}")
 
 
 if __name__ == "__main__":
     benchmark(PartitionedCSVBarsProvider, "Partitioned CSV")
     benchmark(ParquetBarsProvider, "Parquet")
-    benchmark(MemmapBarsProvider, "Memmap")
+    benchmark(PartitionedParquetBarsProvider, "Partitioned Parquet")

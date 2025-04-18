@@ -4,16 +4,18 @@ from datetime import date
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
 from fastscanner.adapters.candle.parquet import ParquetBarsProvider
-from fastscanner.adapters.candle.memmap import MemmapBarsProvider
+from fastscanner.adapters.candle.partitioned_parquet import PartitionedParquetBarsProvider
 
 from fastscanner.pkg.logging import load_logging_config
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = MemmapBarsProvider()
-    start_dt = date(2023, 1, 1)
+    provider = PartitionedCSVBarsProvider()
+    start_dt = date(2013, 1, 1)
     end_dt = date(2023, 10, 1)
     freq = "1h"
     symbol = "AAPL"
