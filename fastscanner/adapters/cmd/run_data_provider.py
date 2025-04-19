@@ -3,15 +3,19 @@ import time
 from datetime import date
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
-from fastscanner.pkg.logging import load_logging_config
+from fastscanner.adapters.candle.parquet import ParquetBarsProvider
 
+from fastscanner.pkg.logging import load_logging_config
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = PartitionedCSVBarsProvider()
+    provider = ParquetBarsProvider()
     start_dt = date(2023, 1, 1)
-    end_dt = date(2023, 10, 1)
+    end_dt = date(2023, 12, 1)
     freq = "1h"
     symbol = "AAPL"
     # Initial fetch should take longer as it calls the API
@@ -21,7 +25,6 @@ if __name__ == "__main__":
         end=end_dt,
         freq=freq,
     )
-
     n = 100
     start = time.time()
     logger.info(f"Starting {n} requests...")
