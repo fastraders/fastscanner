@@ -1,20 +1,19 @@
 import os
 import json
 import logging
-from calendar import monthrange
-from datetime import date, datetime, time, timedelta
-from typing import Dict, List
+from datetime import date, datetime, timedelta, time
+from typing import List, Tuple
 from zoneinfo import ZoneInfo
 
 import httpx
 import pandas as pd
 import pyarrow as pa
-import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+import pyarrow.dataset as ds
 
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 from . import config
-from .polygon import CandleCol, PolygonBarsProvider, split_freq
+from .polygon import CandleCol, PolygonBarsProvider
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +22,24 @@ class ParquetBarsProvider(PolygonBarsProvider):
     tz: str = LOCAL_TIMEZONE_STR
 
     def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        _, unit = split_freq(freq)
-        keys = self._partition_keys_in_range(start, end, unit)
+        path = self._dataset_path(symbol, freq)
 
-        dataset_path = os.path.join(self.CACHE_DIR, symbol)
-        if not os.path.exists(dataset_path):
-            return pd.DataFrame(columns=list(CandleCol.RESAMPLE_MAP.keys()),
-                                index=pd.DatetimeIndex([], name=CandleCol.DATETIME)).tz_localize(self.tz)
+        if not os.path.exists(path):
+            missing_ranges = [(start, end)]
+        else:
+            missing_ranges = self._missing_ranges(symbol, start, end, freq)
 
-        filter_expr = (
-            ds.field("unit") == unit
-        ) & (
-            ds.field("partition_key").isin(keys)
-        )
-
+        if missing_ranges:
+            with httpx.Client() as client:
+                for rng_start, rng_end in missing_ranges:
+                    df = self.Partition_fetch(client, symbol, rng_start, rng_end, freq)
+                    self._save_cache(symbol, freq, df)
+                self._save_current_range(symbol, start, end, freq)
 
         try:
-            dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
-            table = dataset.to_table(filter=filter_expr)
-            df = table.to_pandas()
+            df = pq.read_table(path).to_pandas()
         except Exception as e:
-            logger.error(f"Failed to read from Parquet dataset: {e}")
+            logger.error(f"Failed to read Parquet file: {e}")
             return pd.DataFrame(columns=list(CandleCol.RESAMPLE_MAP.keys()),
                                 index=pd.DatetimeIndex([], name=CandleCol.DATETIME)).tz_localize(self.tz)
 
@@ -55,111 +51,98 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         start_dt = datetime.combine(start, time.min).replace(tzinfo=ZoneInfo(self.tz))
         end_dt = datetime.combine(end, time.max).replace(tzinfo=ZoneInfo(self.tz))
-        df = df.loc[start_dt:end_dt]
 
-        if freq in ("1min", "1h", "1d"):
-            return df
+        return df.loc[start_dt:end_dt] if start_dt in df.index or end_dt in df.index else df[(df.index >= start_dt) & (df.index <= end_dt)]
 
-        return df.resample(freq).aggregate(CandleCol.RESAMPLE_MAP).dropna()
+    def _dataset_path(self, symbol: str, freq: str) -> str:
+        return os.path.join(self.CACHE_DIR, f"{symbol}_{freq}.parquet")
 
-    def _cache(self, symbol: str, key: str, unit: str) -> pd.DataFrame:
-        dataset_path = os.path.join(self.CACHE_DIR, symbol)
+    def _save_cache(self, symbol: str, freq: str, df: pd.DataFrame):
+        if df.empty:
+            return
 
-        if os.path.exists(dataset_path) and not self._is_expired(symbol, key, unit):
-            try:
-                dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
-                table = dataset.to_table(filter=ds.field("unit") == unit & ds.field("partition_key") == key)
-                df = table.to_pandas()
-                if not df.empty:
-                    df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME], utc=True)
-                    return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
-            except Exception as e:
-                logger.error(f"Failed to load parquet data: {e}")
-
-        start, end = self._range_from_key(key, unit)
-        with httpx.Client() as client:
-            df = self._fetch(client, symbol, start, end, f"1{unit}").dropna()
-            self._save_cache(symbol, unit, key, df)
-            self._mark_expiration(symbol, key, unit)
-            return df
-
-    def _save_cache(self, symbol: str, unit: str, key: str, df: pd.DataFrame):
-        dataset_path = os.path.join(self.CACHE_DIR, symbol)
-        os.makedirs(dataset_path, exist_ok=True)
+        path = self._dataset_path(symbol, freq)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
 
         df = df.reset_index()
         df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
-        df["partition_key"] = key
-        df["unit"] = unit
+        df.drop_duplicates(subset=[CandleCol.DATETIME], keep="last", inplace=True)
+        df.sort_values(CandleCol.DATETIME, inplace=True)
 
-        table = pa.Table.from_pandas(df, preserve_index=False)
-        pq.write_to_dataset(table, root_path=dataset_path, partition_cols=["unit", "partition_key"])
-
-    def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> pd.Series:
-        if unit.lower() in ("min", "t"):
-            dt = pd.to_timedelta(index.dayofweek, unit="d")
-            return pd.Series((index - dt).strftime("%Y-%m-%d"), index=index, name="partition_key")
-        elif unit.lower() in ("h", "d"):
-            return pd.Series(index.strftime("%Y-%m"), index=index, name="partition_key")
-        raise ValueError(f"Invalid unit: {unit}")
-
-    def _partition_keys_in_range(self, start: date, end: date, unit: str) -> List[str]:
-        keys = self._partition_keys(pd.date_range(start, end, freq="1d"), unit)
-        return keys.drop_duplicates().tolist()
-
-    def _range_from_key(self, key: str, unit: str) -> tuple[date, date]:
-        if unit.lower() in ("min", "t"):
-            return date.fromisoformat(key), date.fromisoformat(key) + timedelta(days=6)
-        if unit.lower() in ("h", "d"):
-            year, month = key.split("-")
-            year, month = int(year), int(month)
-            _, days = monthrange(year, month)
-            return date(year, month, 1), date(year, month, days)
-        raise ValueError(f"Invalid unit: {unit}")
-
-    _expirations: Dict[str, Dict[str, date]]
-
-    def _is_expired(self, symbol: str, key: str, unit: str) -> bool:
-        self._load_expirations(symbol)
-        expiration_key = self._expiration_key(key, unit)
-        expirations = self._expirations.get(symbol, {})
-        if expiration_key not in expirations:
-            return False
-        today = datetime.now(ZoneInfo(self.tz)).date()
-        return expirations[expiration_key] <= today
-
-    def _mark_expiration(self, symbol: str, key: str, unit: str) -> None:
-        self._load_expirations(symbol)
-        _, end = self._range_from_key(key, unit)
-        today = datetime.now(ZoneInfo(self.tz)).date()
-        expiration_key = self._expiration_key(key, unit)
-        expirations = self._expirations.get(symbol, {})
-
-        if today > end and expiration_key not in expirations:
-            return
-        if today > end:
-            expirations.pop(expiration_key, None)
+        if os.path.exists(path):
+            existing_df = pq.read_table(path).to_pandas()
+            combined_df = pd.concat([existing_df, df]).drop_duplicates(subset=[CandleCol.DATETIME], keep="last")
+            combined_df.sort_values(CandleCol.DATETIME, inplace=True)
         else:
-            expirations[expiration_key] = today + timedelta(days=1)
+            combined_df = df
 
-        with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json"), "w") as f:
-            json.dump({k: v.isoformat() for k, v in expirations.items()}, f)
+        table = pa.Table.from_pandas(combined_df, preserve_index=False)
+        pq.write_table(table, path)
 
-    def _expiration_key(self, key: str, unit: str) -> str:
-        return f"{key}_{unit}"
+    def _current_range_path(self, symbol: str) -> str:
+        return os.path.join(self.CACHE_DIR, f"{symbol}_current_ranges.json")
 
-    def _load_expirations(self, symbol):
-        if not hasattr(self, "_expirations"):
-            self._expirations = {}
-
-        if symbol in self._expirations:
-            return
-
+    def _load_current_range(self, symbol: str, freq: str) -> Tuple[date, date]:
         try:
-            with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json")) as f:
-                self._expirations[symbol] = {
-                    key: date.fromisoformat(value)
-                    for key, value in json.load(f).items()
-                }
+            with open(self._current_range_path(symbol)) as f:
+                ranges = json.load(f)
+                start = date.fromisoformat(ranges[freq]["start"])
+                end = date.fromisoformat(ranges[freq]["end"])
+                return start, end
+        except (FileNotFoundError, KeyError):
+            return None, None
+
+    def _save_current_range(self, symbol: str, start: date, end: date, freq: str):
+        path = self._current_range_path(symbol)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            with open(path) as f:
+                ranges = json.load(f)
         except FileNotFoundError:
-            self._expirations[symbol] = {}
+            ranges = {}
+
+        prev_start, prev_end = self._load_current_range(symbol, freq)
+        new_start = min(filter(None, [start, prev_start]))
+        new_end = max(filter(None, [end, prev_end]))
+
+        ranges[freq] = {"start": new_start.isoformat(), "end": new_end.isoformat()}
+
+        with open(path, "w") as f:
+            json.dump(ranges, f)
+
+    def _missing_ranges(self, symbol: str, start: date, end: date, freq: str) -> List[Tuple[date, date]]:
+        current_start, current_end = self._load_current_range(symbol, freq)
+        if current_start is None or current_end is None:
+            return [(start, end)]
+
+        missing = []
+        if start < current_start:
+            missing.append((start, min(current_start, end)))
+        if end > current_end:
+            missing.append((max(current_end, start), end))
+        return [rng for rng in missing if rng[0] < rng[1]]
+
+    def Partition_fetch(self, client: httpx.Client, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+        if "min" in freq:
+            delta = pd.Timedelta(days=7)
+        elif "h" in freq:
+            delta = pd.Timedelta(days=30)
+        elif "d" in freq:
+            delta = pd.Timedelta(days=3650)
+        else:
+            raise ValueError(f"Unsupported frequency: {freq}")
+
+        curr_start = pd.Timestamp(start)
+        df_all = []
+
+        while curr_start.date() <= end:
+            curr_end = min(curr_start + delta, pd.Timestamp(end) + pd.Timedelta(days=1))
+            try:
+                df = self._fetch(client, symbol, curr_start.date(), curr_end.date(), freq)
+                if not df.empty:
+                    df_all.append(df)
+            except Exception as e:
+                logger.error(f"Error fetching Polygon data from {curr_start.date()} to {curr_end.date()}: {e}")
+            curr_start = curr_end
+
+        return pd.concat(df_all).dropna() if df_all else pd.DataFrame()

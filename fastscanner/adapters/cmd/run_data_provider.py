@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     provider = ParquetBarsProvider()
-    start_dt = date(2013, 1, 1)
-    end_dt = date(2023, 10, 1)
+    start_dt = date(2023, 1, 1)
+    end_dt = date(2023, 12, 1)
     freq = "1h"
     symbol = "AAPL"
     # Initial fetch should take longer as it calls the API
