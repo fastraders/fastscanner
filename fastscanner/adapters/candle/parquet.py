@@ -22,9 +22,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
     tz: str = LOCAL_TIMEZONE_STR
 
     def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        path = self._dataset_path(symbol, freq)
+        dataset_path = self._dataset_path(symbol, freq)
 
-        if not os.path.exists(path):
+        if not os.path.exists(dataset_path):
             missing_ranges = [(start, end)]
         else:
             missing_ranges = self._missing_ranges(symbol, start, end, freq)
@@ -32,22 +32,20 @@ class ParquetBarsProvider(PolygonBarsProvider):
         if missing_ranges:
             with httpx.Client() as client:
                 for rng_start, rng_end in missing_ranges:
-                    df = self.Partition_fetch(client, symbol, rng_start, rng_end, freq)
+                    df = self.partition_fetch(client, symbol, rng_start, rng_end, freq)
                     self._save_cache(symbol, freq, df)
                 self._save_current_range(symbol, freq, missing_ranges)
 
         try:
-            dataset = ds.dataset(path, format="parquet")
-
-            start_dt = datetime.combine(start, time.min).replace(tzinfo=ZoneInfo(self.tz))
-            end_dt = datetime.combine(end, time.max).replace(tzinfo=ZoneInfo(self.tz))
             if "min" in freq:
                 start_key = start.strftime("%Y-%m-%d")
                 end_key = end.strftime("%Y-%m-%d")
             else:
                 start_key = start.strftime("%Y-%m")
                 end_key = end.strftime("%Y-%m")
-            
+
+            dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
+
             filter_expr = (
                 (ds.field("date") >= pa.scalar(start_key)) &
                 (ds.field("date") <= pa.scalar(end_key))
@@ -56,7 +54,7 @@ class ParquetBarsProvider(PolygonBarsProvider):
             table = dataset.to_table(filter=filter_expr, columns=self.columns + [CandleCol.DATETIME])
             df = table.to_pandas()
         except Exception as e:
-            logger.error(f"Failed to read Parquet file: {e}")
+            logger.error(f"Failed to read Parquet dataset: {e}")
             return pd.DataFrame(columns=list(CandleCol.RESAMPLE_MAP.keys()),
                                 index=pd.DatetimeIndex([], name=CandleCol.DATETIME)).tz_localize(self.tz)
 
@@ -70,16 +68,17 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
 
     def _dataset_path(self, symbol: str, freq: str) -> str:
-        return os.path.join(self.CACHE_DIR, f"{symbol}_{freq}.parquet")
+        return os.path.join(self.CACHE_DIR, f"{symbol}_{freq}")
 
     def _save_cache(self, symbol: str, freq: str, df: pd.DataFrame):
         if df.empty:
             return
 
         path = self._dataset_path(symbol, freq)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.makedirs(path, exist_ok=True)
 
         df = df.reset_index()
+        df = df.drop_duplicates(subset=[CandleCol.DATETIME], keep="last")
 
         df["date"] = df[CandleCol.DATETIME].dt.strftime(
             "%Y-%m-%d" if "min" in freq else "%Y-%m"
@@ -87,14 +86,13 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
 
-        if os.path.exists(path):
-            existing_df = pq.read_table(path).to_pandas()
-            combined_df = pd.concat([existing_df, df]).drop_duplicates(subset=[CandleCol.DATETIME], keep="last")
-        else:
-            combined_df = df
-
-        table = pa.Table.from_pandas(combined_df, preserve_index=False)
-        pq.write_table(table, path)
+        table = pa.Table.from_pandas(df, preserve_index=False)
+        pq.write_to_dataset(
+            table,
+            root_path=path,
+            compression="ZSTD",
+            partition_cols=["date"]
+        )
 
     def _current_range_path(self, symbol: str) -> str:
         return os.path.join(self.CACHE_DIR, f"{symbol}_current_ranges.json")
@@ -147,9 +145,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         missing = []
         current = start
-        for s, e in sorted(existing_ranges):
+        for s, e in existing_ranges:
             if current < s:
-                missing.append((current, min(end, s)))
+                missing.append((current, min(end, s - timedelta(days=1))))
             current = max(current, e + timedelta(days=1))
             if current > end:
                 break
@@ -157,9 +155,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
         if current <= end:
             missing.append((current, end))
 
-        return [rng for rng in missing if rng[0] < rng[1]]
+        return missing
 
-    def Partition_fetch(self, client: httpx.Client, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    def partition_fetch(self, client: httpx.Client, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         if "min" in freq:
             delta = pd.Timedelta(days=7)
         elif "h" in freq:
