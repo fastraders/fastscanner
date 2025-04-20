@@ -37,7 +37,16 @@ class ParquetBarsProvider(PolygonBarsProvider):
                 self._save_current_range(symbol, start, end, freq)
 
         try:
-            df = pq.read_table(path).to_pandas()
+            dataset = ds.dataset(path, format="parquet")
+
+            start_dt = datetime.combine(start, time.min).replace(tzinfo=ZoneInfo(self.tz))
+            end_dt = datetime.combine(end, time.max).replace(tzinfo=ZoneInfo(self.tz))
+            filter_expr = (
+                (ds.field(CandleCol.DATETIME) >= pa.scalar(start_dt, type=pa.timestamp("ns"))) &
+                (ds.field(CandleCol.DATETIME) <= pa.scalar(end_dt, type=pa.timestamp("ns")))
+            )
+            table = dataset.to_table(filter=filter_expr, columns=self.columns + [CandleCol.DATETIME])
+            df = table.to_pandas()
         except Exception as e:
             logger.error(f"Failed to read Parquet file: {e}")
             return pd.DataFrame(columns=list(CandleCol.RESAMPLE_MAP.keys()),
@@ -49,10 +58,8 @@ class ParquetBarsProvider(PolygonBarsProvider):
         df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME], utc=True)
         df = df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
 
-        start_dt = datetime.combine(start, time.min).replace(tzinfo=ZoneInfo(self.tz))
-        end_dt = datetime.combine(end, time.max).replace(tzinfo=ZoneInfo(self.tz))
+        return df
 
-        return df.loc[start_dt:end_dt] if start_dt in df.index or end_dt in df.index else df[(df.index >= start_dt) & (df.index <= end_dt)]
 
     def _dataset_path(self, symbol: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, f"{symbol}_{freq}.parquet")
@@ -66,13 +73,10 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         df = df.reset_index()
         df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
-        df.drop_duplicates(subset=[CandleCol.DATETIME], keep="last", inplace=True)
-        df.sort_values(CandleCol.DATETIME, inplace=True)
 
         if os.path.exists(path):
             existing_df = pq.read_table(path).to_pandas()
             combined_df = pd.concat([existing_df, df]).drop_duplicates(subset=[CandleCol.DATETIME], keep="last")
-            combined_df.sort_values(CandleCol.DATETIME, inplace=True)
         else:
             combined_df = df
 
