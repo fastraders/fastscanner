@@ -29,7 +29,7 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
 
         dfs: list[pd.DataFrame] = []
         for key in keys:
-            df = self._cache(symbol, key, unit)
+            df = self._cache(symbol, key, unit, freq)
             if df.empty:
                 continue
             dfs.append(df)
@@ -48,15 +48,11 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
         end_dt = pytz.timezone(self.tz).localize(
             datetime.combine(end, time(23, 59, 59))
         )
-        df = df.loc[start_dt:end_dt]
+        return df.loc[start_dt:end_dt]
 
-        if freq in ("1min", "1h", "1d"):
-            return df
 
-        return df.resample(freq).aggregate(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
-
-    def _cache(self, symbol: str, key: str, unit: str) -> pd.DataFrame:
-        partition_path = self._partition_path(symbol, key, unit)
+    def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
+        partition_path = self._partition_path(symbol, key, unit, freq)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
             try:
                 df = pd.read_csv(partition_path)
@@ -69,33 +65,29 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
                 )
 
-        # Fetches if not exists in cache
         start, end = self._range_from_key(key, unit)
         with httpx.Client() as client:
-            df = self._fetch(client, symbol, start, end, f"1{unit}").dropna()
-            self._save_cache(symbol, unit, key, df)
+            df = self._fetch(client, symbol, start, end, freq).dropna()
+            self._save_cache(symbol, unit, key, freq, df)
             self._mark_expiration(symbol, key, unit)
             return df
 
-    def _save_cache(self, symbol: str, unit: str, key: str, df: pd.DataFrame):
-        partition_path = self._partition_path(symbol, key, unit)
+
+    def _save_cache(self, symbol: str, unit: str, key: str, freq: str, df: pd.DataFrame):
+        partition_path = self._partition_path(symbol, key, unit, freq)
         partition_dir = os.path.dirname(partition_path)
         os.makedirs(partition_dir, exist_ok=True)
 
         df.tz_convert("utc").tz_convert(None).reset_index().to_csv(
             partition_path, index=False
         )
+    
+    def _partition_path(self, symbol: str, key: str, unit: str, freq: str) -> str:
+        return os.path.join(self.CACHE_DIR, symbol, f"{freq}_{key}.csv")
 
-    def _partition(self, df: pd.DataFrame, unit: str) -> list[pd.DataFrame]:
-        keys = self._partition_keys(df.index, unit)  # type: ignore
-        df = df.join(keys)
-        return [group for _, group in df.groupby("partition_key")]
 
     def _partition_key(self, dt: datetime, unit: str) -> str:
         return self._partition_keys(pd.DatetimeIndex([dt]), unit)[0]
-
-    def _partition_path(self, symbol: str, key: str, unit: str) -> str:
-        return os.path.join(self.CACHE_DIR, symbol, f"{unit}_{key}.csv")
 
     def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> "pd.Series[str]":
         if unit.lower() in ("min", "t"):
