@@ -37,13 +37,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
                 self._save_current_range(symbol, freq, missing_ranges)
 
         try:
-            if "min" in freq:
-                start_key = start.strftime("%Y-%m-%d")
-                end_key = end.strftime("%Y-%m-%d")
-            else:
-                start_key = start.strftime("%Y-%m")
-                end_key = end.strftime("%Y-%m")
-
+            start_key = start.strftime("%Y-%m-%d")
+            end_key = end.strftime("%Y-%m-%d")
+           
             dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
 
             filter_expr = (
@@ -79,16 +75,14 @@ class ParquetBarsProvider(PolygonBarsProvider):
         os.makedirs(path, exist_ok=True)
 
         df = df.reset_index()
-        df["date"] = df[CandleCol.DATETIME].dt.strftime(
-            "%Y-%m-%d" if "min" in freq else "%Y-%m"
-        )
+        df["date"] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
         df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
 
         table = pa.Table.from_pandas(df, preserve_index=False)
         pq.write_to_dataset(
             table,
             root_path=path,
-            compression="ZSTD",
+            compression="SNAPPY",
             partition_cols=["date"]
         )
 
