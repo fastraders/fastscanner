@@ -1,12 +1,7 @@
 import io
-import json
 import logging
-import os
 import re
-import zoneinfo
-from abc import ABC, abstractmethod
-from calendar import monthrange
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from urllib.parse import urljoin
 
 import httpx
@@ -15,27 +10,11 @@ import pytz
 
 from fastscanner.pkg.http import MaxRetryError, retry_request
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from fastscanner.services.indicators.ports import CandleCol
 
 from . import config
 
 logger = logging.getLogger(__name__)
-
-
-class CandleCol:
-    DATETIME = "datetime"
-    OPEN = "open"
-    HIGH = "high"
-    LOW = "low"
-    CLOSE = "close"
-    VOLUME = "volume"
-
-    RESAMPLE_MAP = {
-        OPEN: "first",
-        HIGH: "max",
-        LOW: "min",
-        CLOSE: "last",
-        VOLUME: "sum",
-    }
 
 
 class PolygonBarsProvider:

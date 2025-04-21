@@ -12,9 +12,9 @@ import pandas as pd
 import pytz
 
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from fastscanner.services.indicators.ports import CandleCol
 
-from . import config
-from .polygon import CandleCol, PolygonBarsProvider, split_freq
+from .polygon import PolygonBarsProvider, split_freq
 
 logger = logging.getLogger(__name__)
 

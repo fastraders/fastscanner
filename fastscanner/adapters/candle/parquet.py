@@ -1,21 +1,23 @@
-import os
 import json
 import logging
-from datetime import date, datetime, timedelta, time
+import os
+from datetime import date, datetime, time, timedelta
 from typing import List, Tuple
 from zoneinfo import ZoneInfo
 
 import httpx
 import pandas as pd
 import pyarrow as pa
-import pyarrow.parquet as pq
 import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
-from . import config
-from .polygon import CandleCol, PolygonBarsProvider
+from fastscanner.services.indicators.ports import CandleCol
+
+from .polygon import PolygonBarsProvider
 
 logger = logging.getLogger(__name__)
+
 
 class ParquetBarsProvider(PolygonBarsProvider):
     CACHE_DIR = os.path.join("data", "parquet_dataset")
@@ -39,30 +41,32 @@ class ParquetBarsProvider(PolygonBarsProvider):
         try:
             start_key = start.strftime("%Y-%m-%d")
             end_key = end.strftime("%Y-%m-%d")
-           
+
             dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
 
-            filter_expr = (
-                (ds.field("date") >= pa.scalar(start_key)) &
-                (ds.field("date") <= pa.scalar(end_key))
+            filter_expr = (ds.field("date") >= pa.scalar(start_key)) & (
+                ds.field("date") <= pa.scalar(end_key)
             )
 
-            table = dataset.to_table(filter=filter_expr, columns=self.columns + [CandleCol.DATETIME])
+            table = dataset.to_table(
+                filter=filter_expr, columns=self.columns + [CandleCol.DATETIME]
+            )
             df = table.to_pandas()
         except Exception as e:
-            logger.error(f"Failed to read Parquet dataset: {e}")
-            return pd.DataFrame(columns=list(CandleCol.RESAMPLE_MAP.keys()),
-                                index=pd.DatetimeIndex([], name=CandleCol.DATETIME)).tz_localize(self.tz)
+            logger.error(f"Failed to read Parquet file: {e}")
+            return pd.DataFrame(
+                columns=list(CandleCol.RESAMPLE_MAP.keys()),
+                index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
+            ).tz_localize(self.tz)
 
         if df.empty:
             return df
 
         df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME], utc=True)
         df = df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
-        df = df[~df.index.duplicated(keep='last')]
+        df = df[~df.index.duplicated(keep="last")]
 
         return df
-
 
     def _dataset_path(self, symbol: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, f"{symbol}_{freq}")
@@ -76,14 +80,13 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         df = df.reset_index()
         df["date"] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
-        df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
+        df[CandleCol.DATETIME] = (
+            df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
+        )
 
         table = pa.Table.from_pandas(df, preserve_index=False)
         pq.write_to_dataset(
-            table,
-            root_path=path,
-            compression="SNAPPY",
-            partition_cols=["date"]
+            table, root_path=path, compression="SNAPPY", partition_cols=["date"]
         )
 
     def _current_range_path(self, symbol: str) -> str:
@@ -100,7 +103,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
         except (FileNotFoundError, KeyError):
             return []
 
-    def _save_current_range(self, symbol: str, freq: str, new_ranges: List[Tuple[date, date]]):
+    def _save_current_range(
+        self, symbol: str, freq: str, new_ranges: List[Tuple[date, date]]
+    ):
         path = self._current_range_path(symbol)
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -130,7 +135,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
         with open(path, "w") as f:
             json.dump(ranges, f)
 
-    def _missing_ranges(self, symbol: str, start: date, end: date, freq: str) -> List[Tuple[date, date]]:
+    def _missing_ranges(
+        self, symbol: str, start: date, end: date, freq: str
+    ) -> List[Tuple[date, date]]:
         existing_ranges = self._load_current_range(symbol, freq)
         if not existing_ranges:
             return [(start, end)]
@@ -149,7 +156,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         return missing
 
-    def partition_fetch(self, client: httpx.Client, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    def partition_fetch(
+        self, client: httpx.Client, symbol: str, start: date, end: date, freq: str
+    ) -> pd.DataFrame:
         if "min" in freq:
             delta = pd.Timedelta(days=7)
         elif "h" in freq:
@@ -165,11 +174,15 @@ class ParquetBarsProvider(PolygonBarsProvider):
         while curr_start.date() <= end:
             curr_end = min(curr_start + delta, pd.Timestamp(end) + pd.Timedelta(days=1))
             try:
-                df = self._fetch(client, symbol, curr_start.date(), curr_end.date(), freq)
+                df = self._fetch(
+                    client, symbol, curr_start.date(), curr_end.date(), freq
+                )
                 if not df.empty:
                     df_all.append(df)
             except Exception as e:
-                logger.error(f"Error fetching Polygon data from {curr_start.date()} to {curr_end.date()}: {e}")
+                logger.error(
+                    f"Error fetching Polygon data from {curr_start.date()} to {curr_end.date()}: {e}"
+                )
             curr_start = curr_end
 
         return pd.concat(df_all).dropna() if df_all else pd.DataFrame()

@@ -10,3 +10,22 @@ class CandleStore(Protocol):
 
 class FundamentalDataStore(Protocol):
     def get(self, symbol: str, start: date, end: date) -> list[dict]: ...
+
+
+class CandleCol:
+    DATETIME = "datetime"
+    OPEN = "open"
+    HIGH = "high"
+    LOW = "low"
+    CLOSE = "close"
+    VOLUME = "volume"
+
+    RESAMPLE_MAP = {
+        OPEN: "first",
+        HIGH: "max",
+        LOW: "min",
+        CLOSE: "last",
+        VOLUME: "sum",
+    }
+
+    COLUMNS = list(RESAMPLE_MAP.keys())
