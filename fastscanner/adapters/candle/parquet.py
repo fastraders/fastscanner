@@ -63,6 +63,7 @@ class ParquetBarsProvider(PolygonBarsProvider):
 
         df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME], utc=True)
         df = df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
+        df = df[~df.index.duplicated(keep='last')]
 
         return df
 
@@ -78,12 +79,9 @@ class ParquetBarsProvider(PolygonBarsProvider):
         os.makedirs(path, exist_ok=True)
 
         df = df.reset_index()
-        df = df.drop_duplicates(subset=[CandleCol.DATETIME], keep="last")
-
         df["date"] = df[CandleCol.DATETIME].dt.strftime(
             "%Y-%m-%d" if "min" in freq else "%Y-%m"
         )
-
         df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
 
         table = pa.Table.from_pandas(df, preserve_index=False)
