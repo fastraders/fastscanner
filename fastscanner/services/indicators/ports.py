@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
@@ -9,7 +10,21 @@ class CandleStore(Protocol):
 
 
 class FundamentalDataStore(Protocol):
-    def get(self, symbol: str, start: date, end: date) -> list[dict]: ...
+    def get(self, symbol: str) -> "FundamentalData": ...
+
+
+@dataclass
+class FundamentalData:
+    exchange: str
+    country: str
+    city: str
+    gic_industry: str
+    gic_sector: str
+    historical_market_cap: "pd.Series[float]"
+    earnings_dates: pd.DatetimeIndex
+    insiders_ownership_perc: float
+    institutional_ownership_perc: float
+    shares_float: float
 
 
 class CandleCol:
