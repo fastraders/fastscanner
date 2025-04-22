@@ -32,8 +32,8 @@ def test_save_and_load_cache(provider):
         CandleCol.VOLUME: [500, 600, 700, 800, 900]
     }).set_index(CandleCol.DATETIME)
 
-    provider._save_cache(SYMBOL, UNIT, TEST_KEY, FREQ, df)
-    path = provider._partition_path(SYMBOL, TEST_KEY, UNIT, FREQ)
+    provider._save_cache(SYMBOL, TEST_KEY, FREQ, df)
+    path = provider._partition_path(SYMBOL, TEST_KEY, FREQ)
 
     assert os.path.exists(path)
     df_loaded = pd.read_csv(path)
@@ -53,7 +53,7 @@ def test_fetch_and_cache_new_data(mock_client, provider):
     }).set_index(CandleCol.DATETIME)
 
     provider._fetch = MagicMock(return_value=df)
-    result_df = provider._cache(SYMBOL, TEST_KEY, UNIT, FREQ)
+    result_df = provider._cache(SYMBOL, TEST_KEY,UNIT, FREQ)
 
     assert isinstance(result_df, pd.DataFrame)
     assert len(result_df) == 3
@@ -124,7 +124,7 @@ def test_range_from_key_invalid_unit(provider):
 
 @patch("fastscanner.adapters.candle.partitioned_csv.PartitionedCSVBarsProvider._fetch")
 def test_cache_fallback_on_corrupt_file(mock_fetch, provider):
-    path = provider._partition_path(SYMBOL, TEST_KEY, UNIT, FREQ)
+    path = provider._partition_path(SYMBOL, TEST_KEY, FREQ)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write("bad,data\n1,2,3")
@@ -159,7 +159,7 @@ def test_partition_keys_in_range(provider):
 
 
 def test_partition_path(provider):
-    path = provider._partition_path(SYMBOL, TEST_KEY, UNIT, FREQ)
+    path = provider._partition_path(SYMBOL, TEST_KEY, FREQ)
     assert f"{FREQ}_{TEST_KEY}.csv" in path
 
 
