@@ -6,7 +6,6 @@ from urllib.parse import urljoin
 
 import httpx
 import pandas as pd
-import pytz
 
 from fastscanner.pkg.http import MaxRetryError, retry_request
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
