@@ -20,7 +20,7 @@ class FundamentalData:
     city: str
     gic_industry: str
     gic_sector: str
-    historical_market_cap: pd.Series[float]
+    historical_market_cap: "pd.Series[float]"
     earnings_dates: pd.DatetimeIndex
     insiders_ownership_perc: float
     institutional_ownership_perc: float

@@ -71,7 +71,7 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
             return df
 
 
-    def _save_cache(self, symbol: str, unit: str, key: str, freq: str, df: pd.DataFrame):
+    def _save_cache(self, symbol: str, key: str, freq: str, df: pd.DataFrame):
         partition_path = self._partition_path(symbol, key, freq)
         partition_dir = os.path.dirname(partition_path)
         os.makedirs(partition_dir, exist_ok=True)
