@@ -9,7 +9,6 @@ from datetime import date, datetime, time, timedelta
 
 import httpx
 import pandas as pd
-import pytz
 
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
@@ -44,15 +43,14 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
             ).tz_localize(self.tz)
 
         df = pd.concat(dfs)
-        start_dt = pytz.timezone(self.tz).localize(datetime.combine(start, time(0, 0)))
-        end_dt = pytz.timezone(self.tz).localize(
-            datetime.combine(end, time(23, 59, 59))
-        )
+        start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
+        end_dt = pd.Timestamp(datetime.combine(end, time(23, 59, 59)), tz=self.tz)
+
         return df.loc[start_dt:end_dt]
 
 
     def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
-        partition_path = self._partition_path(symbol, key, unit, freq)
+        partition_path = self._partition_path(symbol, key, freq)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
             try:
                 df = pd.read_csv(partition_path)
@@ -74,7 +72,7 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
 
 
     def _save_cache(self, symbol: str, unit: str, key: str, freq: str, df: pd.DataFrame):
-        partition_path = self._partition_path(symbol, key, unit, freq)
+        partition_path = self._partition_path(symbol, key, freq)
         partition_dir = os.path.dirname(partition_path)
         os.makedirs(partition_dir, exist_ok=True)
 
@@ -82,7 +80,7 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
             partition_path, index=False
         )
     
-    def _partition_path(self, symbol: str, key: str, unit: str, freq: str) -> str:
+    def _partition_path(self, symbol: str, key: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, symbol, f"{freq}_{key}.csv")
 
 
