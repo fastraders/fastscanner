@@ -66,7 +66,7 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
         start, end = self._range_from_key(key, unit)
         with httpx.Client() as client:
             df = self._fetch(client, symbol, start, end, freq).dropna()
-            self._save_cache(symbol, unit, key, freq, df)
+            self._save_cache(symbol, key, freq, df)
             self._mark_expiration(symbol, key, unit)
             return df
 
