@@ -13,6 +13,11 @@ class FundamentalDataStore(Protocol):
     def get(self, symbol: str) -> "FundamentalData": ...
 
 
+class Cache(Protocol):
+    def save(self, key: str, value: str) -> None: ...
+    def get(self, key: str) -> str: ...
+
+
 @dataclass
 class FundamentalData:
     exchange: str
@@ -25,6 +30,10 @@ class FundamentalData:
     insiders_ownership_perc: float
     institutional_ownership_perc: float
     shares_float: float
+
+
+class PublicHolidaysDataStore(Protocol):
+    def get(self, year: int) -> set[date]: ...
 
 
 class CandleCol:

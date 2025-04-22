@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 from ..ports import CandleCol
-from ..registry import ApplicationRegistry
 
 
 class CumulativeDailyVolumeIndicator:
@@ -15,66 +14,56 @@ class CumulativeDailyVolumeIndicator:
     def column_name(self):
         return self.type()
 
-    def enrich(self, prev_df: pd.DataFrame, new_rows: pd.DataFrame) -> pd.DataFrame:
-        volume = new_rows[CandleCol.VOLUME]
-        if not prev_df.empty:
-            volume = pd.concat([prev_df.iloc[-1:][CandleCol.VOLUME], volume])
-
+    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
+        volume = df[CandleCol.VOLUME]
         assert isinstance(volume.index, pd.DatetimeIndex)
         cum_volume = volume.groupby(volume.index.date).cumsum()
-        if not prev_df.empty:
-            cum_volume = cum_volume.iloc[1:]
-        new_rows[self.column_name()] = cum_volume
+        df[self.column_name()] = cum_volume
+        return df
+
+    def extend_realtime(
+        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
+    ) -> pd.DataFrame:
+        if prev_df is not None and not prev_df.empty:
+            # Adds the last row to take it into account for the cumulative operation
+            new_rows = pd.concat([prev_df.iloc[-1:][new_rows.columns], new_rows])
+
+        new_rows = self.extend(new_rows)
+        if prev_df is not None and not prev_df.empty:
+            new_rows = new_rows.iloc[1:]
 
         return new_rows
 
 
-class PremarketHighIndicator:
+class PremarketCumulativeIndicator:
+    def __init__(self, candle_col: str):
+        self.candle_col = candle_col
+
     @classmethod
     def type(cls):
-        return "premarket_high"
+        return "premarket_cumulative"
 
     def column_name(self):
-        return self.type()
+        return f"premarket_{self.candle_col}"
 
-    def enrich(self, prev_df: pd.DataFrame, new_rows: pd.DataFrame) -> pd.DataFrame:
-        # Adds the last row to take it into account for the cumulative operation
-        high = new_rows[CandleCol.HIGH]
-        if not prev_df.empty:
-            high = pd.concat([prev_df.iloc[-1:][CandleCol.HIGH], high])
-        assert isinstance(high.index, pd.DatetimeIndex)
-        cum_high = high.groupby(high.index.date).cummax()
-        cum_high[cum_high.index.time < time(9, 30)] = pd.NA  # type: ignore
-        cum_high = cum_high.ffill()
+    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
+        values = df[self.candle_col]
+        assert isinstance(values.index, pd.DatetimeIndex)
+        cum_values = values.groupby(values.index.date).cummax()
+        cum_values[cum_values.index.time >= time(9, 30)] = pd.NA  # type: ignore
+        cum_values = cum_values.ffill()
+        df[self.column_name()] = cum_values
+        return df
 
-        # Removes the first row that was previously added.
-        if not prev_df.empty:
-            cum_high = cum_high.iloc[1:]
-        new_rows[self.column_name()] = cum_high
+    def extend_realtime(
+        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
+    ) -> pd.DataFrame:
+        if prev_df is not None and not prev_df.empty:
+            # Adds the last row to take it into account for the cumulative operation
+            new_rows = pd.concat([prev_df.iloc[-1:][new_rows.columns], new_rows])
 
-        return new_rows
+        new_rows = self.extend(new_rows)
+        if prev_df is not None and not prev_df.empty:
+            new_rows = new_rows.iloc[1:]
 
-
-class PremarketLowIndicator:
-    @classmethod
-    def type(cls):
-        return "premarket_low"
-
-    def column_name(self):
-        return self.type()
-
-    def enrich(self, prev_df: pd.DataFrame, new_rows: pd.DataFrame) -> pd.DataFrame:
-        # Adds the last row to take it into account for the cumulative operation
-        low = new_rows[CandleCol.LOW]
-        if not prev_df.empty:
-            low = pd.concat([prev_df.iloc[-1:][CandleCol.LOW], low])
-        assert isinstance(low.index, pd.DatetimeIndex)
-        cum_low = low.groupby(low.index.date).cummin()
-        cum_low[cum_low.index.time < time(9, 30)] = pd.NA  # type: ignore
-        cum_low = cum_low.ffill()
-
-        # Removes the first row that was previously added.
-        if not prev_df.empty:
-            cum_low = cum_low.iloc[1:]
-        new_rows[self.column_name()] = cum_low
         return new_rows

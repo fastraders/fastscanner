@@ -1,19 +1,17 @@
 import logging
+import sys
 import time
 from datetime import date
-
-from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVBarsProvider
-from fastscanner.adapters.candle.parquet import ParquetBarsProvider
-
-from fastscanner.pkg.logging import load_logging_config
-import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
+from fastscanner.pkg.logging import load_logging_config
+
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = ParquetBarsProvider()
+    provider = ParquetCandlesProvider()
     start_dt = date(2023, 1, 1)
     end_dt = date(2023, 12, 1)
     freq = "1h"

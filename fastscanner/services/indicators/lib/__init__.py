@@ -1,13 +1,27 @@
+from contextvars import ContextVar
 from datetime import date, datetime
 from typing import Any, Protocol
 
 import pandas as pd
 
+from .candle import CumulativeDailyVolumeIndicator, PremarketCumulativeIndicator
+
+_indicators: list[type["Indicator"]] = [
+    CumulativeDailyVolumeIndicator,
+    PremarketCumulativeIndicator,
+]
+
 
 class Indicator(Protocol):
-    def calculate(
-        self, symbol: str, start: datetime, end: datetime | None, freq: str
-    ) -> pd.Series: ...
+    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Extend the DataFrame with the indicator's values.
+        """
+        ...
+
+    def extend_realtime(
+        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
+    ) -> pd.DataFrame: ...
 
     @classmethod
     def type(cls) -> str: ...
@@ -16,6 +30,8 @@ class Indicator(Protocol):
 
 
 class IndicatorsLibrary:
+    _instance: ContextVar["IndicatorsLibrary"] = ContextVar("IndicatorsLibrary")
+
     def __init__(self):
         self.indicators: dict[str, type[Indicator]] = {}
 
@@ -27,3 +43,14 @@ class IndicatorsLibrary:
 
     def register(self, indicator: type[Indicator]) -> None:
         self.indicators[indicator.type()] = indicator
+
+    @classmethod
+    def instance(cls) -> "IndicatorsLibrary":
+        try:
+            return cls._instance.get()
+        except LookupError:
+            instance = cls()
+            for indicator in _indicators:
+                instance.register(indicator)
+            cls._instance.set(instance)
+            return instance

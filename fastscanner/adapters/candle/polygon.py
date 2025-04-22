@@ -11,18 +11,16 @@ from fastscanner.pkg.http import MaxRetryError, retry_request
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
-from . import config
-
 logger = logging.getLogger(__name__)
 
 
-class PolygonBarsProvider:
+class PolygonCandlesProvider:
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
-    def __init__(self):
-        self._base_url = config.POLYGON_BASE_URL
-        self._api_key = config.POLYGON_API_KEY
+    def __init__(self, base_url: str, api_key: str):
+        self._base_url = base_url
+        self._api_key = api_key
 
     def _fetch(
         self,

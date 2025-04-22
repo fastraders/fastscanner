@@ -14,12 +14,12 @@ import pyarrow.parquet as pq
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
-from .polygon import PolygonBarsProvider
+from .polygon import PolygonCandlesProvider
 
 logger = logging.getLogger(__name__)
 
 
-class ParquetBarsProvider(PolygonBarsProvider):
+class ParquetCandlesProvider(PolygonCandlesProvider):
     CACHE_DIR = os.path.join("data", "parquet_dataset")
     tz: str = LOCAL_TIMEZONE_STR
 
