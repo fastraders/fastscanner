@@ -7,20 +7,22 @@ import zoneinfo
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 
-import httpx
 import pandas as pd
 
 from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
-from fastscanner.services.indicators.ports import CandleCol
+from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
-from .polygon import PolygonBarsProvider, split_freq
+from .polygon import split_freq
 
 logger = logging.getLogger(__name__)
 
 
-class PartitionedCSVBarsProvider(PolygonBarsProvider):
+class PartitionedCSVCandlesProvider:
     CACHE_DIR = os.path.join("data", "candles")
     tz: str = LOCAL_TIMEZONE_STR
+
+    def __init__(self, store: CandleStore):
+        self._store = store
 
     def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         _, unit = split_freq(freq)
@@ -48,7 +50,6 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
 
         return df.loc[start_dt:end_dt]
 
-
     def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
@@ -64,12 +65,10 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
                 )
 
         start, end = self._range_from_key(key, unit)
-        with httpx.Client() as client:
-            df = self._fetch(client, symbol, start, end, freq).dropna()
-            self._save_cache(symbol, key, freq, df)
-            self._mark_expiration(symbol, key, unit)
-            return df
-
+        df = self._store.get(symbol, start, end, freq).dropna()
+        self._save_cache(symbol, key, freq, df)
+        self._mark_expiration(symbol, key, unit)
+        return df
 
     def _save_cache(self, symbol: str, key: str, freq: str, df: pd.DataFrame):
         partition_path = self._partition_path(symbol, key, freq)
@@ -79,10 +78,9 @@ class PartitionedCSVBarsProvider(PolygonBarsProvider):
         df.tz_convert("utc").tz_convert(None).reset_index().to_csv(
             partition_path, index=False
         )
-    
-    def _partition_path(self, symbol: str, key: str, freq: str) -> str:
-        return os.path.join(self.CACHE_DIR, symbol, f"{freq}_{key}.csv")
 
+    def _partition_path(self, symbol: str, key: str, freq: str) -> str:
+        return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
 
     def _partition_key(self, dt: datetime, unit: str) -> str:
         return self._partition_keys(pd.DatetimeIndex([dt]), unit)[0]

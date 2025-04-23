@@ -14,8 +14,7 @@ httpx = "^0.28.1"
 pyyaml = "^6.0.2"
 pyarrow="^19.0.1"
 pytest= "^8.3.5"
-requests= "2.32.3"
-
+fastapi = {extras = ["standard"], version = "^0.115.12"}
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"

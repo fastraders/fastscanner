@@ -1,13 +1,21 @@
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import pandas as pd
 
+from .lib import IndicatorsLibrary
 from .ports import CandleStore, FundamentalDataStore
 from .registry import ApplicationRegistry
 
 
-class IndicatorsCalculator:
+@dataclass
+class IndicatorParams:
+    type_: str
+    params: dict[str, Any]
+
+
+class IndicatorsService:
     def __init__(
         self, candles: CandleStore, fundamentals: FundamentalDataStore
     ) -> None:
@@ -16,9 +24,18 @@ class IndicatorsCalculator:
         ApplicationRegistry.init(candles, fundamentals)
 
     def calculate(
-        self, type_: str, start: datetime, end: datetime, params: dict[str, Any]
-    ) -> pd.Series: ...
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        freq: str,
+        indicators: list[IndicatorParams],
+    ) -> pd.DataFrame:
+        df = self.candles.get(symbol, start, end, freq)
+        if df.empty:
+            return df
 
-    def calculate_after(
-        self, type_: str, start: datetime, params: dict[str, Any]
-    ) -> pd.Series: ...
+        for params in indicators:
+            indicator = IndicatorsLibrary().get(params.type_, params.params)
+            df = indicator.extend(df)
+        return df
