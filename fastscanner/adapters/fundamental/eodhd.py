@@ -76,37 +76,34 @@ class EODHDFundamentalStore:
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-
-                market_cap_data = data.get("historical_market_cap", {})
-                market_cap = pd.Series(
-                    data=[float(v) for v in market_cap_data.values()],
-                    index=pd.to_datetime(list(market_cap_data.keys())),
-                    dtype=float,
-                )
-                earnings_dates_data = data.get("earnings_dates", [])
-                earnings_dates = pd.DatetimeIndex(
-                    pd.to_datetime(earnings_dates_data), name="report_date"
-                )
-                return FundamentalData(
-                    exchange=data.get("exchange", ""),
-                    country=data.get("country", ""),
-                    city=data.get("city", ""),
-                    gic_industry=data.get("gic_industry", ""),
-                    gic_sector=data.get("gic_sector", ""),
-                    historical_market_cap=market_cap,
-                    earnings_dates=earnings_dates,
-                    insiders_ownership_perc=float(
-                        data.get("insiders_ownership_perc", 0.0)
-                    ),
-                    institutional_ownership_perc=float(
-                        data.get("institutional_ownership_perc", 0.0)
-                    ),
-                    shares_float=float(data.get("shares_float", 0.0)),
-                )
-
         except json.JSONDecodeError as e:
             logger.warning(f"Cache for {symbol} is corrupted (JSON error): {e}")
-        return None
+            return None
+
+        market_cap_data = data.get("historical_market_cap", {})
+        market_cap = pd.Series(
+            data=[float(v) for v in market_cap_data.values()],
+            index=pd.to_datetime(list(market_cap_data.keys())).date,
+            dtype=float,
+        )
+        earnings_dates_data = data.get("earnings_dates", [])
+        earnings_dates = pd.DatetimeIndex(
+            pd.to_datetime(earnings_dates_data), name="report_date"
+        )
+        return FundamentalData(
+            exchange=data.get("exchange", ""),
+            country=data.get("country", ""),
+            city=data.get("city", ""),
+            gic_industry=data.get("gic_industry", ""),
+            gic_sector=data.get("gic_sector", ""),
+            historical_market_cap=market_cap,
+            earnings_dates=earnings_dates,
+            insiders_ownership_perc=float(data.get("insiders_ownership_perc", 0.0)),
+            institutional_ownership_perc=float(
+                data.get("institutional_ownership_perc", 0.0)
+            ),
+            shares_float=float(data.get("shares_float", 0.0)),
+        )
 
     def reload(self, symbol: str) -> FundamentalData:
         logger.info(f"Forcing reload of fundamentals for: {symbol}")
@@ -135,7 +132,7 @@ class EODHDFundamentalStore:
         }
         historical_market_cap = pd.Series(
             data=list(market_cap_data.values()),
-            index=pd.to_datetime(list(market_cap_data.keys())).normalize(),
+            index=pd.to_datetime(list(market_cap_data.keys())).date,
             dtype=float,
         ).sort_index()
 

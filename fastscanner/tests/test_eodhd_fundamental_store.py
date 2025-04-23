@@ -111,7 +111,7 @@ def test_get_fetch_and_store(
 
     assert result.exchange == "NASDAQ"
     assert result.city == "Cupertino"
-    assert result.historical_market_cap["2023-12-31"] == 1e9
+    assert result.historical_market_cap[pd.Timestamp("2023-12-31").date()] == 1e9
 
     path = store._get_cache_path("AAPL")
     assert os.path.exists(path)
@@ -174,8 +174,11 @@ def test_store_and_load_roundtrip(store, sample_fundamental_data, sample_market_
         loaded.earnings_dates.sort_values(), data.earnings_dates.sort_values()
     )
 
+
 @patch("httpx.Client.get")
-def test_reload_stores_and_returns_fresh_data(mock_httpx_get, store, sample_fundamental_data, sample_market_cap):
+def test_reload_stores_and_returns_fresh_data(
+    mock_httpx_get, store, sample_fundamental_data, sample_market_cap
+):
     mock_fundamental_response = MagicMock()
     mock_fundamental_response.status_code = 200
     mock_fundamental_response.json.return_value = sample_fundamental_data
@@ -191,7 +194,7 @@ def test_reload_stores_and_returns_fresh_data(mock_httpx_get, store, sample_fund
     assert isinstance(result, FundamentalData)
     assert result.exchange == "NASDAQ"
     assert result.city == "Cupertino"
-    assert result.historical_market_cap["2023-12-31"] == 1e9
+    assert result.historical_market_cap[pd.Timestamp("2023-12-31").date()] == 1e9
 
     cache_path = store._get_cache_path("AAPL")
     assert os.path.exists(cache_path)
