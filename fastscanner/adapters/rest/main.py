@@ -22,7 +22,7 @@ class FastscannerApp(FastAPI):
         )
         self.state.indicators = IndicatorsService(
             PartitionedCSVCandlesProvider(polygon),
-            EODHDFundamentalStore(config.EOD_HD_BASE_URL,config.EOD_HD_API_KEY),
+            EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY),
         )
 
 

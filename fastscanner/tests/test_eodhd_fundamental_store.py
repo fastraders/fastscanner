@@ -117,13 +117,25 @@ def test_get_fetch_and_store(
     assert os.path.exists(path)
 
 
-@patch.object(EODHDFundamentalStore, "_fetch_fundamentals", return_value={})
-@patch.object(EODHDFundamentalStore, "_fetch_market_cap", return_value={})
-def test_get_handles_missing_data_gracefully(mock_market_cap, mock_fundamentals, store):
+@patch("httpx.Client.get")
+def test_get_handles_missing_data_gracefully(mock_httpx_get, store):
+    empty_fundamentals = MagicMock()
+    empty_fundamentals.status_code = 200
+    empty_fundamentals.json.return_value = {}
+
+    empty_market_cap = MagicMock()
+    empty_market_cap.status_code = 200
+    empty_market_cap.json.return_value = {}
+
+    mock_httpx_get.side_effect = [empty_fundamentals, empty_market_cap]
+
     result = store.get("AAPL")
+
     assert result is not None
     assert result.exchange == ""
+    assert isinstance(result.historical_market_cap, pd.Series)
     assert result.historical_market_cap.empty
+    assert isinstance(result.earnings_dates, pd.DatetimeIndex)
     assert len(result.earnings_dates) == 0
 
 
@@ -161,3 +173,29 @@ def test_store_and_load_roundtrip(store, sample_fundamental_data, sample_market_
     pd.testing.assert_index_equal(
         loaded.earnings_dates.sort_values(), data.earnings_dates.sort_values()
     )
+
+@patch("httpx.Client.get")
+def test_reload_stores_and_returns_fresh_data(mock_httpx_get, store, sample_fundamental_data, sample_market_cap):
+    mock_fundamental_response = MagicMock()
+    mock_fundamental_response.status_code = 200
+    mock_fundamental_response.json.return_value = sample_fundamental_data
+
+    mock_marketcap_response = MagicMock()
+    mock_marketcap_response.status_code = 200
+    mock_marketcap_response.json.return_value = sample_market_cap
+
+    mock_httpx_get.side_effect = [mock_fundamental_response, mock_marketcap_response]
+
+    result = store.reload("AAPL")
+
+    assert isinstance(result, FundamentalData)
+    assert result.exchange == "NASDAQ"
+    assert result.city == "Cupertino"
+    assert result.historical_market_cap["2023-12-31"] == 1e9
+
+    cache_path = store._get_cache_path("AAPL")
+    assert os.path.exists(cache_path)
+
+    with open(cache_path) as f:
+        saved_data = json.load(f)
+        assert saved_data["exchange"] == "NASDAQ"

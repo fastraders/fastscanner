@@ -21,7 +21,7 @@ TEST_KEY = datetime.now().date().isoformat()
 def provider(tmp_path):
     mock_store = MagicMock()
     provider = PartitionedCSVCandlesProvider(mock_store)
-    provider.CACHE_DIR = str(tmp_path / "candles")
+    provider.CACHE_DIR = tmp_path / "candles"
     return provider
 
 
@@ -136,8 +136,8 @@ def test_get_trims_data_within_start_end(mock_cache):
         result = provider.get(SYMBOL, date(2023, 1, 2), date(2023, 1, 3), "1h")
 
         assert all(
-            (result.index.date >= date(2023, 1, 2))
-            & (result.index.date <= date(2023, 1, 3))
+            (result.index.date >= date(2023, 1, 2))  # type: ignore
+            & (result.index.date <= date(2023, 1, 3))  # type: ignore
         )
 
 
@@ -155,8 +155,7 @@ def test_range_from_key_invalid_unit(provider):
 def test_cache_fallback_on_corrupt_file(tmp_path):
     mock_store = MagicMock()
     provider = PartitionedCSVCandlesProvider(store=mock_store)
-    provider.CACHE_DIR = str(tmp_path / "candles")
-
+    provider.CACHE_DIR = tmp_path / "candles"
     path = provider._partition_path("AAPL", "2023-04", "1min")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:

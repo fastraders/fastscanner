@@ -12,7 +12,7 @@ load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY),
+    provider = ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     start_dt = date(2023, 1, 1)
     end_dt = date(2023, 12, 1)
     freq = "1h"

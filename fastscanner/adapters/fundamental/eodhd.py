@@ -108,6 +108,21 @@ class EODHDFundamentalStore:
             logger.warning(f"Cache for {symbol} is corrupted (JSON error): {e}")
         return None
 
+    def reload(self, symbol: str) -> FundamentalData:
+        logger.info(f"Forcing reload of fundamentals for: {symbol}")
+
+        fundamentals = self._fetch_fundamentals(symbol)
+        market_cap = self._fetch_market_cap(symbol)
+
+        fd = self._parse_data(fundamentals, market_cap)
+        try:
+            self._store(symbol, fd)
+            logger.info(f"Reloaded and stored fundamental data for {symbol}")
+        except Exception as e:
+            logger.error(f"Failed to reload and store {symbol}: {e}")
+            raise
+        return fd
+
     def _parse_data(self, fundamentals: dict, market_cap: dict) -> FundamentalData:
         general = fundamentals.get("General", {})
         shares_stats = fundamentals.get("SharesStats", {})
@@ -120,13 +135,13 @@ class EODHDFundamentalStore:
         }
         historical_market_cap = pd.Series(
             data=list(market_cap_data.values()),
-            index=pd.to_datetime(list(market_cap_data.keys())),
+            index=pd.to_datetime(list(market_cap_data.keys())).normalize(),
             dtype=float,
-        )
+        ).sort_index()
 
         earnings_dates = pd.DatetimeIndex(
             pd.to_datetime(list(earnings.get("History", {}).keys())), name="report_date"
-        )
+        ).sort_values()
 
         return FundamentalData(
             exchange=general.get("Exchange", ""),
@@ -156,9 +171,9 @@ class EODHDFundamentalStore:
             str(idx): float(val) for idx, val in data.historical_market_cap.items()
         }
 
-        data_dict["earnings_dates"] = [str(date.date()) for date in data.earnings_dates]
+        data_dict["earnings_dates"] = [
+            date.date().isoformat() for date in data.earnings_dates
+        ]
 
         with open(path, "w") as f:
             json.dump(data_dict, f, indent=2)
-
-

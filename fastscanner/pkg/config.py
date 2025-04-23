@@ -8,7 +8,7 @@ SERVER_PORT = 12356
 DEBUG = bool(int(os.getenv("DEBUG", "0")))
 POLYGON_BASE_URL = os.environ["POLYGON_BASE_URL"]
 POLYGON_API_KEY = os.environ["POLYGON_API_KEY"]
-EOD_HD_BASE_URL=os.environ["EOD_HD_BASE_URL"]
-EOD_HD_API_KEY=os.environ["EOD_HD_API_KEY"]
+EOD_HD_BASE_URL = os.environ["EOD_HD_BASE_URL"]
+EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 
 INDICATORS_CALCULATE_RESULTS_DIR = "output/indicator_results"
