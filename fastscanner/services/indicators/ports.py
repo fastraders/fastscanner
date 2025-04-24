@@ -33,7 +33,7 @@ class FundamentalData:
 
 
 class PublicHolidaysDataStore(Protocol):
-    def get(self, year: int) -> set[date]: ...
+    def get(self) -> set[date]: ...
 
 
 class CandleCol:

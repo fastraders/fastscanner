@@ -15,6 +15,7 @@ pyyaml = "^6.0.2"
 pyarrow="^19.0.1"
 pytest= "^8.3.5"
 fastapi = {extras = ["standard"], version = "^0.115.12"}
+exchange-calendars= "^4.10"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"
