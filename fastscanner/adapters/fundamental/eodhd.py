@@ -46,7 +46,7 @@ class EODHDFundamentalStore:
         params = {
             "filter": "General::Code,General,Earnings,SharesStats",
             "api_token": self._api_key,
-            "fmt": "json"
+            "fmt": "json",
         }
         try:
             fundamentals = self._fetch_json(url, params=params)
@@ -57,10 +57,7 @@ class EODHDFundamentalStore:
 
     def _fetch_market_cap(self, symbol: str) -> Dict:
         url = f"{self._base_url}/historical-market-cap/{symbol}"
-        params = {
-            "api_token": self._api_key,
-            "fmt": "json"
-        }
+        params = {"api_token": self._api_key, "fmt": "json"}
         try:
             market_cap = self._fetch_json(url, params=params)
             return market_cap
@@ -68,16 +65,10 @@ class EODHDFundamentalStore:
             logger.exception(f"Error fetching market cap for {symbol}")
             return {}
 
-
     def _fetch_json(self, url: str, params: Dict) -> dict:
         try:
             with httpx.Client() as client:
-                response = retry_request(
-                    client,
-                    "GET",
-                    url,
-                    params=params
-                )
+                response = retry_request(client, "GET", url, params=params)
                 response.raise_for_status()
                 return response.json()
         except (MaxRetryError, httpx.HTTPStatusError) as exc:
@@ -191,18 +182,3 @@ class EODHDFundamentalStore:
 
         with open(path, "w") as f:
             json.dump(data_dict, f, indent=2)
-
-
-if __name__ == "__main__":
-    fetcher = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
-    symbol = "AAPL"
-
-    logger.info(f"Fetching fundamental data for {symbol}")
-
-    try:
-        data = fetcher.get(symbol)
-        logger.info("Successfully retrieved fundamental data.")
-        logger.info(data)
-    except Exception as e:
-        logger.error(f"Failed to fetch fundamental data: {e}")
-        raise
