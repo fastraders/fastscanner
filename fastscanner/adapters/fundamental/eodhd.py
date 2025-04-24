@@ -8,6 +8,7 @@ import httpx
 import pandas as pd
 
 from fastscanner.pkg import config
+from fastscanner.pkg.http import MaxRetryError, retry_request
 from fastscanner.services.indicators.ports import FundamentalData
 
 logger = logging.getLogger(__name__)
@@ -41,33 +42,49 @@ class EODHDFundamentalStore:
         return fd
 
     def _fetch_fundamentals(self, symbol: str) -> Dict:
-        filters = "General::Code,General,Earnings,SharesStats"
-        url = f"{self._base_url}/fundamentals/{symbol}?filter={filters}&api_token={self._api_key}&fmt=json"
+        url = f"{self._base_url}/fundamentals/{symbol}"
+        params = {
+            "filter": "General::Code,General,Earnings,SharesStats",
+            "api_token": self._api_key,
+            "fmt": "json"
+        }
         try:
-            fundamentals = self._fetch_json(url)
+            fundamentals = self._fetch_json(url, params=params)
             return fundamentals
         except Exception as e:
             logger.exception(f"Error fetching fundamentals for {symbol}")
             return {}
 
     def _fetch_market_cap(self, symbol: str) -> Dict:
-        url = f"{self._base_url}/historical-market-cap/{symbol}?api_token={self._api_key}&fmt=json"
+        url = f"{self._base_url}/historical-market-cap/{symbol}"
+        params = {
+            "api_token": self._api_key,
+            "fmt": "json"
+        }
         try:
-            market_cap = self._fetch_json(url)
+            market_cap = self._fetch_json(url, params=params)
             return market_cap
         except Exception as e:
             logger.exception(f"Error fetching market cap for {symbol}")
             return {}
 
-    def _fetch_json(self, url: str) -> dict:
+
+    def _fetch_json(self, url: str, params: Dict) -> dict:
         try:
-            with httpx.Client(timeout=10.0) as client:
-                response = client.get(url)
+            with httpx.Client() as client:
+                response = retry_request(
+                    client,
+                    "GET",
+                    url,
+                    params=params
+                )
                 response.raise_for_status()
                 return response.json()
-        except Exception as e:
-            logger.exception(f"HTTP error for {url}: {e}")
-            return {}
+        except (MaxRetryError, httpx.HTTPStatusError) as exc:
+            logger.exception(f"HTTP error for {url}: {exc}")
+        except Exception as exc:
+            logger.exception(f"Unexpected error for {url}: {exc}")
+        return {}
 
     def _load_cached(self, symbol: str) -> FundamentalData | None:
         path = self._get_cache_path(symbol)
@@ -174,3 +191,18 @@ class EODHDFundamentalStore:
 
         with open(path, "w") as f:
             json.dump(data_dict, f, indent=2)
+
+
+if __name__ == "__main__":
+    fetcher = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
+    symbol = "AAPL"
+
+    logger.info(f"Fetching fundamental data for {symbol}")
+
+    try:
+        data = fetcher.get(symbol)
+        logger.info("Successfully retrieved fundamental data.")
+        logger.info(data)
+    except Exception as e:
+        logger.error(f"Failed to fetch fundamental data: {e}")
+        raise
