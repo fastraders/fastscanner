@@ -93,19 +93,19 @@ def test_get_from_cache(store):
     assert result.shares_float == expected.shares_float
 
 
-@patch("httpx.Client.get")
+@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
 def test_get_fetch_and_store(
-    mock_httpx_get, store, sample_fundamental_data, sample_market_cap
+    mock_retry_request, store, sample_fundamental_data, sample_market_cap
 ):
-    mock_response_fundamentals = MagicMock()
-    mock_response_fundamentals.status_code = 200
-    mock_response_fundamentals.json.return_value = sample_fundamental_data
-
-    mock_response_market_cap = MagicMock()
-    mock_response_market_cap.status_code = 200
-    mock_response_market_cap.json.return_value = sample_market_cap
-
-    mock_httpx_get.side_effect = [mock_response_fundamentals, mock_response_market_cap]
+    mock_fundamentals = MagicMock()
+    mock_fundamentals.status_code = 200
+    mock_fundamentals.json.return_value = sample_fundamental_data
+    
+    mock_marketcap = MagicMock()
+    mock_marketcap.status_code = 200
+    mock_marketcap.json.return_value = sample_market_cap
+    
+    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
 
     result = store.get("AAPL")
 
@@ -175,19 +175,19 @@ def test_store_and_load_roundtrip(store, sample_fundamental_data, sample_market_
     )
 
 
-@patch("httpx.Client.get")
+@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
 def test_reload_stores_and_returns_fresh_data(
-    mock_httpx_get, store, sample_fundamental_data, sample_market_cap
+    mock_retry_request, store, sample_fundamental_data, sample_market_cap
 ):
-    mock_fundamental_response = MagicMock()
-    mock_fundamental_response.status_code = 200
-    mock_fundamental_response.json.return_value = sample_fundamental_data
+    mock_fundamentals = MagicMock()
+    mock_fundamentals.status_code = 200
+    mock_fundamentals.json.return_value = sample_fundamental_data
 
-    mock_marketcap_response = MagicMock()
-    mock_marketcap_response.status_code = 200
-    mock_marketcap_response.json.return_value = sample_market_cap
+    mock_marketcap = MagicMock()
+    mock_marketcap.status_code = 200
+    mock_marketcap.json.return_value = sample_market_cap
 
-    mock_httpx_get.side_effect = [mock_fundamental_response, mock_marketcap_response]
+    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
 
     result = store.reload("AAPL")
 
