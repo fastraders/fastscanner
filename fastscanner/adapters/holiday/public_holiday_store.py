@@ -15,7 +15,6 @@ class ExchangeCalendarsPublicHolidaysStore:
 
     def __init__(self, exchange_code: str = "XNAS"):
         self._exchange_code = exchange_code
-        os.makedirs(self.CACHE_DIR, exist_ok=True)
         self._holidays: Set[date] | None = None
 
     def get(self) -> Set[date]:
@@ -23,9 +22,15 @@ class ExchangeCalendarsPublicHolidaysStore:
             self._holidays = self._load_or_fetch()
         return self._holidays
 
-    def _load_or_fetch(self) -> Set[date]:
+    def reload(self) -> Set[date]:
+        self._holidays = self._load_or_fetch(force_reload=True)
+        return self._holidays
+
+    def _load_or_fetch(self, force_reload: bool = False) -> Set[date]:
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
         path = self._get_cache_path()
-        if os.path.exists(path):
+
+        if not force_reload and os.path.exists(path):
             logger.info(f"Loading holidays from cache for {self._exchange_code}")
             return self._load_cache(path)
 
@@ -34,17 +39,13 @@ class ExchangeCalendarsPublicHolidaysStore:
         )
         calendar = ecals.get_calendar(self._exchange_code)
 
-        adhoc = calendar.adhoc_holidays
-        regular = (
-            calendar.regular_holidays.holidays()
-            if calendar.regular_holidays
-            else pd.DatetimeIndex([])
-        )
-        all_holidays = pd.DatetimeIndex(
-            sorted(set(adhoc).union(set(regular)))
-        ).tz_localize(None)
+        adhoc: Set[date] = {h.date() for h in calendar.adhoc_holidays}
 
-        holidays = {d.date() for d in all_holidays}
+        assert calendar.regular_holidays is not None
+        regular: Set[date] = {h.date() for h in calendar.regular_holidays.holidays()}
+
+        holidays = adhoc.union(regular)
+
         self._store_cache(holidays)
         return holidays
 
@@ -57,4 +58,4 @@ class ExchangeCalendarsPublicHolidaysStore:
             return {datetime.strptime(d, "%Y-%m-%d").date() for d in json.load(f)}
 
     def _get_cache_path(self) -> str:
-        return os.path.join(self.CACHE_DIR, f"US_Exchange_holidays.json")
+        return os.path.join(self.CACHE_DIR, f"US_exchange_holidays.json")

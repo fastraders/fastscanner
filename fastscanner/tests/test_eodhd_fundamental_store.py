@@ -100,11 +100,11 @@ def test_get_fetch_and_store(
     mock_fundamentals = MagicMock()
     mock_fundamentals.status_code = 200
     mock_fundamentals.json.return_value = sample_fundamental_data
-    
+
     mock_marketcap = MagicMock()
     mock_marketcap.status_code = 200
     mock_marketcap.json.return_value = sample_market_cap
-    
+
     mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
 
     result = store.get("AAPL")
