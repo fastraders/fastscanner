@@ -5,13 +5,14 @@ from datetime import date
 from pathlib import Path
 
 from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
+from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    provider = ParquetCandlesProvider()
+    provider = ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     start_dt = date(2023, 1, 1)
     end_dt = date(2023, 12, 1)
     freq = "1h"
