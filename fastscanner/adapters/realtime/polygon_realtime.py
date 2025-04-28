@@ -23,7 +23,7 @@ class PolygonRealtime:
         self.channel = channel
         self._ws_task: Optional[asyncio.Task] = None
 
-    async def start(self, symbols: Set[str]):
+    async def start(self):
         if self._running:
             logger.warning("WebSocket already running.")
             return
@@ -33,13 +33,8 @@ class PolygonRealtime:
                 feed=Feed.RealTime,
                 market=Market.Stocks,
             )
-            for symbol in symbols:
-                self.client.subscribe(f"AM.{symbol}")
-                logger.info(f"Subscribed to: AM.{symbol}")
-                self.symbols.add(symbol)
-
             self._running = True
-            logger.info("Connecting WebSocket...")
+            logger.info("Connecting WebSocket")
 
             self._ws_task = asyncio.create_task(
                 self.client.connect(self.handle_message)
@@ -52,8 +47,14 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
+        if self.client is None:
+            logger.warning("Client not initialized. Cannot unsubscribe.")
+            return
         try:
-            self.client.close()
+            if self.symbols:
+                await self.unsubscribe(self.symbols)
+
+            await self.client.close()
             if self._ws_task:
                 await self._ws_task
 
@@ -67,23 +68,38 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running")
             return
+        if self.client is None:
+            logger.warning("Client not initialized. Cannot unsubscribe.")
+            return
         try:
-            for symbol in symbols:
-                self.client.subscribe(f"AM.{symbol}")
-                logger.info(f"Subscribed to: AM.{symbol}")
-                self.symbols.add(symbol)
+            if not symbols:
+                logger.warning("No symbols to subscribe.")
+                return
+
+            tickers = [f"AM.{symbol}" for symbol in symbols]
+            self.client.subscribe(*tickers)
+            self.symbols.update(symbols)
+            logger.info(f"Subscribed to: {tickers}")
         except Exception as e:
             logger.error(f"Error in subscribe(): {e}")
             logger.error(traceback.format_exc())
 
-    async def unsubscribe(self, symbol: str):
+    async def unsubscribe(self, symbols: Set[str]):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
+        if self.client is None:
+            logger.warning("Client not initialized. Cannot unsubscribe.")
+            return
         try:
-            self.client.unsubscribe(f"AM.{symbol}")
-            logger.info(f"Unsubscribed from: AM.{symbol}")
-            self.symbols.discard(symbol)
+            if not symbols:
+                logger.warning("No symbols to unsubscribe.")
+                return
+
+            tickers = [f"AM.{symbol}" for symbol in symbols]
+            self.client.unsubscribe(*tickers)
+            self.symbols.difference_update(symbols)
+            logger.info(f"Unsubscribed from: {tickers}")
         except Exception as e:
             logger.error(f"Error in unsubscribe(): {e}")
             logger.error(traceback.format_exc())
@@ -95,7 +111,7 @@ class PolygonRealtime:
             data = []
             for msg in msgs:
                 record = {
-                    "symbol": msg.symbol,
+                    "symbol": getattr(msg, "symbol", None),
                     "timestamp": getattr(msg, "start_timestamp", None),
                     "open": getattr(msg, "open", None),
                     "high": getattr(msg, "high", None),
@@ -136,10 +152,16 @@ async def main():
             api_key=config.POLYGON_API_KEY, channel=redis_channel
         )
 
-        await realtime.start({"*"})
-        await asyncio.sleep(20)
+        await realtime.start()
+
+        await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})
+
+        await asyncio.sleep(300)
+
+        await realtime.unsubscribe({"MSFT", "GOOGL"})
 
         await realtime.stop()
+
     except Exception as e:
         logger.error(f"Error in main(): {e}")
 
