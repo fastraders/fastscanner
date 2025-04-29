@@ -38,7 +38,11 @@ class PublicHolidaysDataStore(Protocol):
 
 
 class Channel(Protocol):
-    async def push(self, data: list[dict]): ...
+    async def push(self, channel_id: str, data: list[dict]): ...
+
+
+class PolygonRealtime(Protocol):
+    def __init__(self, api_key: str, channel: Channel): ...
 
 
 class CandleCol:

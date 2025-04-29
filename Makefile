@@ -1,9 +1,9 @@
 .PHONY: up down restart logs
 
-up:
+run:
 	docker-compose up -d
 
-down:
+stop:
 	docker-compose down
 
 restart: down up

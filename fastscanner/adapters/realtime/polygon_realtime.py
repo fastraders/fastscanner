@@ -1,151 +1,150 @@
 import asyncio
 import logging
 import traceback
-from typing import List, Optional, Set
 
 import pandas as pd
 from polygon import WebSocketClient
 from polygon.websocket.models import Feed, Market, WebSocketMessage
+from redis import RedisError
+from websockets import ConnectionClosedError
 
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.services.indicators.ports import Channel
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
 class PolygonRealtime:
-    def __init__(self, api_key: str, channel=None):
-        self.api_key = api_key
-        self.client: Optional[WebSocketClient] = None
+    def __init__(self, api_key: str, channel: Channel):
+        self._api_key = api_key
+        self._client: WebSocketClient
         self._running = False
-        self.symbols: Set[str] = set()
-        self.channel = channel
-        self._ws_task: Optional[asyncio.Task] = None
+        self._symbols: set[str] = set()
+        self._channel = channel
+        self._ws_task: asyncio.Task
 
     async def start(self):
         if self._running:
             logger.warning("WebSocket already running.")
             return
-        try:
-            self.client = WebSocketClient(
-                api_key=self.api_key,
-                feed=Feed.RealTime,
-                market=Market.Stocks,
-            )
-            self._running = True
-            logger.info("Connecting WebSocket")
 
-            self._ws_task = asyncio.create_task(
-                self.client.connect(self.handle_message)
+        self._client = WebSocketClient(
+            api_key=self._api_key,
+            feed=Feed.RealTime,
+            market=Market.Stocks,
+        )
+        if self._client is None:
+            raise RuntimeError(
+                "WebSocketClient initialization failed — client is None."
             )
-        except Exception as e:
-            logger.error(f"Error in start(): {e}")
-            logger.error(traceback.format_exc())
+
+        self._running = True
+        logger.info("Connecting WebSocket")
+
+        self._ws_task = asyncio.create_task(self._client.connect(self.handle_messages))
 
     async def stop(self):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        if self.client is None:
-            logger.warning("Client not initialized. Cannot unsubscribe.")
-            return
-        try:
-            if self.symbols:
-                await self.unsubscribe(self.symbols)
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during stop.")
 
-            await self.client.close()
+        if self._symbols:
+            await self.unsubscribe(self._symbols)
+
+        try:
+            await self._client.close()
             if self._ws_task:
                 await self._ws_task
-
+        except ConnectionClosedError as e:
+            logger.warning(f"Client was disconnected: {e}")
+        finally:
             self._running = False
             logger.info("WebSocket stopped.")
-        except Exception as e:
-            logger.error(f"Error in stop(): {e}")
-            logger.error(traceback.format_exc())
 
-    async def subscribe(self, symbols: Set[str]):
+    async def subscribe(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running")
             return
-        if self.client is None:
-            logger.warning("Client not initialized. Cannot unsubscribe.")
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during subscribe.")
+
+        if not symbols:
+            logger.warning("No symbols to subscribe.")
             return
-        try:
-            if not symbols:
-                logger.warning("No symbols to subscribe.")
-                return
 
-            tickers = [f"AM.{symbol}" for symbol in symbols]
-            self.client.subscribe(*tickers)
-            self.symbols.update(symbols)
-            logger.info(f"Subscribed to: {tickers}")
-        except Exception as e:
-            logger.error(f"Error in subscribe(): {e}")
-            logger.error(traceback.format_exc())
+        tickers = [f"AM.{symbol}" for symbol in symbols]
+        self._client.subscribe(*tickers)
+        self._symbols.update(symbols)
+        logger.info(f"Subscribed to: {tickers}")
 
-    async def unsubscribe(self, symbols: Set[str]):
+    async def unsubscribe(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        if self.client is None:
-            logger.warning("Client not initialized. Cannot unsubscribe.")
+
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during unsubscribe.")
+
+        if not symbols:
+            logger.warning("No symbols to unsubscribe.")
             return
-        try:
-            if not symbols:
-                logger.warning("No symbols to unsubscribe.")
-                return
 
-            tickers = [f"AM.{symbol}" for symbol in symbols]
-            self.client.unsubscribe(*tickers)
-            self.symbols.difference_update(symbols)
+        tickers = [f"AM.{symbol}" for symbol in symbols]
+        try:
+            self._client.unsubscribe(*tickers)
+            self._symbols.difference_update(symbols)
             logger.info(f"Unsubscribed from: {tickers}")
-        except Exception as e:
-            logger.error(f"Error in unsubscribe(): {e}")
-            logger.error(traceback.format_exc())
+        except ConnectionClosedError as e:
+            logger.warning(f"WebSocket connection was already closed: {e}")
 
-    async def handle_message(self, msgs: List[WebSocketMessage]):
-        try:
-            logger.info(f"Received messages: {msgs}")
+    async def handle_messages(self, msgs: list[WebSocketMessage]):
+        logger.info(f"Received messages: {msgs}")
+        data = []
+        for msg in msgs:
+            record = {
+                "symbol": getattr(msg, "symbol", None),
+                "timestamp": getattr(msg, "start_timestamp", None),
+                "open": getattr(msg, "open", None),
+                "high": getattr(msg, "high", None),
+                "low": getattr(msg, "low", None),
+                "close": getattr(msg, "close", None),
+                "volume": getattr(msg, "volume", None),
+            }
+            data.append(record)
 
-            data = []
-            for msg in msgs:
-                record = {
-                    "symbol": getattr(msg, "symbol", None),
-                    "timestamp": getattr(msg, "start_timestamp", None),
-                    "open": getattr(msg, "open", None),
-                    "high": getattr(msg, "high", None),
-                    "low": getattr(msg, "low", None),
-                    "close": getattr(msg, "close", None),
-                    "volume": getattr(msg, "volume", None),
-                }
-                data.append(record)
-
-            if data:
-                df = pd.DataFrame(data)
-                await self._push(df)
-            else:
-                logger.info("No data records to push.")
-        except Exception as e:
-            logger.error(f"Error in handle_message(): {e}")
-            logger.error(traceback.format_exc())
+        if len(data) > 0:
+            df = pd.DataFrame(data)
+            await self._push(df)
+        else:
+            logger.debug("No data records to push.")
 
     async def _push(self, df: pd.DataFrame):
-        try:
-            logger.info(f"Pushing {len(df)} records to Redis.")
-            if self.channel:
-                await self.channel.push(df.to_dict(orient="records"))
-            else:
-                print(df)
-        except Exception as e:
-            logger.error(f"Error in _push(): {e}")
-            logger.error(traceback.format_exc())
+        logger.info(f"Pushing {len(df)} records to Redis.")
+        if self._channel:
+            try:
+                grouped = df.groupby("symbol")
+                for symbol, group in grouped:
+                    channel_id = f"realtime_stream_{symbol}"
+                    await self._channel.push(
+                        channel_id, group.to_dict(orient="records")
+                    )
+            except RedisError as e:
+                logger.error(f"Redis push failed: {e}")
+        else:
+            print(df)
 
 
 async def main():
     try:
         redis_channel = RedisChannel(
-            host="localhost", port=6379, stream_key="realtime_stream"
+            host=config.REDIS_DB_HOST,
+            port=config.REDIS_DB_PORT,
+            password=None,
+            db=0,
         )
 
         realtime = PolygonRealtime(
@@ -153,17 +152,14 @@ async def main():
         )
 
         await realtime.start()
-
         await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})
-
         await asyncio.sleep(300)
-
         await realtime.unsubscribe({"MSFT", "GOOGL"})
-
         await realtime.stop()
 
     except Exception as e:
         logger.error(f"Error in main(): {e}")
+        logger.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
