@@ -37,6 +37,14 @@ class PublicHolidaysStore(Protocol):
     def get(self) -> set[date]: ...
 
 
+class Channel(Protocol):
+    async def push(self, channel_id: str, data: list[dict]): ...
+
+
+class PolygonRealtime(Protocol):
+    def __init__(self, api_key: str, channel: Channel): ...
+
+
 class CandleCol:
     DATETIME = "datetime"
     OPEN = "open"

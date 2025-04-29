@@ -11,24 +11,22 @@ logging.basicConfig(level=logging.INFO)
 class RedisChannel:
     def __init__(
         self,
-        host="localhost",
-        port=6379,
-        password=None,
-        db=0,
-        stream_key="realtime_stream",
+        host: str,
+        port: int,
+        password: str | None,
+        db: int,
     ):
         self.redis = aioredis.Redis(
-            host=host, port=port, password=password, db=db, decode_responses=True
+            host=host,
+            port=port,
+            password=password,
+            db=db,
+            decode_responses=True,
         )
-        self.stream_key = stream_key
 
-    async def push(self, data: list[dict[str, Any]]):
-        if self.redis is None:
-            raise RuntimeError(
-                "Redis connection not established. Call connect() first."
-            )
+    async def push(self, channel_id: str, data: list[dict[str, Any]]):
         pipe = self.redis.pipeline()
         for record in data:
-            record_str: dict[Any, Any] = {k: v for k, v in record.items()}
-            pipe.xadd(self.stream_key, record_str)
+            record: dict[Any, Any]
+            pipe.xadd(channel_id, record)
         await pipe.execute()
