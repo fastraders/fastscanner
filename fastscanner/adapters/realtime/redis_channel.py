@@ -23,10 +23,17 @@ class RedisChannel:
             db=db,
             decode_responses=True,
         )
+        self._pipeline = None
 
-    async def push(self, channel_id: str, data: list[dict[str, Any]]):
-        pipe = self.redis.pipeline()
-        for record in data:
-            record: dict[Any, Any]
-            pipe.xadd(channel_id, record)
-        await pipe.execute()
+    async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True):
+        if self._pipeline is None:
+            self._pipeline = self.redis.pipeline()
+
+        self._pipeline.xadd(channel_id, data)
+        if flush:
+            await self.flush()
+
+    async def flush(self):
+        if self._pipeline:
+            await self._pipeline.execute()
+            self._pipeline = None

@@ -1,22 +1,26 @@
 from dataclasses import dataclass
 from datetime import date
-from typing import Protocol
+from typing import Any, Protocol
 
 import pandas as pd
 
 
 class CandleStore(Protocol):
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame: ...
+    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+        ...
 
 
 class FundamentalDataStore(Protocol):
-    def get(self, symbol: str) -> "FundamentalData": ...
+    def get(self, symbol: str) -> "FundamentalData":
+        ...
 
 
 class Cache(Protocol):
-    def save(self, key: str, value: str) -> None: ...
+    def save(self, key: str, value: str) -> None:
+        ...
 
-    def get(self, key: str) -> str: ...
+    def get(self, key: str) -> str:
+        ...
 
 
 @dataclass
@@ -34,15 +38,21 @@ class FundamentalData:
 
 
 class PublicHolidaysDataStore(Protocol):
-    def get(self) -> set[date]: ...
+    def get(self) -> set[date]:
+        ...
 
 
 class Channel(Protocol):
-    async def push(self, channel_id: str, data: list[dict]): ...
+    async def push(self, channel_id: str, data: dict[Any,Any], flush: bool = True):
+        ...
+
+    async def flush(self):
+        ...
 
 
 class PolygonRealtime(Protocol):
-    def __init__(self, api_key: str, channel: Channel): ...
+    def __init__(self, api_key: str, channel: Channel):
+        ...
 
 
 class CandleCol:
