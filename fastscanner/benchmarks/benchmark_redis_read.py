@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def fetch_all_for_symbol(redis: aioredis.Redis, symbol: str):
-    stream_key = f"realtime_stream_{symbol}"
+    stream_key = f"candles_min_{symbol}"
     start_time = time.perf_counter()
     count = 0
     last_id = "0"

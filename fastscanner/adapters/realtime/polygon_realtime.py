@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import traceback
+from collections import defaultdict
+from typing import Any
 
 import pandas as pd
 from polygon import WebSocketClient
-from polygon.websocket.models import Feed, Market, WebSocketMessage
+from polygon.websocket.models import EquityAgg, Feed, Market, WebSocketMessage
 from redis import RedisError
 from websockets import ConnectionClosedError
 
@@ -19,11 +21,11 @@ logging.basicConfig(level=logging.INFO)
 class PolygonRealtime:
     def __init__(self, api_key: str, channel: Channel):
         self._api_key = api_key
-        self._client: WebSocketClient
+        self._client: WebSocketClient | None = None
         self._running = False
         self._symbols: set[str] = set()
         self._channel = channel
-        self._ws_task: asyncio.Task
+        self._ws_task: asyncio.Task | None = None
 
     async def start(self):
         if self._running:
@@ -35,11 +37,6 @@ class PolygonRealtime:
             feed=Feed.RealTime,
             market=Market.Stocks,
         )
-        if self._client is None:
-            raise RuntimeError(
-                "WebSocketClient initialization failed — client is None."
-            )
-
         self._running = True
         logger.info("Connecting WebSocket")
 
@@ -103,39 +100,29 @@ class PolygonRealtime:
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
         logger.info(f"Received messages: {msgs}")
-        data = []
+        pushed = 0
         for msg in msgs:
+            if not isinstance(msg, EquityAgg):
+                logger.warning("Received unexpected message %s", str(msg))
+                continue
+
             record = {
-                "symbol": getattr(msg, "symbol", None),
-                "timestamp": getattr(msg, "start_timestamp", None),
-                "open": getattr(msg, "open", None),
-                "high": getattr(msg, "high", None),
-                "low": getattr(msg, "low", None),
-                "close": getattr(msg, "close", None),
-                "volume": getattr(msg, "volume", None),
+                "symbol": msg.symbol,
+                "timestamp": msg.start_timestamp,
+                "open": msg.open,
+                "high": msg.high,
+                "low": msg.low,
+                "close": msg.close,
+                "volume": msg.volume,
             }
-            data.append(record)
+            channel_id = f"candles_min_{msg.symbol}"
+            await self._channel.push(channel_id, record, flush=False)
+            pushed += 1
 
-        if len(data) > 0:
-            df = pd.DataFrame(data)
-            await self._push(df)
+        if pushed > 0:
+            await self._channel.flush()
         else:
-            logger.debug("No data records to push.")
-
-    async def _push(self, df: pd.DataFrame):
-        logger.info(f"Pushing {len(df)} records to Redis.")
-        if self._channel:
-            try:
-                grouped = df.groupby("symbol")
-                for symbol, group in grouped:
-                    channel_id = f"realtime_stream_{symbol}"
-                    await self._channel.push(
-                        channel_id, group.to_dict(orient="records")
-                    )
-            except RedisError as e:
-                logger.error(f"Redis push failed: {e}")
-        else:
-            print(df)
+            logger.debug("No valid messages to push.")
 
 
 async def main():
