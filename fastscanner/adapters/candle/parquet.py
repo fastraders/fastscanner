@@ -11,7 +11,7 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
-from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
 from .polygon import PolygonCandlesProvider

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
-from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 SYMBOL = "AAPL"
@@ -176,7 +176,7 @@ def test_cache_fallback_on_corrupt_file(tmp_path):
 
     mock_store.get.return_value = df
 
-    result = provider._cache("AAPL", "2023-04", "d", "1min")
+    result = provider._cache("AAPL", "2023", "d", "1min")
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 2

@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from fastscanner.adapters.holiday.public_holiday_store import (
+from fastscanner.adapters.holiday.exchange_calendars import (
     ExchangeCalendarsPublicHolidaysStore,
 )
 

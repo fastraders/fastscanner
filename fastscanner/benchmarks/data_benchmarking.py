@@ -12,13 +12,13 @@ from fastscanner.pkg import config
 from fastscanner.services.indicators.ports import CandleStore
 
 SYMBOL = "AAPL"
-START_DATE = date(2020, 1, 1)
+START_DATE = date(2020, 1, 5)
 FREQUENCIES = ["1min", "2min", "15min", "1h", "5h", "1d"]
 
 DURATION_MAP = {
     "1D": timedelta(days=1),
     "1M": timedelta(days=30),
-    "1Y": timedelta(days=365),
+    "3M": timedelta(days=90),
 }
 
 OUTPUT_DIR = "output"
@@ -38,7 +38,7 @@ def benchmark(provider: CandleStore, label):
         print(f"Priming cache for {case_name}...")
         df = provider.get(SYMBOL, start, end, freq)
 
-        n_samples = 10
+        n_samples = 100
         elapsed = 0
         for _ in range(n_samples):
             t0 = time.perf_counter()
@@ -64,24 +64,24 @@ def benchmark(provider: CandleStore, label):
 if __name__ == "__main__":
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     benchmark(PartitionedCSVCandlesProvider(polygon), "Partitioned CSV")
-    benchmark(
-        ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY),
-        "Parquet",
-    )
+    # benchmark(
+    #     ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY),
+    #     "Parquet",
+    # )
 
     df = pd.DataFrame(results)
 
     # Create side-by-side comparison
     csv_df = df[df["Format"] == "Partitioned CSV"].set_index("Range")
-    parquet_df = df[df["Format"] == "Parquet"].set_index("Range")
+    # parquet_df = df[df["Format"] == "Parquet"].set_index("Range")
 
     side_by_side = (
         csv_df[["Rows", "Time (s)", "Memory (MB)"]]
-        .join(
-            parquet_df[["Rows", "Time (s)", "Memory (MB)"]],
-            lsuffix=" CSV",
-            rsuffix=" Parquet",
-        )
+        # .join(
+        #     parquet_df[["Rows", "Time (s)", "Memory (MB)"]],
+        #     lsuffix=" CSV",
+        #     rsuffix=" Parquet",
+        # )
         .reset_index()
     )
 
@@ -90,9 +90,9 @@ if __name__ == "__main__":
         "Partitioned CSV Rows",
         "Partitioned CSV Time (s)",
         "Partitioned CSV Memory (MB)",
-        "Parquet Rows",
-        "Parquet Time (s)",
-        "Parquet Memory (MB)",
+        # "Parquet Rows",
+        # "Parquet Time (s)",
+        # "Parquet Memory (MB)",
     ]
 
     csv_path = os.path.join(OUTPUT_DIR, "benchmark_report.csv")

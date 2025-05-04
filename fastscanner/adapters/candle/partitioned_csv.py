@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 
-from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 from .polygon import split_freq
@@ -36,9 +36,6 @@ class PartitionedCSVCandlesProvider:
             dfs.append(df)
 
         if len(dfs) == 0:
-            logger.warning(
-                f"No data fetched for {symbol} in the entire date range {start} to {end}."
-            )
             return pd.DataFrame(
                 columns=list(CandleCol.RESAMPLE_MAP.keys()),
                 index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
@@ -91,8 +88,10 @@ class PartitionedCSVCandlesProvider:
             return pd.Series(
                 (index - dt).strftime("%Y-%m-%d"), index=index, name="partition_key"
             )
-        if unit.lower() in ("h", "d"):
+        if unit.lower() in ("h",):
             return pd.Series(index.strftime("%Y-%m"), index=index, name="partition_key")
+        if unit.lower() in ("d",):
+            return pd.Series(index.strftime("%Y"), index=index, name="partition_key")
         raise ValueError(f"Invalid unit: {unit}")
 
     def _partition_keys_in_range(self, start: date, end: date, unit: str) -> list[str]:
@@ -102,11 +101,13 @@ class PartitionedCSVCandlesProvider:
     def _range_from_key(self, key: str, unit: str) -> tuple[date, date]:
         if unit.lower() in ("min", "t"):
             return date.fromisoformat(key), date.fromisoformat(key) + timedelta(days=6)
-        if unit.lower() in ("h", "d"):
+        if unit.lower() in ("h",):
             year, month = key.split("-")
             year, month = int(year), int(month)
             _, days = monthrange(year, month)
             return date(year, month, 1), date(year, month, days)
+        if unit.lower() in ("d",):
+            return date(int(key), 1, 1), date(int(key), 12, 31)
         raise ValueError(f"Invalid unit: {unit}")
 
     _expirations: dict[str, dict[str, date]]

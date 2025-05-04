@@ -1,12 +1,25 @@
-from datetime import datetime, time
+import logging
+import math
+from datetime import date, datetime, time, timedelta
+from enum import StrEnum
+from operator import add
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
 
 from ..ports import CandleCol
+from ..registry import ApplicationRegistry
+from ..utils import lookback_days
+
+logger = logging.getLogger(__name__)
 
 
 class CumulativeDailyVolumeIndicator:
+    def __init__(self):
+        self._last_date: dict[str, date] = {}
+        self._last_volume: dict[str, float] = {}
+
     @classmethod
     def type(cls):
         return "cumulative_daily_volume"
@@ -14,56 +27,262 @@ class CumulativeDailyVolumeIndicator:
     def column_name(self):
         return self.type()
 
-    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         volume = df[CandleCol.VOLUME]
         assert isinstance(volume.index, pd.DatetimeIndex)
         cum_volume = volume.groupby(volume.index.date).cumsum()
         df[self.column_name()] = cum_volume
         return df
 
-    def extend_realtime(
-        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
-    ) -> pd.DataFrame:
-        if prev_df is not None and not prev_df.empty:
-            # Adds the last row to take it into account for the cumulative operation
-            new_rows = pd.concat([prev_df.iloc[-1:][new_rows.columns], new_rows])
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        volume = new_row[CandleCol.VOLUME]
+        assert isinstance(new_row.name, datetime)
+        last_date = self._last_date.get(symbol)
+        if last_date is not None and last_date == new_row.name.date():
+            volume += self._last_volume.get(symbol, 0)
+        new_row[self.column_name()] = volume
+        self._last_date[symbol] = new_row.name.date()
+        self._last_volume[symbol] = volume
+        return new_row
 
-        new_rows = self.extend(new_rows)
-        if prev_df is not None and not prev_df.empty:
-            new_rows = new_rows.iloc[1:]
 
-        return new_rows
+class CumulativeOperation(StrEnum):
+    MIN = "min"
+    MAX = "max"
+    SUM = "sum"
+
+    def label(self) -> str:
+        return {
+            self.MIN: "lowest",
+            self.MAX: "highest",
+            self.SUM: "total",
+        }[self]
+
+    def pandas_func(self) -> str:
+        return {
+            self.MIN: "cummin",
+            self.MAX: "cummax",
+            self.SUM: "cumsum",
+        }[self]
+
+    def func(self) -> Callable[[float, float], float]:
+        return {
+            self.MIN: min,
+            self.MAX: max,
+            self.SUM: add,  # Use addition instead of sum() which expects an iterable
+        }[self]
+
+    def initial_value(self) -> float:
+        return {
+            self.MIN: np.inf,
+            self.MAX: -np.inf,
+            self.SUM: 0,
+        }[self]
 
 
 class PremarketCumulativeIndicator:
-    def __init__(self, candle_col: str):
-        self.candle_col = candle_col
+    def __init__(self, candle_col: str, op: CumulativeOperation):
+        self._candle_col = candle_col
+        self._op = op
+        self._last_date: dict[str, date] = {}
+        self._last_value: dict[str, float] = {}
 
     @classmethod
     def type(cls):
         return "premarket_cumulative"
 
     def column_name(self):
-        return f"premarket_{self.candle_col}"
+        return f"premarket_{self._op.label()}_{self._candle_col}"
 
-    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
-        values = df[self.candle_col]
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        values = df[self._candle_col]
         assert isinstance(values.index, pd.DatetimeIndex)
-        cum_values = values.groupby(values.index.date).cummax()
+        cum_values = values.groupby(values.index.date).agg(self._op.pandas_func())
         cum_values[cum_values.index.time >= time(9, 30)] = pd.NA  # type: ignore
         cum_values = cum_values.ffill()
         df[self.column_name()] = cum_values
         return df
 
-    def extend_realtime(
-        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
-    ) -> pd.DataFrame:
-        if prev_df is not None and not prev_df.empty:
-            # Adds the last row to take it into account for the cumulative operation
-            new_rows = pd.concat([prev_df.iloc[-1:][new_rows.columns], new_rows])
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        last_date = self._last_date.get(symbol)
+        last_value = self._last_value.get(symbol)
+        if new_row.name.time() >= time(9, 30):
+            if last_date is None or last_date != new_row.name.date():
+                new_row[self.column_name()] = pd.NA
+            else:
+                new_row[self.column_name()] = last_value
+            return new_row
 
-        new_rows = self.extend(new_rows)
-        if prev_df is not None and not prev_df.empty:
-            new_rows = new_rows.iloc[1:]
+        value = new_row[self._candle_col]
+        if last_value is not None and last_date == new_row.name.date():
+            value = self._op.func()(value, last_value)
 
-        return new_rows
+        new_row[self.column_name()] = value
+        self._last_date[symbol] = new_row.name.date()
+        self._last_value[symbol] = value
+        return new_row
+
+
+class ATRIndicator:
+    def __init__(self, period: int):
+        self._period = period
+        self._last_atr: dict[str, float] = {}
+        self._last_close: dict[str, float] = {}
+
+    @classmethod
+    def type(cls):
+        return "atr"
+
+    def column_name(self):
+        return f"atr_{self._period}"
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        assert isinstance(df.index, pd.DatetimeIndex)
+        tr0 = (df[CandleCol.HIGH] - df[CandleCol.LOW]).abs()
+        tr1 = (df[CandleCol.HIGH] - df[CandleCol.CLOSE].shift(1)).abs()
+        tr2 = (df[CandleCol.LOW] - df[CandleCol.CLOSE].shift(1)).abs()
+        col_name = self.column_name()
+        df[col_name] = (
+            pd.concat([tr0, tr1, tr2], axis=1)
+            .max(axis=1)
+            .ewm(alpha=1 / self._period)
+            .mean()
+            .round(3)
+        )
+        return df
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        last_close = self._last_close.get(symbol)
+        if last_close is None:
+            new_row[self.column_name()] = pd.NA
+            self._last_close[symbol] = new_row[CandleCol.CLOSE]
+            return new_row
+
+        tr0: float = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
+        tr1: float = abs(new_row[CandleCol.HIGH] - last_close)
+        tr2: float = abs(new_row[CandleCol.LOW] - last_close)
+        tr: float = max(tr0, tr1, tr2)
+
+        last_atr = self._last_atr.get(symbol)
+        if last_atr is None:
+            new_row[self.column_name()] = tr
+            self._last_close[symbol] = new_row[CandleCol.CLOSE]
+            self._last_atr[symbol] = tr
+            return new_row
+
+        alpha = 1 / self._period
+        atr = last_atr * (1 - alpha) + tr * alpha
+        new_row[self.column_name()] = round(atr, 3)
+        self._last_atr[symbol] = atr
+        self._last_close[symbol] = new_row[CandleCol.CLOSE]
+        return new_row
+
+
+class PositionInRangeIndicator:
+    """
+    Normalizes the current close between the highest and lowest values of the last n days.
+    """
+
+    def __init__(self, n_days: int):
+        self._n_days = n_days
+        self._high_n_days: dict[str, list[float]] = {}
+        self._low_n_days: dict[str, list[float]] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "position_in_range"
+
+    def column_name(self):
+        return f"position_in_range_{self._n_days}"
+
+    def _get_high_low_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        start_date = lookback_days(df.index[0].date(), self._n_days)
+        end_date = df.index[-1].date() - timedelta(days=1)
+        daily_df = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
+        if daily_df.shape[0] < self._n_days:
+            logger.warning(
+                f"Requested {self._n_days} days of data for {symbol} on {start_date}-{end_date}, got {daily_df.shape[0]} days."
+            )
+        return daily_df
+
+    def _extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        daily_df = self._get_high_low_n_days(symbol, df)
+        if daily_df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+
+        daily_df = (
+            daily_df[[CandleCol.HIGH, CandleCol.LOW]]
+            .rolling(self._n_days)
+            .agg(
+                {
+                    CandleCol.HIGH: "max",
+                    CandleCol.LOW: "min",
+                }
+            )
+            .rename(
+                columns={
+                    CandleCol.HIGH: "_highest",
+                    CandleCol.LOW: "_lowest",
+                }
+            )
+            .set_index(daily_df.index.date)  # type: ignore
+        )
+
+        daily_df.loc[df.index[-1].date()] = pd.NA
+        daily_df = daily_df.shift(1)
+
+        df["date"] = df.index.date  # type: ignore
+        df = df.join(daily_df, on="date")
+        df["_cumhigh"] = df[CandleCol.HIGH].cummax()
+        df["_cumlow"] = df[CandleCol.LOW].cummin()
+        df["_highest"] = df[["_highest", "_cumhigh"]].max(axis=1)
+        df["_lowest"] = df[["_lowest", "_cumlow"]].min(axis=1)
+        df[self.column_name()] = (df[CandleCol.CLOSE] - df["_lowest"]) / (
+            df["_highest"] - df["_lowest"]
+        )
+
+        return df
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        return self._extend(symbol, df).drop(
+            columns=["date", "_lowest", "_highest", "_cumhigh", "_cumlow"]
+        )
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        last_date = self._last_date.get(symbol)
+        if last_date is None:
+            daily_df = self._get_high_low_n_days(symbol, new_row.to_frame().T)
+            self._last_date[symbol] = new_row.name.date()  # type: ignore
+            self._low_n_days[symbol] = list(
+                daily_df[CandleCol.LOW].values[-self._n_days :]
+            )
+            self._high_n_days[symbol] = list(
+                daily_df[CandleCol.HIGH].values[-self._n_days :]
+            )
+            self._low_n_days[symbol].append(new_row[CandleCol.LOW])
+            self._high_n_days[symbol].append(new_row[CandleCol.HIGH])
+        elif last_date != new_row.name.date():
+            self._high_n_days[symbol].pop(0)
+            self._low_n_days[symbol].pop(0)
+            self._last_date[symbol] = new_row.name.date()
+            self._low_n_days[symbol].append(new_row[CandleCol.LOW])
+            self._high_n_days[symbol].append(new_row[CandleCol.HIGH])
+        else:
+            self._low_n_days[symbol][-1] = min(
+                self._low_n_days[symbol][-1], new_row[CandleCol.LOW]
+            )
+            self._high_n_days[symbol][-1] = max(
+                self._high_n_days[symbol][-1], new_row[CandleCol.HIGH]
+            )
+
+        last_high = max(self._high_n_days[symbol])
+        last_low = min(self._low_n_days[symbol])
+        last_close = new_row[CandleCol.CLOSE]
+        new_row[self.column_name()] = (last_close - last_low) / (last_high - last_low)
+
+        return new_row
