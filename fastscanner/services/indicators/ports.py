@@ -6,21 +6,17 @@ import pandas as pd
 
 
 class CandleStore(Protocol):
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        ...
+    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame: ...
 
 
 class FundamentalDataStore(Protocol):
-    def get(self, symbol: str) -> "FundamentalData":
-        ...
+    def get(self, symbol: str) -> "FundamentalData": ...
 
 
 class Cache(Protocol):
-    def save(self, key: str, value: str) -> None:
-        ...
+    def save(self, key: str, value: str) -> None: ...
 
-    def get(self, key: str) -> str:
-        ...
+    def get(self, key: str) -> str: ...
 
 
 @dataclass
@@ -37,9 +33,8 @@ class FundamentalData:
     shares_float: float
 
 
-class PublicHolidaysDataStore(Protocol):
-    def get(self) -> set[date]:
-        ...
+class PublicHolidaysStore(Protocol):
+    def get(self) -> set[date]: ...
 
 
 class CandleCol:

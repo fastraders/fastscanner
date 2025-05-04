@@ -7,8 +7,8 @@ from urllib.parse import urljoin
 import httpx
 import pandas as pd
 
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.pkg.http import MaxRetryError, retry_request
-from fastscanner.pkg.localize import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class PolygonCandlesProvider:
                     }
                 )[self.columns]
             )
-            if unit in ["min", "t", "h"]:
+            if unit in ("min", "h", "t"):
                 df = df[
                     (df.index.time >= pd.Timestamp("04:00").time()) & (df.index.time <= pd.Timestamp("20:00").time())  # type: ignore
                 ]
@@ -101,9 +101,6 @@ class PolygonCandlesProvider:
             curr_end = min(end, curr_start + timedelta(days=max_days))
 
         if not dfs:
-            logger.warning(
-                f"No data fetched for {symbol} in the entire date range {start} to {end}."
-            )
             return pd.DataFrame(
                 columns=self.columns,
                 index=pd.DatetimeIndex([], name=CandleCol.DATETIME),

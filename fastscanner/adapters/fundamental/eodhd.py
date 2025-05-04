@@ -9,6 +9,7 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.http import MaxRetryError, retry_request
+from fastscanner.services.exceptions import NotFound
 from fastscanner.services.indicators.ports import FundamentalData
 
 logger = logging.getLogger(__name__)
@@ -48,22 +49,14 @@ class EODHDFundamentalStore:
             "api_token": self._api_key,
             "fmt": "json",
         }
-        try:
-            fundamentals = self._fetch_json(url, params=params)
-            return fundamentals
-        except Exception as e:
-            logger.exception(f"Error fetching fundamentals for {symbol}")
-            return {}
+        fundamentals = self._fetch_json(url, params=params)
+        return fundamentals
 
     def _fetch_market_cap(self, symbol: str) -> Dict:
         url = f"{self._base_url}/historical-market-cap/{symbol}"
         params = {"api_token": self._api_key, "fmt": "json"}
-        try:
-            market_cap = self._fetch_json(url, params=params)
-            return market_cap
-        except Exception as e:
-            logger.exception(f"Error fetching market cap for {symbol}")
-            return {}
+        market_cap = self._fetch_json(url, params=params)
+        return market_cap
 
     def _fetch_json(self, url: str, params: Dict) -> dict:
         try:

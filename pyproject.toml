@@ -19,6 +19,7 @@ exchange-calendars= "^4.10"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"
+coverage = "^7.8.0"
 
 [build-system]
 requires = ["poetry-core"]

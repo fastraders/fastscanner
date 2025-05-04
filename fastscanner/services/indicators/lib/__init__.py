@@ -13,23 +13,20 @@ _indicators: list[type["Indicator"]] = [
 
 
 class Indicator(Protocol):
-    def extend(self, df: pd.DataFrame) -> pd.DataFrame:
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         """
         Extend the DataFrame with the indicator's values.
         """
         ...
 
-    def extend_realtime(
-        self, new_rows: pd.DataFrame, prev_df: pd.DataFrame | None
-    ) -> pd.DataFrame:
-        ...
-
     @classmethod
-    def type(cls) -> str:
-        ...
+    def type(cls) -> str: ...
 
-    def column_name(self) -> str:
-        ...
+    def column_name(self) -> str: ...
+
+
+class RealtimeIndicator(Indicator, Protocol):
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
 class IndicatorsLibrary:
