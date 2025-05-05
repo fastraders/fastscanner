@@ -43,23 +43,6 @@ class Channel(Protocol):
     async def flush(self): ...
 
 
-class PolygonRealtime(Protocol):
-    def __init__(self, api_key: str, channel: Channel): ...
-
-
-class Channel(Protocol):
-    async def push(self, channel_id: str, data: dict[Any,Any], flush: bool = True):
-        ...
-
-    async def flush(self):
-        ...
-
-
-class PolygonRealtime(Protocol):
-    def __init__(self, api_key: str, channel: Channel):
-        ...
-
-
 class CandleCol:
     DATETIME = "datetime"
     OPEN = "open"

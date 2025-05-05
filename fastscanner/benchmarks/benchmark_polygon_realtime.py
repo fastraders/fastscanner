@@ -2,6 +2,8 @@ import asyncio
 import logging
 import time
 import traceback
+from functools import wraps
+from types import MethodType
 
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
@@ -13,42 +15,37 @@ logging.basicConfig(level=logging.INFO)
 
 class BenchmarkStats:
     def __init__(self):
-        self.total_records = 0
-        self.total_flushes = 0
         self.latencies = []
 
-    def record_flush(self, record_count: int, latency: float):
-        self.total_records += record_count
-        self.total_flushes += 1
+    def record(self, latency: float):
         self.latencies.append(latency)
 
     def report(self):
-        avg_latency = sum(self.latencies) / len(self.latencies) if self.latencies else 0
-        max_latency = max(self.latencies) if self.latencies else 0
+        if not self.latencies:
+            print("\n--- Benchmark Report ---")
+            print("No data received yet.")
+            return
+
+        avg_latency = sum(self.latencies) / len(self.latencies)
+        max_latency = max(self.latencies)
+
         print("\n--- Benchmark Report ---")
-        print(f"Total Records Pushed: {self.total_records}")
-        print(f"Total Flushes: {self.total_flushes}")
-        print(f"Avg Flush Latency: {avg_latency:.6f}s")
-        print(f"Max Flush Latency: {max_latency:.6f}s")
+        print(f"Handle Calls: {len(self.latencies)}")
+        print(f"Avg Latency: {avg_latency:.6f}s")
+        print(f"Max Latency: {max_latency:.6f}s")
 
 
-def wrap_flush(redis_channel: RedisChannel, stats: BenchmarkStats):
-    original_flush = redis_channel.flush
+def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
+    original_handle = realtime.handle_messages
 
-    async def benchmarked_flush():
+    @wraps(original_handle)
+    async def benchmarked_handle(self, msgs):
         start = time.perf_counter()
-        pipeline = redis_channel._pipeline
-        record_count = 0
-
-        if pipeline:
-            record_count = len(pipeline.command_stack)
-
-        await original_flush()
+        await original_handle(msgs)
         end = time.perf_counter()
+        stats.record(end - start)
 
-        stats.record_flush(record_count, end - start)
-
-    redis_channel.flush = benchmarked_flush
+    realtime.handle_messages = MethodType(benchmarked_handle, realtime)
 
 
 async def main():
@@ -62,12 +59,12 @@ async def main():
             db=0,
         )
 
-        wrap_flush(redis_channel, stats)
-
         realtime = PolygonRealtime(
             api_key=config.POLYGON_API_KEY,
             channel=redis_channel,
         )
+
+        wrap_handle_messages(realtime, stats)
 
         await realtime.start()
         await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})

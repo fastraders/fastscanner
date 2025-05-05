@@ -46,14 +46,10 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        if self._client is None:
-            raise RuntimeError("WebSocketClient is None during stop.")
-
-        if self._symbols:
-            await self.unsubscribe(self._symbols)
-
+        await self.unsubscribe(self._symbols)
         try:
-            await self._client.close()
+            if self._client:
+                await self._client.close()
             if self._ws_task:
                 await self._ws_task
         except ConnectionClosedError as e:
@@ -100,7 +96,6 @@ class PolygonRealtime:
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
         logger.info(f"Received messages: {msgs}")
-        pushed = 0
         for msg in msgs:
             if not isinstance(msg, EquityAgg):
                 logger.warning("Received unexpected message %s", str(msg))
@@ -117,12 +112,8 @@ class PolygonRealtime:
             }
             channel_id = f"candles_min_{msg.symbol}"
             await self._channel.push(channel_id, record, flush=False)
-            pushed += 1
 
-        if pushed > 0:
-            await self._channel.flush()
-        else:
-            logger.debug("No valid messages to push.")
+        await self._channel.flush()
 
 
 async def main():

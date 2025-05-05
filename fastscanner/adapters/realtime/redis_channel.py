@@ -35,5 +35,6 @@ class RedisChannel:
 
     async def flush(self):
         if self._pipeline:
-            await self._pipeline.execute()
+            pipeline = self._pipeline
             self._pipeline = None
+            await pipeline.execute()
