@@ -16,9 +16,11 @@ logging.basicConfig(level=logging.INFO)
 class BenchmarkStats:
     def __init__(self):
         self.latencies = []
+        self.total_messages = 0
 
-    def record(self, latency: float):
+    def record(self, message_count: int, latency: float):
         self.latencies.append(latency)
+        self.total_messages += message_count
 
     def report(self):
         if not self.latencies:
@@ -30,9 +32,10 @@ class BenchmarkStats:
         max_latency = max(self.latencies)
 
         print("\n--- Benchmark Report ---")
-        print(f"Handle Calls: {len(self.latencies)}")
-        print(f"Avg Latency: {avg_latency:.6f}s")
-        print(f"Max Latency: {max_latency:.6f}s")
+        print(f"Handle Calls       : {len(self.latencies)}")
+        print(f"Total Messages     : {self.total_messages}")
+        print(f"Avg Latency        : {avg_latency:.6f}s")
+        print(f"Max Latency        : {max_latency:.6f}s")
 
 
 def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
@@ -43,7 +46,7 @@ def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
         start = time.perf_counter()
         await original_handle(msgs)
         end = time.perf_counter()
-        stats.record(end - start)
+        stats.record(len(msgs), end - start)
 
     realtime.handle_messages = MethodType(benchmarked_handle, realtime)
 
@@ -67,7 +70,7 @@ async def main():
         wrap_handle_messages(realtime, stats)
 
         await realtime.start()
-        await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})
+        await realtime.subscribe({"*"})  # Subscribe to all symbols
 
         print("Benchmark running...\n")
         while True:
