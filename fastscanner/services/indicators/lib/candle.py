@@ -208,7 +208,7 @@ class PositionInRangeIndicator:
             )
         return daily_df
 
-    def _extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         daily_df = self._get_high_low_n_days(symbol, df)
         if daily_df.empty:
             df[self.column_name()] = pd.NA
@@ -237,48 +237,24 @@ class PositionInRangeIndicator:
 
         df["date"] = df.index.date  # type: ignore
         df = df.join(daily_df, on="date")
-        df["_cumhigh"] = df[CandleCol.HIGH].cummax()
-        df["_cumlow"] = df[CandleCol.LOW].cummin()
-        df["_highest"] = df[["_highest", "_cumhigh"]].max(axis=1)
-        df["_lowest"] = df[["_lowest", "_cumlow"]].min(axis=1)
         df[self.column_name()] = (df[CandleCol.CLOSE] - df["_lowest"]) / (
             df["_highest"] - df["_lowest"]
         )
 
-        return df
-
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        return self._extend(symbol, df).drop(
-            columns=["date", "_lowest", "_highest", "_cumhigh", "_cumlow"]
-        )
+        return df.drop(columns=["date", "_lowest", "_highest"])
 
     def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
-        if last_date is None:
+        if last_date is None or last_date != new_row.name.date():
             daily_df = self._get_high_low_n_days(symbol, new_row.to_frame().T)
             self._last_date[symbol] = new_row.name.date()  # type: ignore
-            self._low_n_days[symbol] = list(
-                daily_df[CandleCol.LOW].values[-self._n_days :]
-            )
-            self._high_n_days[symbol] = list(
-                daily_df[CandleCol.HIGH].values[-self._n_days :]
-            )
-            self._low_n_days[symbol].append(new_row[CandleCol.LOW])
-            self._high_n_days[symbol].append(new_row[CandleCol.HIGH])
-        elif last_date != new_row.name.date():
-            self._high_n_days[symbol].pop(0)
-            self._low_n_days[symbol].pop(0)
-            self._last_date[symbol] = new_row.name.date()
-            self._low_n_days[symbol].append(new_row[CandleCol.LOW])
-            self._high_n_days[symbol].append(new_row[CandleCol.HIGH])
-        else:
-            self._low_n_days[symbol][-1] = min(
-                self._low_n_days[symbol][-1], new_row[CandleCol.LOW]
-            )
-            self._high_n_days[symbol][-1] = max(
-                self._high_n_days[symbol][-1], new_row[CandleCol.HIGH]
-            )
+            self._low_n_days[symbol] = daily_df[CandleCol.LOW].to_list()[
+                -self._n_days :
+            ]
+            self._high_n_days[symbol] = daily_df[CandleCol.HIGH].to_list()[
+                -self._n_days :
+            ]
 
         last_high = max(self._high_n_days[symbol])
         last_low = min(self._low_n_days[symbol])
