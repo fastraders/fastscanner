@@ -95,7 +95,6 @@ class PolygonRealtime:
             logger.warning(f"WebSocket connection was already closed: {e}")
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
-        logger.info(f"Received messages: {msgs}")
         for msg in msgs:
             if not isinstance(msg, EquityAgg):
                 logger.warning("Received unexpected message %s", str(msg))

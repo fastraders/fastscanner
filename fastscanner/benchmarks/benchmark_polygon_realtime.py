@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 import traceback
+from datetime import datetime
 from functools import wraps
 from types import MethodType
 
@@ -12,30 +13,63 @@ from fastscanner.pkg import config
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+NO_DATA_TIMEOUT = 10
+
 
 class BenchmarkStats:
     def __init__(self):
         self.latencies = []
         self.total_messages = 0
+        self.batch_start_time: datetime | None = None
+        self.last_received_time: datetime | None = None
+        self.lock = asyncio.Lock()
 
-    def record(self, message_count: int, latency: float):
-        self.latencies.append(latency)
-        self.total_messages += message_count
+    async def record(self, message_count: int, latency: float):
+        async with self.lock:
+            now = datetime.now()
+            if self.batch_start_time is None:
+                self.batch_start_time = now
+            self.last_received_time = now
+
+            self.latencies.append(latency)
+            self.total_messages += message_count
+
+    async def check_timeout(self):
+        async with self.lock:
+            now = datetime.now()
+            if (
+                self.batch_start_time
+                and self.last_received_time
+                and (now - self.last_received_time).total_seconds() > NO_DATA_TIMEOUT
+            ):
+
+                logger.info(
+                    f"\nBatch started at: {self.batch_start_time.strftime('%M:%S.%f')}"
+                )
+                logger.info(f"Batch ended at:   {now.strftime('%M:%S.%f')}")
+                logger.info(
+                    f"Batch duration: {(now - self.batch_start_time).total_seconds():.6f} seconds\n"
+                )
+
+                self.batch_start_time = None
+                self.last_received_time = None
+                self.total_messages = 0
+                self.latencies.clear()
 
     def report(self):
         if not self.latencies:
-            print("\n--- Benchmark Report ---")
-            print("No data received yet.")
+            logger.info("\n--- Benchmark Report ---")
+            logger.info("No data received yet.")
             return
 
         avg_latency = sum(self.latencies) / len(self.latencies)
         max_latency = max(self.latencies)
 
-        print("\n--- Benchmark Report ---")
-        print(f"Handle Calls       : {len(self.latencies)}")
-        print(f"Total Messages     : {self.total_messages}")
-        print(f"Avg Latency        : {avg_latency:.6f}s")
-        print(f"Max Latency        : {max_latency:.6f}s")
+        logger.info("\n--- Benchmark Report ---")
+        logger.info(f"Handle Calls       : {len(self.latencies)}")
+        logger.info(f"Total Messages     : {self.total_messages}")
+        logger.info(f"Avg Latency        : {avg_latency:.6f}s")
+        logger.info(f"Max Latency        : {max_latency:.6f}s")
 
 
 def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
@@ -46,9 +80,15 @@ def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
         start = time.perf_counter()
         await original_handle(msgs)
         end = time.perf_counter()
-        stats.record(len(msgs), end - start)
+        await stats.record(len(msgs), end - start)
 
     realtime.handle_messages = MethodType(benchmarked_handle, realtime)
+
+
+async def monitor_inactivity(stats: BenchmarkStats):
+    while True:
+        await asyncio.sleep(1)
+        await stats.check_timeout()
 
 
 async def main():
@@ -70,9 +110,13 @@ async def main():
         wrap_handle_messages(realtime, stats)
 
         await realtime.start()
-        await realtime.subscribe({"*"})  # Subscribe to all symbols
+        await asyncio.sleep(3)
+        await realtime.subscribe({"*"})
 
-        print("Benchmark running...\n")
+        logger.info("Benchmark running...\n")
+
+        asyncio.create_task(monitor_inactivity(stats))
+
         while True:
             await asyncio.sleep(10)
             stats.report()
