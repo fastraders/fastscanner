@@ -50,6 +50,18 @@ class Channel(Protocol):
         ...
 
 
+class Channel(Protocol):
+    async def subscribe(self, channel_id: str, handler: "ChannelHandler"): ...
+
+    async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True): ...
+
+    async def flush(self): ...
+
+
+class ChannelHandler(Protocol):
+    async def handle(self, channel_id: str, data: dict[Any, Any]): ...
+
+
 class CandleCol:
     DATETIME = "datetime"
     OPEN = "open"
