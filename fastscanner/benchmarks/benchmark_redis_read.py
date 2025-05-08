@@ -15,11 +15,14 @@ logging.basicConfig(level=logging.INFO)
 SYMBOLS_FILE = "data/symbols/symbols.json"
 STREAM_PREFIX = "candles_min_"
 NO_DATA_TIMEOUT = 10
+LAST_ID_KEY = "stream_processor:last_ids"
 
 batch_start_time = None
 last_received_time = None
 batch_lock = asyncio.Lock()
 total_messages = 0
+
+last_ids: dict[str, str] = {}
 
 
 async def get_or_load_symbols(redis: aioredis.Redis) -> list[str]:
@@ -44,11 +47,45 @@ async def get_or_load_symbols(redis: aioredis.Redis) -> list[str]:
     return symbols
 
 
+async def get_last_id(redis: aioredis.Redis, stream_key: str) -> str:
+    last_id = await redis.hget(LAST_ID_KEY, stream_key)
+    if last_id is not None and isinstance(last_id, str):
+        return last_id
+
+    last_entry = await redis.xrevrange(stream_key, count=1)
+    return last_entry[0][0] if last_entry else "0-0"
+
+
+async def save_last_id(redis: aioredis.Redis, stream_key: str, last_id: str) -> None:
+    await redis.hset(LAST_ID_KEY, stream_key, last_id)
+
+
+async def handle_stream_entry(
+    symbol: str,
+    redis: aioredis.Redis,
+    stream_key: str,
+    entry_id: str,
+    data: dict,
+    now: float,
+):
+    global last_received_time, batch_start_time, total_messages
+
+    ts = float(data.get("timestamp", now))
+    logger.info(f"[{symbol}] ID: {entry_id}, Timestamp: {ts}, Data: {data}")
+
+    await save_last_id(redis, stream_key, entry_id)
+
+    if batch_start_time is None:
+        batch_start_time = now
+    last_received_time = now
+    total_messages += 1
+
+
 async def read_stream(redis: aioredis.Redis, symbol: str):
     global batch_start_time, last_received_time, total_messages
 
     stream_key = f"{STREAM_PREFIX}{symbol}"
-    last_id = "$"
+    last_id = await get_last_id(redis, stream_key)
 
     logger.info(f"Listening for stream: {stream_key}")
 
@@ -56,49 +93,40 @@ async def read_stream(redis: aioredis.Redis, symbol: str):
         while True:
             entries = await redis.xread({stream_key: last_id}, block=1000, count=100)
             now = time.time()
-            if entries:
-                for _, stream_entries in entries:
-                    for entry_id, data in stream_entries:
-                        ts = float(data.get("timestamp", now))
-                        logger.info(
-                            f"[{symbol}] ID: {entry_id}, Timestamp: {ts}, Data: {data}"
-                        )
-                        last_id = entry_id
-
-                        async with batch_lock:
-                            if batch_start_time is None:
-                                batch_start_time = now
-                            last_received_time = now
-                            total_messages += 1
+            for _, stream_entries in entries:
+                for entry_id, data in stream_entries:
+                    await handle_stream_entry(
+                        symbol, redis, stream_key, entry_id, data, now
+                    )
+                    last_id = entry_id
 
     except Exception as e:
         logger.error(f"[{symbol}] Error: {e}")
 
 
 async def monitor_batch_timeout():
-    global batch_start_time, last_received_time,total_messages
+    global batch_start_time, last_received_time, total_messages
 
     while True:
         await asyncio.sleep(1)
         now = time.time()
 
-        async with batch_lock:
-            if (
-                batch_start_time
-                and last_received_time
-                and (now - last_received_time) > NO_DATA_TIMEOUT
-            ):
-                logger.info(
-                    f"\nbatch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
-                )
-                logger.info(
-                    f"batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
-                )
-                logger.info(f"total messages read: {total_messages}")
-                logger.info(f"batch duration: {now - batch_start_time:.6f} seconds\n")
-                batch_start_time = None
-                last_received_time = None
-                total_messages=0
+        if (
+            batch_start_time
+            and last_received_time
+            and (now - last_received_time) > NO_DATA_TIMEOUT
+        ):
+            logger.info(
+                f"\nbatch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
+            )
+            logger.info(
+                f"batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
+            )
+            logger.info(f"total messages read: {total_messages}")
+            logger.info(f"batch duration: {now - batch_start_time:.6f} seconds\n")
+            batch_start_time = None
+            last_received_time = None
+            total_messages = 0
 
 
 async def main():

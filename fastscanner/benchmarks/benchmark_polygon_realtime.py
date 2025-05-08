@@ -25,36 +25,31 @@ class BenchmarkStats:
         self.lock = asyncio.Lock()
 
     async def record(self, message_count: int, latency: float):
-        async with self.lock:
-            now = datetime.now()
-            if self.batch_start_time is None:
-                self.batch_start_time = now
-            self.last_received_time = now
-
-            self.latencies.append(latency)
-            self.total_messages += message_count
+        now = datetime.now()
+        if self.batch_start_time is None:
+            self.batch_start_time = now
+        self.last_received_time = now
+        self.latencies.append(latency)
+        self.total_messages += message_count
 
     async def check_timeout(self):
-        async with self.lock:
-            now = datetime.now()
-            if (
-                self.batch_start_time
-                and self.last_received_time
-                and (now - self.last_received_time).total_seconds() > NO_DATA_TIMEOUT
-            ):
-
-                logger.info(
-                    f"\nBatch started at: {self.batch_start_time.strftime('%M:%S.%f')}"
-                )
-                logger.info(f"Batch ended at:   {now.strftime('%M:%S.%f')}")
-                logger.info(
-                    f"Batch duration: {(now - self.batch_start_time).total_seconds():.6f} seconds\n"
-                )
-
-                self.batch_start_time = None
-                self.last_received_time = None
-                self.total_messages = 0
-                self.latencies.clear()
+        now = datetime.now()
+        if (
+            self.batch_start_time
+            and self.last_received_time
+            and (now - self.last_received_time).total_seconds() > NO_DATA_TIMEOUT
+        ):
+            logger.info(
+                f"\nBatch started at: {self.batch_start_time.strftime('%M:%S.%f')}"
+            )
+            logger.info(f"Batch ended at:   {now.strftime('%M:%S.%f')}")
+            logger.info(
+                f"Batch duration: {(now - self.batch_start_time).total_seconds():.6f} seconds\n"
+            )
+            self.batch_start_time = None
+            self.last_received_time = None
+            self.total_messages = 0
+            self.latencies.clear()
 
     def report(self):
         if not self.latencies:
