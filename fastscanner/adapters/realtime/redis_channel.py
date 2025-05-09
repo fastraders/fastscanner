@@ -55,17 +55,14 @@ class RedisChannel:
             await pipeline.execute()
 
     async def subscribe(self, channel_id: str, handler: ChannelHandler) -> None:
-        if channel_id not in self._handlers:
-            self._handlers[channel_id] = []
+        self._handlers.setdefault(channel_id, []).append(handler)
+        if channel_id not in self._last_ids:
             self._last_ids[channel_id] = await self._get_last_id(channel_id)
         self._handlers[channel_id].append(handler)
         if self._xread_task is None or self._xread_task.done():
             self._xread_task = asyncio.create_task(self._xread_loop())
 
     async def _get_last_id(self, stream_key: str) -> str:
-        if stream_key in self._last_ids:
-            return self._last_ids[stream_key]
-
         last_entry = await self.redis.xrevrange(stream_key, count=1)
         return last_entry[0][0] if last_entry else "0-0"
 
