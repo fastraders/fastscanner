@@ -13,3 +13,4 @@ EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 REDIS_DB_PORT = 6379
 REDIS_DB_HOST = "localhost"
 INDICATORS_CALCULATE_RESULTS_DIR = "output/indicator_results"
+UNIX_SOCKET_PATH = "/run/redis/redis-server.sock"

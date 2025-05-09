@@ -32,6 +32,7 @@ async def print_latest_redis_data(redis, symbol: str):
 async def main():
     try:
         redis_channel = RedisChannel(
+            unix_socket_path=config.UNIX_SOCKET_PATH,
             host=config.REDIS_DB_HOST,
             port=config.REDIS_DB_PORT,
             password=None,

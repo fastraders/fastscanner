@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import os
 import time
 import traceback
 from datetime import datetime
@@ -14,6 +16,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 NO_DATA_TIMEOUT = 10
+SYMBOLS_FILE = "data/symbols/symbols.json"
 
 
 class BenchmarkStats:
@@ -86,11 +89,23 @@ async def monitor_inactivity(stats: BenchmarkStats):
         await stats.check_timeout()
 
 
+def load_symbols() -> set[str]:
+    if os.path.exists(SYMBOLS_FILE):
+        with open(SYMBOLS_FILE, "r") as f:
+            symbols = json.load(f)
+            logger.info(f"Loaded {len(symbols)} symbols from file.")
+            return set(symbols)
+    else:
+        logger.warning("No symbols.json found.")
+        return set()
+
+
 async def main():
     stats = BenchmarkStats()
 
     try:
         redis_channel = RedisChannel(
+            unix_socket_path=config.UNIX_SOCKET_PATH,
             host=config.REDIS_DB_HOST,
             port=config.REDIS_DB_PORT,
             password=None,
@@ -106,7 +121,8 @@ async def main():
 
         await realtime.start()
         await asyncio.sleep(3)
-        await realtime.subscribe({"*"})
+        symbols = load_symbols()
+        await realtime.subscribe(symbols)
 
         logger.info("Benchmark running...\n")
 

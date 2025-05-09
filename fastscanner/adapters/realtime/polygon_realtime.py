@@ -72,7 +72,7 @@ class PolygonRealtime:
         tickers = [f"AM.{symbol}" for symbol in symbols]
         self._client.subscribe(*tickers)
         self._symbols.update(symbols)
-        logger.info(f"Subscribed to: {tickers}")
+        logger.info(f"Subscribed to: {tickers}\n")
 
     async def unsubscribe(self, symbols: set[str]):
         if not self._running:
@@ -118,6 +118,7 @@ class PolygonRealtime:
 async def main():
     try:
         redis_channel = RedisChannel(
+            unix_socket_path=config.UNIX_SOCKET_PATH,
             host=config.REDIS_DB_HOST,
             port=config.REDIS_DB_PORT,
             password=None,

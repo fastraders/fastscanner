@@ -4,10 +4,11 @@ import logging
 import os
 import time
 from datetime import datetime
+from typing import Any
 
-import redis.asyncio as aioredis
-
+from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.services.indicators.ports import ChannelHandler
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -15,17 +16,14 @@ logging.basicConfig(level=logging.INFO)
 SYMBOLS_FILE = "data/symbols/symbols.json"
 STREAM_PREFIX = "candles_min_"
 NO_DATA_TIMEOUT = 10
-LAST_ID_KEY = "stream_processor:last_ids"
 
 batch_start_time = None
 last_received_time = None
-batch_lock = asyncio.Lock()
 total_messages = 0
+batch_lock = asyncio.Lock()
 
-last_ids: dict[str, str] = {}
 
-
-async def get_or_load_symbols(redis: aioredis.Redis) -> list[str]:
+async def get_or_load_symbols(redis: RedisChannel) -> list[str]:
     os.makedirs(os.path.dirname(SYMBOLS_FILE), exist_ok=True)
 
     if os.path.exists(SYMBOLS_FILE):
@@ -35,8 +33,8 @@ async def get_or_load_symbols(redis: aioredis.Redis) -> list[str]:
             return symbols
 
     symbols = []
-    async for key in redis.scan_iter(f"{STREAM_PREFIX}*"):
-        if await redis.type(key) == "stream":
+    async for key in redis.redis.scan_iter(f"{STREAM_PREFIX}*"):
+        if await redis.redis.type(key) == "stream":
             symbol = key.replace(STREAM_PREFIX, "")
             symbols.append(symbol)
 
@@ -47,61 +45,18 @@ async def get_or_load_symbols(redis: aioredis.Redis) -> list[str]:
     return symbols
 
 
-async def get_last_id(redis: aioredis.Redis, stream_key: str) -> str:
-    last_id = await redis.hget(LAST_ID_KEY, stream_key)
-    if last_id is not None and isinstance(last_id, str):
-        return last_id
+class BenchmarkHandler(ChannelHandler):
+    async def handle(self, channel_id: str, data: dict[Any, Any]):
+        global batch_start_time, last_received_time, total_messages
 
-    last_entry = await redis.xrevrange(stream_key, count=1)
-    return last_entry[0][0] if last_entry else "0-0"
+        now = time.time()
+        ts = float(data.get("timestamp", now))
+        logger.info(f"[{channel_id}] Timestamp: {ts}, Data: {data}")
 
-
-async def save_last_id(redis: aioredis.Redis, stream_key: str, last_id: str) -> None:
-    await redis.hset(LAST_ID_KEY, stream_key, last_id)
-
-
-async def handle_stream_entry(
-    symbol: str,
-    redis: aioredis.Redis,
-    stream_key: str,
-    entry_id: str,
-    data: dict,
-    now: float,
-):
-    global last_received_time, batch_start_time, total_messages
-
-    ts = float(data.get("timestamp", now))
-    logger.info(f"[{symbol}] ID: {entry_id}, Timestamp: {ts}, Data: {data}")
-
-    await save_last_id(redis, stream_key, entry_id)
-
-    if batch_start_time is None:
-        batch_start_time = now
-    last_received_time = now
-    total_messages += 1
-
-
-async def read_stream(redis: aioredis.Redis, symbol: str):
-    global batch_start_time, last_received_time, total_messages
-
-    stream_key = f"{STREAM_PREFIX}{symbol}"
-    last_id = await get_last_id(redis, stream_key)
-
-    logger.info(f"Listening for stream: {stream_key}")
-
-    try:
-        while True:
-            entries = await redis.xread({stream_key: last_id}, block=1000, count=100)
-            now = time.time()
-            for _, stream_entries in entries:
-                for entry_id, data in stream_entries:
-                    await handle_stream_entry(
-                        symbol, redis, stream_key, entry_id, data, now
-                    )
-                    last_id = entry_id
-
-    except Exception as e:
-        logger.error(f"[{symbol}] Error: {e}")
+        if batch_start_time is None:
+            batch_start_time = now
+        last_received_time = now
+        total_messages += 1
 
 
 async def monitor_batch_timeout():
@@ -117,38 +72,35 @@ async def monitor_batch_timeout():
             and (now - last_received_time) > NO_DATA_TIMEOUT
         ):
             logger.info(
-                f"\nbatch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
+                f"\nBatch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
             )
             logger.info(
-                f"batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
+                f"Batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
             )
-            logger.info(f"total messages read: {total_messages}")
-            logger.info(f"batch duration: {now - batch_start_time:.6f} seconds\n")
+            logger.info(f"Total messages read: {total_messages}")
+            logger.info(f"Batch duration: {now - batch_start_time:.6f} seconds\n")
             batch_start_time = None
             last_received_time = None
             total_messages = 0
 
 
 async def main():
-    redis = aioredis.Redis(
-        unix_socket_path="/run/redis/redis-server.sock",
+    redis_channel = RedisChannel(
+        unix_socket_path=config.UNIX_SOCKET_PATH,
+        host=config.REDIS_DB_HOST,
+        port=config.REDIS_DB_PORT,
         password=None,
         db=0,
-        decode_responses=True,
     )
-    # redis = aioredis.Redis(
-    #     host=config.REDIS_DB_HOST,
-    #     port=config.REDIS_DB_PORT,
-    #     password=None,
-    #     db=0,
-    #     decode_responses=True,
-    # )
-    symbols = await get_or_load_symbols(redis)
+    symbols = await get_or_load_symbols(redis_channel)
 
     logger.info("Read benchmark started...\n")
-    tasks = [asyncio.create_task(read_stream(redis, symbol)) for symbol in symbols]
-    tasks.append(asyncio.create_task(monitor_batch_timeout()))
-    await asyncio.gather(*tasks)
+
+    for symbol in symbols:
+        stream_key = f"{STREAM_PREFIX}{symbol}"
+        await redis_channel.subscribe(stream_key, BenchmarkHandler())
+
+    await monitor_batch_timeout()
 
 
 if __name__ == "__main__":
