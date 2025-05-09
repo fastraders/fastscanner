@@ -63,4 +63,5 @@ class IndicatorsService:
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        ...
