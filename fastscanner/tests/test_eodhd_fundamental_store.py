@@ -117,8 +117,8 @@ def test_get_fetch_and_store(
     assert os.path.exists(path)
 
 
-@patch("httpx.Client.get")
-def test_get_handles_missing_data_gracefully(mock_httpx_get, store):
+@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
+def test_get_handles_missing_data_gracefully(mock_retry_request, store):
     empty_fundamentals = MagicMock()
     empty_fundamentals.status_code = 200
     empty_fundamentals.json.return_value = {}
@@ -127,7 +127,7 @@ def test_get_handles_missing_data_gracefully(mock_httpx_get, store):
     empty_market_cap.status_code = 200
     empty_market_cap.json.return_value = {}
 
-    mock_httpx_get.side_effect = [empty_fundamentals, empty_market_cap]
+    mock_retry_request.side_effect = [empty_fundamentals, empty_market_cap]
 
     result = store.get("AAPL")
 
