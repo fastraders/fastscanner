@@ -21,13 +21,6 @@ class RedisChannel:
         password: str | None,
         db: int,
     ):
-        # self.redis = aioredis.Redis(
-        #     host=host,
-        #     port=port,
-        #     password=password,
-        #     db=db,
-        #     decode_responses=True,
-        # )
         self.redis = aioredis.Redis(
             unix_socket_path=unix_socket_path,
             password=None,

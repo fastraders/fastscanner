@@ -4,11 +4,24 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from .candle import CumulativeDailyVolumeIndicator, PremarketCumulativeIndicator
+from .candle import (
+    ATRIndicator,
+    CumulativeDailyVolumeIndicator,
+    PositionInRangeIndicator,
+    PremarketCumulativeIndicator,
+)
+from .daily import DailyGapIndicator, PrevDayIndicator
+from .fundamental import DaysFromEarningsIndicator, DaysToEarningsIndicator
 
 _indicators: list[type["Indicator"]] = [
     CumulativeDailyVolumeIndicator,
     PremarketCumulativeIndicator,
+    PositionInRangeIndicator,
+    ATRIndicator,
+    DailyGapIndicator,
+    PrevDayIndicator,
+    DaysFromEarningsIndicator,
+    DaysToEarningsIndicator,
 ]
 
 
@@ -20,16 +33,13 @@ class Indicator(Protocol):
         ...
 
     @classmethod
-    def type(cls) -> str:
-        ...
+    def type(cls) -> str: ...
 
-    def column_name(self) -> str:
-        ...
+    def column_name(self) -> str: ...
 
+    def lookback_days(self) -> int: ...
 
-class RealtimeIndicator(Indicator, Protocol):
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        ...
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
 class IndicatorsLibrary:

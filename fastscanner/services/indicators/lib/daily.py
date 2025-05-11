@@ -1,0 +1,220 @@
+from datetime import date, datetime, time, timedelta
+
+import pandas as pd
+
+from ..ports import CandleCol
+from ..registry import ApplicationRegistry
+from ..utils import lookback_days
+
+
+class PrevDayIndicator:
+    def __init__(self, candle_col: str):
+        self._candle_col = candle_col
+        self._prev_day: dict[str, float] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "prev_day"
+
+    def column_name(self):
+        return f"prev_day_{self._candle_col}"
+
+    def lookback_days(self) -> int:
+        return 0
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        start_date = df.index[0].date() - timedelta(days=1)
+        end_date = df.index[-1].date() - timedelta(days=1)
+
+        daily = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
+        daily = daily.set_index(daily.index.date)  # type: ignore
+        daily.loc[df.index[-1].date()] = pd.NA
+        daily = daily.shift(1).rename(columns={self._candle_col: self.column_name()})
+
+        df["date"] = df.index.date  # type: ignore
+        df = df.join(daily[[self.column_name()]], on="date")
+        return df.drop(columns=["date"])
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            yday = lookback_days(new_date, 1)
+            close = ApplicationRegistry.candles.get(symbol, yday, yday, "1d")
+            if not close.empty:
+                self._prev_day[symbol] = close[self._candle_col].values[0]
+            self._last_date[symbol] = new_date
+
+        new_row[self.column_name()] = self._prev_day.get(symbol, pd.NA)
+        return new_row
+
+
+class DailyGapIndicator:
+    def __init__(self):
+        self._daily_open: dict[str, float] = {}
+        self._daily_close: dict[str, float] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "daily_gap"
+
+    def lookback_days(self) -> int:
+        return 0
+
+    def column_name(self):
+        return f"daily_gap"
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        start_date = df.index[0].date() - timedelta(days=1)
+        end_date = df.index[-1].date() - timedelta(days=1)
+
+        df["date"] = df.index.date  # type: ignore
+
+        daily_close = ApplicationRegistry.candles.get(
+            symbol, start_date, end_date, "1d"
+        )
+        daily_close = daily_close.set_index(daily_close.index.date)[[CandleCol.CLOSE]]  # type: ignore
+        daily_open = (
+            df.loc[df.index.time >= time(9, 30)].groupby("date")[CandleCol.OPEN].first()  # type: ignore
+        )
+        daily_close.loc[df.index[-1].date()] = pd.NA
+        daily_close = daily_close.shift(1)
+        daily_close = daily_close.join(daily_open)
+        daily_close[self.column_name()] = (
+            daily_close[CandleCol.OPEN] - daily_close[CandleCol.CLOSE]
+        ) / daily_close[CandleCol.CLOSE]
+
+        return df.join(daily_close[self.column_name()], on="date").drop(
+            columns=["date"]
+        )
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            yday = lookback_days(new_date, 1)
+            close = ApplicationRegistry.candles.get(symbol, yday, yday, "1d")
+            if not close.empty:
+                self._daily_close[symbol] = close[CandleCol.CLOSE].values[0]
+            self._daily_open.pop(symbol, None)
+            self._last_date[symbol] = new_date
+
+        day_open = self._daily_open.get(symbol)
+        if day_open is None and new_row.name.time() >= time(9, 30):
+            day_open = new_row[CandleCol.OPEN]
+            self._daily_open[symbol] = day_open
+
+        day_close = self._daily_close.get(symbol)
+        if day_open is not None and day_close is not None:
+            new_row[self.column_name()] = (day_open - day_close) / day_close
+        else:
+            new_row[self.column_name()] = pd.NA
+
+        return new_row
+
+
+class DailyATRIndicator:
+    def __init__(self, period: int):
+        self._period = period
+        self._daily_atr: dict[str, float] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "daily_atr"
+
+    def column_name(self):
+        return f"daily_atr_{self._period}"
+
+    def lookback_days(self) -> int:
+        return 0
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        start_date = lookback_days(df.index[0].date(), self._period + 1)
+        end_date = df.index[-1].date() - timedelta(days=1)
+
+        daily = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
+        daily = daily.set_index(daily.index.date)  # type: ignore
+        daily.loc[df.index[-1].date()] = pd.NA
+        daily = daily.shift(1)
+
+        tr0 = (daily[CandleCol.HIGH] - daily[CandleCol.LOW]).abs()
+        tr1 = (daily[CandleCol.HIGH] - daily[CandleCol.CLOSE].shift(1)).abs()
+        tr2 = (daily[CandleCol.LOW] - daily[CandleCol.CLOSE].shift(1)).abs()
+
+        atr = (
+            pd.concat([tr0, tr1, tr2], axis=1)
+            .max(axis=1)
+            .ewm(alpha=1 / self._period)
+            .mean()
+            .round(3)
+        )
+        df["date"] = df.index.date  # type: ignore
+        df = df.join(atr.rename(self.column_name()), on="date")
+        return df.drop(columns=["date"])
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            new_row = self.extend(symbol, new_row.to_frame().T).iloc[0]
+            self._daily_atr[symbol] = new_row[self.column_name()]
+            self._last_date[symbol] = new_date
+
+        new_row[self.column_name()] = self._daily_atr[symbol]
+        return new_row
+
+
+class DailyATRGapIndicator:
+    def __init__(self, period: int):
+        self._period = period
+        self._last_date: dict[str, date] = {}
+        self._daily_gap: dict[str, float] = {}
+
+    @classmethod
+    def type(cls):
+        return "daily_atr_gap"
+
+    def column_name(self):
+        return f"daily_atr_gap_{self._period}"
+
+    def lookback_days(self) -> int:
+        return 0
+
+    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        # Gets the ratio (day_open - prev_day_close) / atr
+        atr_indicator = DailyATRIndicator(self._period)
+        daily_gap = DailyGapIndicator()
+        prev_day = PrevDayIndicator(CandleCol.CLOSE)
+        cols_to_drop = [
+            daily_gap.column_name(),
+            prev_day.column_name(),
+            atr_indicator.column_name(),
+        ]
+        cols_to_drop = [col for col in cols_to_drop if col not in df.columns]
+
+        df = daily_gap.extend(symbol, df)
+        df = atr_indicator.extend(symbol, df)
+        df[self.column_name()] = (
+            df[daily_gap.column_name()]
+            * df[prev_day.column_name()]
+            / df[atr_indicator.column_name()]
+        )
+        return df.drop(columns=cols_to_drop)
+
+    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            self._daily_gap.pop(symbol, None)
+            self._last_date[symbol] = new_date
+
+        if new_row.name.time() >= time(9, 30) and symbol not in self._daily_gap:
+            new_row = self.extend(symbol, new_row.to_frame().T).iloc[0]
+            self._daily_gap[symbol] = new_row[self.column_name()]
+            self._last_date[symbol] = new_date
+
+        new_row[self.column_name()] = self._daily_gap.get(symbol, pd.NA)
+        return new_row

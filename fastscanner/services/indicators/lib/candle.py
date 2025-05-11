@@ -198,6 +198,9 @@ class PositionInRangeIndicator:
     def column_name(self):
         return f"position_in_range_{self._n_days}"
 
+    def lookback_days(self) -> int:
+        return 0
+
     def _get_high_low_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._n_days)
         end_date = df.index[-1].date() - timedelta(days=1)

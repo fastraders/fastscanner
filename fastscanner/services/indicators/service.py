@@ -19,8 +19,7 @@ class IndicatorsService:
     def __init__(
         self,
         candles: CandleStore,
-        fundamentals: FundamentalDataStore,
-        # , channel: Channel
+        fundamentals: FundamentalDataStore,  # , channel: Channel
     ) -> None:
         self.candles = candles
         self.fundamentals = fundamentals
@@ -43,6 +42,15 @@ class IndicatorsService:
             df = indicator.extend(symbol, df)
         return df
 
+    def calculate_batch(
+        self,
+        symbols: list[str],
+        start: date,
+        end: date,
+        freq: str,
+        indicators: list[IndicatorParams],
+    ): ...
+
     def subscribe_realtime(
         self,
         symbol: str,
@@ -63,5 +71,4 @@ class IndicatorsService:
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        ...
+    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
