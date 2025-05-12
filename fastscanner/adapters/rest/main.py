@@ -14,6 +14,8 @@ from fastscanner.pkg import config
 from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import IndicatorsService
 
+from .indicators import router as indicators_router
+
 
 class FastscannerApp(FastAPI):
     @property
@@ -39,6 +41,7 @@ class FastscannerApp(FastAPI):
 app = FastscannerApp(docs_url="/api/docs", redoc_url="/api/redoc")
 
 api_router = APIRouter(prefix="/api")
+api_router.include_router(indicators_router)
 app.include_router(api_router)
 app.startup()
 

@@ -9,10 +9,8 @@ from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
-
-from .polygon import split_freq
 
 logger = logging.getLogger(__name__)
 

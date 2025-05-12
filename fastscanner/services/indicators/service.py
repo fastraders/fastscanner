@@ -7,6 +7,7 @@ import pandas as pd
 from .lib import IndicatorsLibrary
 from .ports import CandleStore, Channel, FundamentalDataStore
 from .registry import ApplicationRegistry
+from .utils import lookback_days
 
 
 @dataclass
@@ -33,23 +34,19 @@ class IndicatorsService:
         freq: str,
         indicators: list[IndicatorParams],
     ) -> pd.DataFrame:
-        df = self.candles.get(symbol, start, end, freq)
+        ind_instances = [
+            IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
+        ]
+        days = max(i.lookback_days() for i in ind_instances)
+        lagged_start = lookback_days(start, days)
+
+        df = self.candles.get(symbol, lagged_start, end, freq)
         if df.empty:
             return df
 
-        for params in indicators:
-            indicator = IndicatorsLibrary().get(params.type_, params.params)
+        for indicator in ind_instances:
             df = indicator.extend(symbol, df)
-        return df
-
-    def calculate_batch(
-        self,
-        symbols: list[str],
-        start: date,
-        end: date,
-        freq: str,
-        indicators: list[IndicatorParams],
-    ): ...
+        return df.loc[df.index.date >= start]  # type: ignore
 
     def subscribe_realtime(
         self,

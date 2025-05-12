@@ -1,13 +1,9 @@
 import asyncio
 import logging
 import traceback
-from collections import defaultdict
-from typing import Any
 
-import pandas as pd
 from polygon import WebSocketClient
 from polygon.websocket.models import EquityAgg, Feed, Market, WebSocketMessage
-from redis import RedisError
 from websockets import ConnectionClosedError
 
 from fastscanner.adapters.realtime.redis_channel import RedisChannel

@@ -24,12 +24,12 @@ class PrevDayIndicator:
         return 0
 
     def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        start_date = df.index[0].date() - timedelta(days=1)
+        start_date = lookback_days(df.index[0].date(), 1)
         end_date = df.index[-1].date() - timedelta(days=1)
 
         daily = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
         daily = daily.set_index(daily.index.date)  # type: ignore
-        daily.loc[df.index[-1].date()] = pd.NA
+        daily.loc[df.index[-1].date(), self._candle_col] = pd.NA
         daily = daily.shift(1).rename(columns={self._candle_col: self.column_name()})
 
         df["date"] = df.index.date  # type: ignore
@@ -64,10 +64,10 @@ class DailyGapIndicator:
         return 0
 
     def column_name(self):
-        return f"daily_gap"
+        return "daily_gap"
 
     def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        start_date = df.index[0].date() - timedelta(days=1)
+        start_date = lookback_days(df.index[0].date(), 1)
         end_date = df.index[-1].date() - timedelta(days=1)
 
         df["date"] = df.index.date  # type: ignore
@@ -79,16 +79,17 @@ class DailyGapIndicator:
         daily_open = (
             df.loc[df.index.time >= time(9, 30)].groupby("date")[CandleCol.OPEN].first()  # type: ignore
         )
-        daily_close.loc[df.index[-1].date()] = pd.NA
+        daily_close.loc[df.index[-1].date(), CandleCol.CLOSE] = pd.NA
         daily_close = daily_close.shift(1)
         daily_close = daily_close.join(daily_open)
         daily_close[self.column_name()] = (
             daily_close[CandleCol.OPEN] - daily_close[CandleCol.CLOSE]
         ) / daily_close[CandleCol.CLOSE]
 
-        return df.join(daily_close[self.column_name()], on="date").drop(
-            columns=["date"]
-        )
+        df = df.join(daily_close[self.column_name()], on="date")
+        df.loc[df.index.time < time(9, 30), self.column_name()] = pd.NA  # type: ignore
+
+        return df.drop(columns=["date"])
 
     def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
@@ -137,7 +138,9 @@ class DailyATRIndicator:
 
         daily = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
         daily = daily.set_index(daily.index.date)  # type: ignore
-        daily.loc[df.index[-1].date()] = pd.NA
+        daily.loc[
+            df.index[-1].date(), [CandleCol.HIGH, CandleCol.LOW, CandleCol.CLOSE]
+        ] = pd.NA
         daily = daily.shift(1)
 
         tr0 = (daily[CandleCol.HIGH] - daily[CandleCol.LOW]).abs()
@@ -188,15 +191,14 @@ class DailyATRGapIndicator:
         atr_indicator = DailyATRIndicator(self._period)
         daily_gap = DailyGapIndicator()
         prev_day = PrevDayIndicator(CandleCol.CLOSE)
-        cols_to_drop = [
-            daily_gap.column_name(),
-            prev_day.column_name(),
-            atr_indicator.column_name(),
-        ]
-        cols_to_drop = [col for col in cols_to_drop if col not in df.columns]
+        aux_indicators = [atr_indicator, daily_gap, prev_day]
+        cols_to_drop: list[str] = []
+        for ind in aux_indicators:
+            if ind.column_name() in df.columns:
+                continue
+            df = ind.extend(symbol, df)
+            cols_to_drop.append(ind.column_name())
 
-        df = daily_gap.extend(symbol, df)
-        df = atr_indicator.extend(symbol, df)
         df[self.column_name()] = (
             df[daily_gap.column_name()]
             * df[prev_day.column_name()]

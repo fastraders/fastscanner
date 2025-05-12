@@ -1,5 +1,7 @@
 import io
+import json
 import logging
+import os
 import re
 from datetime import date, timedelta
 from urllib.parse import urljoin
@@ -7,7 +9,7 @@ from urllib.parse import urljoin
 import httpx
 import pandas as pd
 
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.pkg.http import MaxRetryError, retry_request
 from fastscanner.services.indicators.ports import CandleCol
 
@@ -116,11 +118,42 @@ class PolygonCandlesProvider:
         with httpx.Client() as client:
             return self._fetch(client, symbol, start, end, freq)
 
+    def all_symbols(self) -> set[str]:
+        symbols = set()
+        symbols_path = os.path.join("data/polygon_symbols.json")
+        if os.path.exists(symbols_path):
+            with open(symbols_path, "r") as f:
+                return set(json.load(f))
 
-def split_freq(freq: str) -> tuple[int, str]:
-    match = re.match(r"(\d+)(\w+)", freq)
-    if match is None:
-        raise ValueError(f"Invalid frequency: {freq}")
-    mult = int(match.groups()[0])
-    unit = match.groups()[1].lower()
-    return mult, unit
+        with httpx.Client() as client:
+            url = urljoin(self._base_url, "v3/reference/tickers")
+            params = {
+                "apiKey": self._api_key,
+                "type": "CS",
+                "active": True,
+                "limit": 1000,
+            }
+            while True:
+                response = retry_request(
+                    client,
+                    "GET",
+                    url,
+                    params=params,
+                )
+                response.raise_for_status()
+                data = response.json()
+                if data.get("count", 0) == 0:
+                    break
+
+                for item in data["results"]:
+                    symbols.add(item["ticker"])
+
+                if data.get("next_url") is None:
+                    break
+                url = f'{data["next_url"]}&apiKey={self._api_key}'
+                params = None
+
+        os.makedirs(os.path.dirname(symbols_path), exist_ok=True)
+        with open(symbols_path, "w") as f:
+            json.dump(list(symbols), f)
+        return symbols

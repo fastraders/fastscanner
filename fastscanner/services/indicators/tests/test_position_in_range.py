@@ -5,13 +5,8 @@ import pandas as pd
 import pytest
 
 from fastscanner.services.indicators.lib.candle import PositionInRangeIndicator
-from fastscanner.services.indicators.ports import (
-    CandleCol,
-    CandleStore,
-    FundamentalDataStore,
-    PublicHolidaysStore,
-)
-from fastscanner.services.indicators.registry import ApplicationRegistry
+from fastscanner.services.indicators.ports import CandleCol
+from fastscanner.services.indicators.tests.fixtures import CandleStoreTest, candles
 
 
 def test_position_in_range_type():
@@ -35,7 +30,7 @@ def test_position_in_range_extend(candles: "CandleStoreTest"):
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 10), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
     dates = [
@@ -71,7 +66,7 @@ def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 2), date(2023, 1, 11), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
     dates = [
@@ -100,6 +95,8 @@ def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
 
 
 def test_position_in_range_extend_empty_data(candles: "CandleStoreTest"):
+    candles.set_data("AAPL", pd.DataFrame(index=pd.DatetimeIndex([])))
+
     dates = [datetime(2023, 1, 10, 9, 30)]
     closes = [135]
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
@@ -118,7 +115,7 @@ def test_position_in_range_extend_realtime_first_candle(candles: "CandleStoreTes
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 10), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     indicator = PositionInRangeIndicator(n_days=5)
 
@@ -144,7 +141,7 @@ def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreTest"):
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 10), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     indicator = PositionInRangeIndicator(n_days=5)
 
@@ -171,7 +168,7 @@ def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTest"):
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 11), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     indicator = PositionInRangeIndicator(n_days=5)
 
@@ -210,8 +207,8 @@ def test_position_in_range_extend_realtime_multiple_symbols(candles: "CandleStor
         index=msft_daily_dates,
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 10), "1d", aapl_daily_data)
-    candles.set_data("MSFT", date(2023, 1, 1), date(2023, 1, 10), "1d", msft_daily_data)
+    candles.set_data("AAPL", aapl_daily_data)
+    candles.set_data("MSFT", msft_daily_data)
 
     indicator = PositionInRangeIndicator(n_days=5)
 
@@ -249,7 +246,7 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
         {CandleCol.HIGH: daily_highs, CandleCol.LOW: daily_lows}, index=daily_dates
     )
 
-    candles.set_data("AAPL", date(2023, 1, 1), date(2023, 1, 10), "1d", daily_data)
+    candles.set_data("AAPL", daily_data)
 
     indicator = PositionInRangeIndicator(n_days=5)
 
@@ -290,40 +287,4 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     assert abs(result_row[indicator.column_name()] - (-0.5833)) < 1e-4
 
 
-class CandleStoreTest(CandleStore):
-    def __init__(self):
-        self._data = {}
-
-    def set_data(self, symbol, start_date, end_date, interval, data):
-        key = (symbol, start_date, end_date, interval)
-        self._data[key] = data
-
-    def get(self, symbol, start_date, end_date, freq="1m"):
-        for (s, sd, ed, i), data in self._data.items():
-            if s == symbol and i == freq and sd <= start_date and ed >= end_date:
-                return data
-        return pd.DataFrame()
-
-
-class MockFundamentalDataStore(FundamentalDataStore):
-    def get(self, symbol):
-        return None
-
-
-class MockPublicHolidaysStore(PublicHolidaysStore):
-    def get(self):
-        return set()
-
-
-@pytest.fixture
-def candles():
-    candle_store = CandleStoreTest()
-    fundamental_store = MockFundamentalDataStore()
-    holiday_store = MockPublicHolidaysStore()
-
-    ApplicationRegistry.init(
-        candles=candle_store, fundamentals=fundamental_store, holidays=holiday_store
-    )
-
-    yield candle_store
-    ApplicationRegistry.reset()
+# Fixtures moved to fixtures.py

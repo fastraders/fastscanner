@@ -122,9 +122,12 @@ class EODHDFundamentalStore:
         return fd
 
     def _parse_data(self, fundamentals: dict, market_cap: dict) -> FundamentalData:
-        general = fundamentals.get("General", {})
-        shares_stats = fundamentals.get("SharesStats", {})
-        earnings = fundamentals.get("Earnings", {})
+        fundamentals = {
+            k: v for k, v in fundamentals.items() if v is not None and v != "NA"
+        }
+        general = fundamentals.get("General") or {}
+        shares_stats = fundamentals.get("SharesStats") or {}
+        earnings = fundamentals.get("Earnings") or {}
 
         market_cap_data = {
             v["date"]: float(v["value"])
@@ -140,6 +143,7 @@ class EODHDFundamentalStore:
         earnings_dates = pd.DatetimeIndex(
             pd.to_datetime(list(earnings.get("History", {}).keys())), name="report_date"
         ).sort_values()
+        general = {k: v for k, v in general.items() if v is not None}
 
         return FundamentalData(
             exchange=general.get("Exchange", ""),

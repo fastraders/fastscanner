@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 from datetime import date, datetime
-from typing import Any, Protocol
+from typing import Any, Hashable, Protocol
 
 import pandas as pd
 
@@ -10,7 +10,12 @@ from .candle import (
     PositionInRangeIndicator,
     PremarketCumulativeIndicator,
 )
-from .daily import DailyGapIndicator, PrevDayIndicator
+from .daily import (
+    DailyATRGapIndicator,
+    DailyATRIndicator,
+    DailyGapIndicator,
+    PrevDayIndicator,
+)
 from .fundamental import DaysFromEarningsIndicator, DaysToEarningsIndicator
 
 _indicators: list[type["Indicator"]] = [
@@ -22,6 +27,8 @@ _indicators: list[type["Indicator"]] = [
     PrevDayIndicator,
     DaysFromEarningsIndicator,
     DaysToEarningsIndicator,
+    DailyATRIndicator,
+    DailyATRGapIndicator,
 ]
 
 
@@ -37,7 +44,11 @@ class Indicator(Protocol):
 
     def column_name(self) -> str: ...
 
-    def lookback_days(self) -> int: ...
+    def lookback_days(self) -> int:
+        """
+        Returns the number of days that the indicator needs to look back in order to calculate its value.
+        """
+        ...
 
     def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
@@ -46,16 +57,16 @@ class IndicatorsLibrary:
     _instance: ContextVar["IndicatorsLibrary"] = ContextVar("IndicatorsLibrary")
 
     def __init__(self):
-        self.indicators: dict[str, type[Indicator]] = {}
+        self._indicators: dict[str, type[Indicator]] = {}
 
-    def get(self, type_: str, params: dict[str, Any]) -> Indicator:
-        if type_ not in self.indicators:
+    def get(self, type_: str, params: dict[str, Hashable]) -> Indicator:
+        if type_ not in self._indicators:
             raise ValueError(f"Indicator {type_} not found.")
-        indicator_class = self.indicators[type_]
+        indicator_class = self._indicators[type_]
         return indicator_class(**params)
 
     def register(self, indicator: type[Indicator]) -> None:
-        self.indicators[indicator.type()] = indicator
+        self._indicators[indicator.type()] = indicator
 
     @classmethod
     def instance(cls) -> "IndicatorsLibrary":

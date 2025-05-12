@@ -31,25 +31,34 @@ class IndicatorsCalculate(BaseModel):
 
 @router.post("/calculate", status_code=status.HTTP_200_OK)
 async def calculate(
-    indicators_calculate: IndicatorsCalculate,
+    indicators_calculate: list[IndicatorsCalculate],
     service: Annotated[IndicatorsService, Depends(get_indicators_service)],
     request: Request,
-) -> str:
-    body = await request.body()
-    calculation_id = uuid5(NAMESPACE_DNS, body.decode("utf-8"))
-    path = os.path.join(
-        config.INDICATORS_CALCULATE_RESULTS_DIR, f"{calculation_id}.csv"
-    )
-    if os.path.exists(path):
-        return path
+) -> list[str]:
+    paths: list[str] = []
+    for ic in indicators_calculate:
+        body = await request.body()
+        body_hash = uuid5(NAMESPACE_DNS, body.decode("utf-8")).hex
+        calculation_id = f"{ic.symbol}_{ic.start}_{ic.end}_{ic.freq}_{body_hash[:6]}"
 
-    df = service.calculate(
-        indicators_calculate.symbol,
-        indicators_calculate.start,
-        indicators_calculate.end,
-        indicators_calculate.freq,
-        [Params(i.type, i.params) for i in indicators_calculate.indicators],
-    )
+        path = os.path.join(
+            config.INDICATORS_CALCULATE_RESULTS_DIR,
+            ic.symbol,
+            f"{calculation_id}.csv",
+        )
+        if os.path.exists(path):
+            paths.append(path)
+            continue
 
-    df.tz_convert("utc").tz_convert(None).reset_index().to_csv(path, index=False)
-    return path
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        df = service.calculate(
+            ic.symbol,
+            ic.start,
+            ic.end,
+            ic.freq,
+            [Params(i.type, i.params) for i in ic.indicators],
+        )
+
+        df.tz_convert("utc").tz_convert(None).reset_index().to_csv(path, index=False)
+    return paths

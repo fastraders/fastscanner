@@ -10,3 +10,6 @@ restart: down up
 
 logs:
 	docker-compose logs -f redis
+
+test:
+	coverage run -m pytest -s -vv && coverage report -m

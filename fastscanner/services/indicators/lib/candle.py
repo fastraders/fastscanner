@@ -8,6 +8,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from fastscanner.pkg.datetime import split_freq
+
 from ..ports import CandleCol
 from ..registry import ApplicationRegistry
 from ..utils import lookback_days
@@ -19,6 +21,9 @@ class CumulativeDailyVolumeIndicator:
     def __init__(self):
         self._last_date: dict[str, date] = {}
         self._last_volume: dict[str, float] = {}
+
+    def lookback_days(self) -> int:
+        return 0
 
     @classmethod
     def type(cls):
@@ -81,11 +86,14 @@ class CumulativeOperation(StrEnum):
 
 
 class PremarketCumulativeIndicator:
-    def __init__(self, candle_col: str, op: CumulativeOperation):
+    def __init__(self, candle_col: str, op: str):
         self._candle_col = candle_col
-        self._op = op
+        self._op = CumulativeOperation(op)
         self._last_date: dict[str, date] = {}
         self._last_value: dict[str, float] = {}
+
+    def lookback_days(self) -> int:
+        return 0
 
     @classmethod
     def type(cls):
@@ -125,10 +133,21 @@ class PremarketCumulativeIndicator:
 
 
 class ATRIndicator:
-    def __init__(self, period: int):
+    def __init__(self, period: int, freq: str):
         self._period = period
         self._last_atr: dict[str, float] = {}
         self._last_close: dict[str, float] = {}
+        self._freq = freq
+
+    def lookback_days(self) -> int:
+        n, unit = split_freq(self._freq)
+        if unit == "d":
+            n *= 390
+        elif unit == "h":
+            n *= 390 / 6.5
+
+        # 390 minute candles in a day and a security factor of 2
+        return math.ceil(2 * self._period * n / 390)
 
     @classmethod
     def type(cls):
@@ -235,7 +254,7 @@ class PositionInRangeIndicator:
             .set_index(daily_df.index.date)  # type: ignore
         )
 
-        daily_df.loc[df.index[-1].date()] = pd.NA
+        daily_df.loc[df.index[-1].date(), ["_highest", "_lowest"]] = pd.NA
         daily_df = daily_df.shift(1)
 
         df["date"] = df.index.date  # type: ignore
