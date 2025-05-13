@@ -70,8 +70,6 @@ class IndicatorsService:
         handler: "SubscriptionHandler",
     ):
         """
-        Every time you get a new subscription to a symbol in Redis, cancel the current xread and start a new one subscribed to multiple streams.
-
         Redis -> RedisChannel -> For all subscribers, compute the indicators -> SubscriptionHandler
             candle                                                          candle with indicators
         Store the subscription handler in a dictionary.
