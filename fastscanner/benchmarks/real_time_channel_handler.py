@@ -13,7 +13,15 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.services.indicators.lib import IndicatorsLibrary
+from fastscanner.services.indicators.lib.candle import (
+    ATRIndicator,
+    CumulativeDailyVolumeIndicator,
+    PositionInRangeIndicator,
+    PremarketCumulativeIndicator,
+)
 from fastscanner.services.indicators.lib.daily import (
+    DailyATRGapIndicator,
+    DailyATRIndicator,
     DailyGapIndicator,
     PrevDayIndicator,
 )
@@ -24,27 +32,16 @@ from fastscanner.services.indicators.service import (
     IndicatorsService,
     SubscriptionHandler,
 )
-from fastscanner.services.indicators.lib.daily import (
-    DailyGapIndicator,
-    PrevDayIndicator,
-    DailyATRIndicator,
-    DailyATRGapIndicator,
-)
-from fastscanner.services.indicators.lib.candle import (
-    ATRIndicator,
-    CumulativeDailyVolumeIndicator,
-    PremarketCumulativeIndicator,
-    PositionInRangeIndicator,
-)
 
+logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
 class PrintHandler(SubscriptionHandler):
     def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        print(f"\n[PrintHandler] Enriched row for {symbol}:")
+        logger.info(f"\n[PrintHandler] Enriched row for {symbol}:")
         for k, v in new_row.items():
-            print(f"  {k}: {v}")
+            logger.info(f"  {k}: {v}")
         return new_row
 
 
@@ -67,10 +64,9 @@ async def main():
     )
     ApplicationRegistry.init(candles, fundamentals, holidays)
     prev_indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
-    daily_gap_indicator = DailyGapIndicator()
     indicators = [
         IndicatorParams(
-            type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}
+            type_=prev_indicator.type(), params={"candle_col": CandleCol.CLOSE}
         ),
         IndicatorParams(type_=DailyGapIndicator.type(), params={}),
         IndicatorParams(
@@ -93,7 +89,7 @@ async def main():
         ),
     ]
     for ind in indicators:
-        print(
+        logger.info(
             f"Subscribing to: {ind.type_} -> {IndicatorsLibrary.instance().get(ind.type_, ind.params).column_name()}"
         )
     await service.subscribe_realtime(
@@ -103,7 +99,7 @@ async def main():
         handler=PrintHandler(),
     )
 
-    print("\nSubscribed to Redis stream: candles_min_AAPL")
+    logger.info("\nSubscribed to Redis stream: candles_min_AAPL")
 
     while True:
         await asyncio.sleep(1)

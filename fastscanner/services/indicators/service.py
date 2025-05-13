@@ -1,8 +1,11 @@
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
+
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 
 from .lib import Indicator, IndicatorsLibrary
 from .ports import (
@@ -15,6 +18,9 @@ from .ports import (
 )
 from .registry import ApplicationRegistry
 from .utils import lookback_days
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 @dataclass
@@ -73,7 +79,6 @@ class IndicatorsService:
         Then we will call the handler with the new row.
         The first time you get a subscription to a symbol, you need to subscribe to the channel.
         """
-        ...
         indicator_instances = [
             IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
         ]
@@ -85,13 +90,13 @@ class IndicatorsService:
 
         df = self.candles.get(symbol, lookback_start, end_date, freq)
         if df.empty:
-            df = pd.DataFrame()
-
-        for idx in df.index:
-            row = df.loc[idx]
+            logger.warning(
+                f"No historical data found for {symbol} from {lookback_start} to {end_date}"
+            )
+            return
+        for _, row in df.iterrows():
             for ind in indicator_instances:
                 row = ind.extend_realtime(symbol, row)
-            df.loc[idx] = row
         stream_key = f"candles_min_{symbol}"
         await self.channel.subscribe(
             stream_key, CandleChannelHandler(symbol, indicator_instances, handler)
@@ -136,15 +141,12 @@ class CandleChannelHandler(ChannelHandler):
             new_row.name = timestamp
 
             for indicator in self.indicators:
-                try:
-                    new_row = indicator.extend_realtime(self.symbol, new_row)
-                except Exception as ind_err:
-                    print(
-                        f"[Indicator Error] {indicator.__class__.__name__} failed: {ind_err}"
-                    )
-                    raise
+                new_row = indicator.extend_realtime(self.symbol, new_row)
 
             self.handler.handle(self.symbol, new_row)
 
         except Exception as e:
-            print(f"[Handler Error] Failed processing message from {channel_id}: {e}")
+            logger.error(
+                f"[Handler Error] Failed processing message from {channel_id}: {e}"
+            )
+            return
