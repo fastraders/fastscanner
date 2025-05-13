@@ -10,6 +10,7 @@ from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.adapters.holiday.exchange_calendars import (
     ExchangeCalendarsPublicHolidaysStore,
 )
+from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import IndicatorsService
@@ -31,9 +32,15 @@ class FastscannerApp(FastAPI):
             config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY
         )
         holidays = ExchangeCalendarsPublicHolidaysStore()
+        channel = RedisChannel(
+            unix_socket_path=config.UNIX_SOCKET_PATH,
+            host=config.REDIS_DB_HOST,
+            port=config.REDIS_DB_PORT,
+            password=None,
+            db=0,
+        )
         self.state.indicators = IndicatorsService(
-            candles=candles,
-            fundamentals=fundamental,
+            candles=candles, fundamentals=fundamental, channel=channel
         )
         ApplicationRegistry.init(candles, fundamental, holidays)
 
