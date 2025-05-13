@@ -12,6 +12,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.services.indicators.lib import IndicatorsLibrary
 from fastscanner.services.indicators.lib.daily import (
     DailyGapIndicator,
     PrevDayIndicator,
@@ -22,6 +23,18 @@ from fastscanner.services.indicators.service import (
     IndicatorParams,
     IndicatorsService,
     SubscriptionHandler,
+)
+from fastscanner.services.indicators.lib.daily import (
+    DailyGapIndicator,
+    PrevDayIndicator,
+    DailyATRIndicator,
+    DailyATRGapIndicator,
+)
+from fastscanner.services.indicators.lib.candle import (
+    ATRIndicator,
+    CumulativeDailyVolumeIndicator,
+    PremarketCumulativeIndicator,
+    PositionInRangeIndicator,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -57,11 +70,32 @@ async def main():
     daily_gap_indicator = DailyGapIndicator()
     indicators = [
         IndicatorParams(
-            type_=prev_indicator.type(), params={"candle_col": CandleCol.CLOSE}
+            type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}
         ),
-        IndicatorParams(type_=daily_gap_indicator.type(), params={}),
+        IndicatorParams(type_=DailyGapIndicator.type(), params={}),
+        IndicatorParams(
+            type_=DailyATRIndicator(period=14).type(), params={"period": 14}
+        ),
+        IndicatorParams(
+            type_=DailyATRGapIndicator(period=14).type(), params={"period": 14}
+        ),
+        IndicatorParams(
+            type_=ATRIndicator(period=14, freq="1min").type(),
+            params={"period": 14, "freq": "1min"},
+        ),
+        IndicatorParams(type_=CumulativeDailyVolumeIndicator.type(), params={}),
+        IndicatorParams(
+            type_=PremarketCumulativeIndicator.type(),
+            params={"candle_col": CandleCol.CLOSE, "op": "sum"},
+        ),
+        IndicatorParams(
+            type_=PositionInRangeIndicator(n_days=5).type(), params={"n_days": 5}
+        ),
     ]
-
+    for ind in indicators:
+        print(
+            f"Subscribing to: {ind.type_} -> {IndicatorsLibrary.instance().get(ind.type_, ind.params).column_name()}"
+        )
     await service.subscribe_realtime(
         symbol="AAPL",
         freq="1min",
