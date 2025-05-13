@@ -120,7 +120,6 @@ class CandleChannelHandler(ChannelHandler):
         self.handler = handler
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        print(f"[Redis] Received data on {channel_id}: {data}")
 
         try:
 
@@ -134,11 +133,13 @@ class CandleChannelHandler(ChannelHandler):
                 if field in data:
                     data[field] = float(data[field])
 
-            ts_raw = data.get("timestamp")
-            if ts_raw:
-                timestamp = pd.to_datetime(int(ts_raw), unit="ms")
-            new_row = pd.Series(data)
-            new_row.name = timestamp
+            if "timestamp" not in data:
+                logger.warning(f"SOME WARNING")
+                return
+            ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
+                LOCAL_TIMEZONE_STR
+            )
+            new_row = pd.Series(data, name=ts)
 
             for indicator in self.indicators:
                 new_row = indicator.extend_realtime(self.symbol, new_row)
