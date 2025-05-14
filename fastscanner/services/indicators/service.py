@@ -115,9 +115,9 @@ class CandleChannelHandler(ChannelHandler):
         indicators: list[Indicator],
         handler: SubscriptionHandler,
     ) -> None:
-        self.symbol = symbol
-        self.indicators = indicators
-        self.handler = handler
+        self._symbol = symbol
+        self._indicators = indicators
+        self._handler = handler
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
 
@@ -134,17 +134,17 @@ class CandleChannelHandler(ChannelHandler):
                     data[field] = float(data[field])
 
             if "timestamp" not in data:
-                logger.warning(f"SOME WARNING")
+                logger.warning(f"Missing timestamp in message from {channel_id}")
                 return
             ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
                 LOCAL_TIMEZONE_STR
             )
             new_row = pd.Series(data, name=ts)
 
-            for indicator in self.indicators:
-                new_row = indicator.extend_realtime(self.symbol, new_row)
+            for indicator in self._indicators:
+                new_row = indicator.extend_realtime(self._symbol, new_row)
 
-            self.handler.handle(self.symbol, new_row)
+            self._handler.handle(self._symbol, new_row)
 
         except Exception as e:
             logger.error(
