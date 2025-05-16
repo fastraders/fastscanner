@@ -8,7 +8,7 @@ import httpx
 import pandas as pd
 
 from fastscanner.pkg import config
-from fastscanner.pkg.http import MaxRetryError, retry_request
+from fastscanner.pkg.http import MaxRetryError, async_retry_request
 from fastscanner.services.exceptions import NotFound
 from fastscanner.services.indicators.ports import FundamentalData
 
@@ -22,7 +22,7 @@ class EODHDFundamentalStore:
         self._base_url = base_url
         self._api_key = api_key
 
-    def get(self, symbol: str) -> FundamentalData:
+    async def get(self, symbol: str) -> FundamentalData:
         logger.info(f"Retrieving fundamentals for: {symbol}")
 
         cached = self._load_cached(symbol)
@@ -30,8 +30,8 @@ class EODHDFundamentalStore:
             logger.info(f"Loaded {symbol} fundamentals from cache.")
             return cached
 
-        fundamentals = self._fetch_fundamentals(symbol)
-        market_cap = self._fetch_market_cap(symbol)
+        fundamentals = await self._fetch_fundamentals(symbol)
+        market_cap = await self._fetch_market_cap(symbol)
 
         fd = self._parse_data(fundamentals, market_cap)
         try:
@@ -42,26 +42,24 @@ class EODHDFundamentalStore:
             raise
         return fd
 
-    def _fetch_fundamentals(self, symbol: str) -> Dict:
+    async def _fetch_fundamentals(self, symbol: str) -> Dict:
         url = f"{self._base_url}/fundamentals/{symbol}"
         params = {
             "filter": "General::Code,General,Earnings,SharesStats",
             "api_token": self._api_key,
             "fmt": "json",
         }
-        fundamentals = self._fetch_json(url, params=params)
-        return fundamentals
+        return await self._fetch_json(url, params=params)
 
-    def _fetch_market_cap(self, symbol: str) -> Dict:
+    async def _fetch_market_cap(self, symbol: str) -> Dict:
         url = f"{self._base_url}/historical-market-cap/{symbol}"
         params = {"api_token": self._api_key, "fmt": "json"}
-        market_cap = self._fetch_json(url, params=params)
-        return market_cap
+        return await self._fetch_json(url, params=params)
 
-    def _fetch_json(self, url: str, params: Dict) -> dict:
+    async def _fetch_json(self, url: str, params: Dict) -> dict:
         try:
-            with httpx.Client() as client:
-                response = retry_request(client, "GET", url, params=params)
+            async with httpx.AsyncClient() as client:
+                response = await async_retry_request(client, "GET", url, params=params)
                 response.raise_for_status()
                 return response.json()
         except (MaxRetryError, httpx.HTTPStatusError) as exc:
@@ -106,11 +104,11 @@ class EODHDFundamentalStore:
             shares_float=float(data.get("shares_float", 0.0)),
         )
 
-    def reload(self, symbol: str) -> FundamentalData:
+    async def reload(self, symbol: str) -> FundamentalData:
         logger.info(f"Forcing reload of fundamentals for: {symbol}")
 
-        fundamentals = self._fetch_fundamentals(symbol)
-        market_cap = self._fetch_market_cap(symbol)
+        fundamentals = await self._fetch_fundamentals(symbol)
+        market_cap = await self._fetch_market_cap(symbol)
 
         fd = self._parse_data(fundamentals, market_cap)
         try:
@@ -143,7 +141,6 @@ class EODHDFundamentalStore:
         earnings_dates = pd.DatetimeIndex(
             pd.to_datetime(list(earnings.get("History", {}).keys())), name="report_date"
         ).sort_values()
-        general = {k: v for k, v in general.items() if v is not None}
 
         return FundamentalData(
             exchange=general.get("Exchange", ""),
@@ -168,11 +165,9 @@ class EODHDFundamentalStore:
         path = self._get_cache_path(symbol)
 
         data_dict = asdict(data)
-
         data_dict["historical_market_cap"] = {
             str(idx): float(val) for idx, val in data.historical_market_cap.items()
         }
-
         data_dict["earnings_dates"] = [
             date.date().isoformat() for date in data.earnings_dates
         ]

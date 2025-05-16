@@ -33,7 +33,7 @@ _indicators: list[type["Indicator"]] = [
 
 
 class Indicator(Protocol):
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         """
         Extend the DataFrame with the indicator's values.
         """
@@ -52,7 +52,7 @@ class Indicator(Protocol):
         """
         ...
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         ...
 
 

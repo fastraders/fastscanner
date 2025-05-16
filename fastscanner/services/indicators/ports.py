@@ -6,12 +6,12 @@ import pandas as pd
 
 
 class CandleStore(Protocol):
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         ...
 
 
 class FundamentalDataStore(Protocol):
-    def get(self, symbol: str) -> "FundamentalData":
+    async def get(self, symbol: str) -> "FundamentalData":
         ...
 
 

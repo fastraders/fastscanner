@@ -32,14 +32,14 @@ class CumulativeDailyVolumeIndicator:
     def column_name(self):
         return self.type()
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         volume = df[CandleCol.VOLUME]
         assert isinstance(volume.index, pd.DatetimeIndex)
         cum_volume = volume.groupby(volume.index.date).cumsum()
         df[self.column_name()] = cum_volume
         return df
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         volume = new_row[CandleCol.VOLUME]
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
@@ -102,7 +102,7 @@ class PremarketCumulativeIndicator:
     def column_name(self):
         return f"premarket_{self._op.label()}_{self._candle_col}"
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         values = df[self._candle_col]
         assert isinstance(values.index, pd.DatetimeIndex)
         cum_values = values.groupby(values.index.date).agg(self._op.pandas_func())
@@ -111,7 +111,7 @@ class PremarketCumulativeIndicator:
         df[self.column_name()] = cum_values
         return df
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
         last_value = self._last_value.get(symbol)
@@ -156,7 +156,7 @@ class ATRIndicator:
     def column_name(self):
         return f"atr_{self._period}"
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         assert isinstance(df.index, pd.DatetimeIndex)
         tr0 = (df[CandleCol.HIGH] - df[CandleCol.LOW]).abs()
         tr1 = (df[CandleCol.HIGH] - df[CandleCol.CLOSE].shift(1)).abs()
@@ -171,7 +171,7 @@ class ATRIndicator:
         )
         return df
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_close = self._last_close.get(symbol)
         if last_close is None:
@@ -220,18 +220,20 @@ class PositionInRangeIndicator:
     def lookback_days(self) -> int:
         return 0
 
-    def _get_high_low_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def _get_high_low_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._n_days)
         end_date = df.index[-1].date() - timedelta(days=1)
-        daily_df = ApplicationRegistry.candles.get(symbol, start_date, end_date, "1d")
+        daily_df = await ApplicationRegistry.candles.get(
+            symbol, start_date, end_date, "1d"
+        )
         if daily_df.shape[0] < self._n_days:
             logger.warning(
                 f"Requested {self._n_days} days of data for {symbol} on {start_date}-{end_date}, got {daily_df.shape[0]} days."
             )
         return daily_df
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        daily_df = self._get_high_low_n_days(symbol, df)
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        daily_df = await self._get_high_low_n_days(symbol, df)
         if daily_df.empty:
             df[self.column_name()] = pd.NA
             return df
@@ -265,11 +267,11 @@ class PositionInRangeIndicator:
 
         return df.drop(columns=["date", "_lowest", "_highest"])
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
         if last_date is None or last_date != new_row.name.date():
-            daily_df = self._get_high_low_n_days(symbol, new_row.to_frame().T)
+            daily_df = await self._get_high_low_n_days(symbol, new_row.to_frame().T)
             self._last_date[symbol] = new_row.name.date()  # type: ignore
             self._low_n_days[symbol] = daily_df[CandleCol.LOW].to_list()[
                 -self._n_days :

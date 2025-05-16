@@ -30,7 +30,8 @@ def test_prev_day_indicator_column_name():
     assert indicator.column_name() == "prev_day_high"
 
 
-def test_prev_day_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -48,13 +49,14 @@ def test_prev_day_indicator_extend(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
 
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # All rows should have the previous day's close (105)
     assert result_df[indicator.column_name()].to_list() == [105, 105, 105]
 
 
-def test_prev_day_indicator_extend_multiple_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -73,7 +75,7 @@ def test_prev_day_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
 
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # Jan 11 rows should have Jan 10's close (105)
     # Jan 12 rows should have Jan 11's close (which we don't have in our daily data, so it should be NaN)
@@ -82,7 +84,8 @@ def test_prev_day_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     assert result_df[indicator.column_name()].to_list() == expected_values
 
 
-def test_prev_day_indicator_extend_different_columns(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend_different_columns(candles: "CandleStoreTest"):
     # Set up test data for daily candles with multiple columns
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_data = pd.DataFrame(
@@ -114,20 +117,21 @@ def test_prev_day_indicator_extend_different_columns(candles: "CandleStoreTest")
 
     # Test with HIGH column
     high_indicator = PrevDayIndicator(candle_col=CandleCol.HIGH)
-    result_df = high_indicator.extend("AAPL", df.copy())
+    result_df = await high_indicator.extend("AAPL", df.copy())
     assert result_df[high_indicator.column_name()].to_list() == [110, 110]
 
     # Test with LOW column
     low_indicator = PrevDayIndicator(candle_col=CandleCol.LOW)
-    result_df = low_indicator.extend("AAPL", df.copy())
+    result_df = await low_indicator.extend("AAPL", df.copy())
     assert result_df[low_indicator.column_name()].to_list() == [100, 100]
 
     # Test with OPEN column
     open_indicator = PrevDayIndicator(candle_col=CandleCol.OPEN)
-    result_df = open_indicator.extend("AAPL", df.copy())
+    result_df = await open_indicator.extend("AAPL", df.copy())
     assert result_df[open_indicator.column_name()].to_list() == [103, 103]
 
 
+@pytest.mark.asyncio
 def test_daily_gap_indicator_type():
     indicator = DailyGapIndicator()
     assert indicator.type() == "daily_gap"
@@ -138,7 +142,8 @@ def test_daily_gap_indicator_column_name():
     assert indicator.column_name() == "daily_gap"
 
 
-def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -157,7 +162,7 @@ def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
 
     indicator = DailyGapIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     expected_gap1 = (110 - 107) / 107
     expected_gap2 = (115 - 105) / 105
@@ -169,7 +174,8 @@ def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
     assert pd.isna(result_df[indicator.column_name()].iloc[2])
 
 
-def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -188,7 +194,7 @@ def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
 
     indicator = DailyGapIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # Day 1 gap: (110 - 105) / 105 = 0.0476
     day1_expected_gap = (110 - 107) / 107
@@ -206,7 +212,8 @@ def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     assert abs(result_df[indicator.column_name()].iloc[3] - day2_expected_gap) < 1e-4
 
 
-def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -225,7 +232,7 @@ def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
 
     indicator = DailyGapIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # Gap calculation should use the first candle at or after 9:30
     # Previous day close = 105, First market open = 110
@@ -240,7 +247,8 @@ def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTest"):
     assert pd.isna(result_df[indicator.column_name()].iloc[1])
 
 
-def test_daily_gap_indicator_extend_no_market_open(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_no_market_open(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -258,14 +266,15 @@ def test_daily_gap_indicator_extend_no_market_open(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
 
     indicator = DailyGapIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # No market open candles, so gap should be NaN
     for gap in result_df[indicator.column_name()]:
         assert pd.isna(gap)
 
 
-def test_prev_day_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -285,13 +294,14 @@ def test_prev_day_indicator_extend_realtime(candles: "CandleStoreTest"):
     )
 
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Should have the previous day's close (105)
     assert result_row[indicator.column_name()] == 105
 
 
-def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -308,14 +318,14 @@ def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
         {CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 11, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 11 (same day)
     row2 = pd.Series(
         {CandleCol.CLOSE: 112},
         name=datetime(2023, 1, 11, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same previous day value (105)
     assert result1[indicator.column_name()] == 105
@@ -326,7 +336,10 @@ def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
     # (if it made multiple calls, it would still work but be less efficient)
 
 
-def test_prev_day_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_prev_day_indicator_extend_realtime_different_days(
+    candles: "CandleStoreTest",
+):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 11))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105, 110]
@@ -341,14 +354,14 @@ def test_prev_day_indicator_extend_realtime_different_days(candles: "CandleStore
         {CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 11, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 12 (different day)
     row2 = pd.Series(
         {CandleCol.CLOSE: 115},
         name=datetime(2023, 1, 12, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Jan 11 should have Jan 10's close (105)
     assert result1[indicator.column_name()] == 105
@@ -357,7 +370,8 @@ def test_prev_day_indicator_extend_realtime_different_days(candles: "CandleStore
     assert result2[indicator.column_name()] == 110
 
 
-def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -377,7 +391,7 @@ def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
     )
 
     indicator = DailyGapIndicator()
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Gap calculation: (daily_open - prev_day_close) / prev_day_close
     # Previous day close = 105, Daily open = 110
@@ -386,7 +400,8 @@ def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
     assert abs(result_row[indicator.column_name()] - expected_gap) < 1e-4
 
 
-def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -403,14 +418,14 @@ def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 11, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 11 (same day, later time)
     row2 = pd.Series(
         {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
         name=datetime(2023, 1, 11, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same gap value
     # Gap = (110 - 105) / 105 = 0.0476
@@ -422,7 +437,10 @@ def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
     # and should not update with the second row's open price (112)
 
 
-def test_daily_gap_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_realtime_different_days(
+    candles: "CandleStoreTest",
+):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 11))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105, 110]
@@ -437,14 +455,14 @@ def test_daily_gap_indicator_extend_realtime_different_days(candles: "CandleStor
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 11, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 12 (different day)
     row2 = pd.Series(
         {CandleCol.OPEN: 115, CandleCol.CLOSE: 115},
         name=datetime(2023, 1, 12, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Jan 11 gap: (110 - 105) / 105 = 0.0476
     expected_gap1 = (110 - 105) / 105
@@ -455,7 +473,10 @@ def test_daily_gap_indicator_extend_realtime_different_days(candles: "CandleStor
     assert abs(result2[indicator.column_name()] - expected_gap2) < 1e-4
 
 
-def test_daily_gap_indicator_extend_realtime_premarket(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_realtime_premarket(
+    candles: "CandleStoreTest",
+):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
@@ -470,7 +491,7 @@ def test_daily_gap_indicator_extend_realtime_premarket(candles: "CandleStoreTest
         {CandleCol.OPEN: 108, CandleCol.CLOSE: 108},
         name=datetime(2023, 1, 11, 9, 0),
     )
-    premarket_result = indicator.extend_realtime("AAPL", premarket_row.copy())
+    premarket_result = await indicator.extend_realtime("AAPL", premarket_row.copy())
 
     # Should be NaN because we don't have a market open price yet
     assert pd.isna(premarket_result[indicator.column_name()])
@@ -480,7 +501,7 @@ def test_daily_gap_indicator_extend_realtime_premarket(candles: "CandleStoreTest
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 11, 9, 30),
     )
-    market_open_result = indicator.extend_realtime("AAPL", market_open_row.copy())
+    market_open_result = await indicator.extend_realtime("AAPL", market_open_row.copy())
 
     # Now we should have a gap value
     expected_gap = (110 - 105) / 105
@@ -491,13 +512,16 @@ def test_daily_gap_indicator_extend_realtime_premarket(candles: "CandleStoreTest
         {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
         name=datetime(2023, 1, 12, 9, 0),
     )
-    next_premarket_result = indicator.extend_realtime("AAPL", next_premarket_row.copy())
+    next_premarket_result = await indicator.extend_realtime(
+        "AAPL", next_premarket_row.copy()
+    )
 
     # Should be NaN because we don't have a market open price for the new day yet
     assert pd.isna(next_premarket_result[indicator.column_name()])
 
 
-def test_daily_gap_indicator_extend_realtime_missing_prev_close(
+@pytest.mark.asyncio
+async def test_daily_gap_indicator_extend_realtime_missing_prev_close(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles, but with a gap in the data
@@ -516,7 +540,7 @@ def test_daily_gap_indicator_extend_realtime_missing_prev_close(
         name=datetime(2023, 1, 11, 9, 30),
     )
 
-    result = indicator.extend_realtime("AAPL", row.copy())
+    result = await indicator.extend_realtime("AAPL", row.copy())
     assert pd.isna(result[indicator.column_name()])
 
 
@@ -533,7 +557,8 @@ def test_daily_atr_indicator_column_name():
     assert indicator.column_name() == "daily_atr_20"
 
 
-def test_daily_atr_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 20))
     daily_data = pd.DataFrame(
@@ -650,7 +675,7 @@ def test_daily_atr_indicator_extend(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = DailyATRIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -660,7 +685,8 @@ def test_daily_atr_indicator_extend(candles: "CandleStoreTest"):
     assert result_df[indicator.column_name()].nunique() == 1
 
 
-def test_daily_atr_indicator_calculation(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_indicator_calculation(candles: "CandleStoreTest"):
     # Set up test data with known values for manual ATR calculation
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
     daily_data = pd.DataFrame(
@@ -688,14 +714,15 @@ def test_daily_atr_indicator_calculation(candles: "CandleStoreTest"):
 
     # Test with period=5
     indicator = DailyATRIndicator(period=5)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the ATR value is reasonable (should be around 13-14)
     atr_value = result_df[indicator.column_name()].iloc[0]
     assert abs(atr_value - 14.391) <= 0.001
 
 
-def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles with simple values for easier calculation
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
     daily_data = pd.DataFrame(
@@ -722,7 +749,7 @@ def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     # Use a smaller period for easier calculation
     indicator = DailyATRIndicator(period=5)
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Verify the actual ATR value
     expected_atr = 14.391  # Calculated from the test data with period=5
@@ -730,7 +757,8 @@ def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
     assert abs(actual_atr - expected_atr) < 0.001
 
 
-def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles with a reduced period of 5
@@ -760,7 +788,7 @@ def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 7, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 7 (same day)
     row2 = pd.Series(
@@ -772,7 +800,7 @@ def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 7, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ATR value
     assert result1[indicator.column_name()] == result2[indicator.column_name()]
@@ -792,7 +820,10 @@ def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
     assert abs(actual_atr - expected_atr) < 0.1
 
 
-def test_daily_atr_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_indicator_extend_realtime_different_days(
+    candles: "CandleStoreTest",
+):
     # Set up test data for daily candles with simple values for easy manual calculation
     # Use datetime objects for the index, not date objects
     daily_dates = [
@@ -826,7 +857,7 @@ def test_daily_atr_indicator_extend_realtime_different_days(candles: "CandleStor
         },
         name=datetime(2023, 1, 6, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ATR value for Jan 6
     jan6_atr = result1[indicator.column_name()]
@@ -853,7 +884,7 @@ def test_daily_atr_indicator_extend_realtime_different_days(candles: "CandleStor
         },
         name=datetime(2023, 1, 7, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ATR value for Jan 7
     jan7_atr = result2[indicator.column_name()]
@@ -879,7 +910,8 @@ def test_adv_indicator_column_name():
     assert indicator.column_name() == "adv_20"
 
 
-def test_adv_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adv_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 20))
     daily_volumes = [
@@ -927,7 +959,7 @@ def test_adv_indicator_extend(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADVIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -942,7 +974,8 @@ def test_adv_indicator_extend(candles: "CandleStoreTest"):
     assert abs(actual_adv - expected_adv) < 0.001
 
 
-def test_adv_indicator_extend_empty_data(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adv_indicator_extend_empty_data(candles: "CandleStoreTest"):
     # Set up empty data
     daily_data = pd.DataFrame(
         {CandleCol.VOLUME: [], CandleCol.CLOSE: []}, index=pd.DatetimeIndex([])
@@ -958,13 +991,14 @@ def test_adv_indicator_extend_empty_data(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADVIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Should return NaN for empty data
     assert pd.isna(result_df[indicator.column_name()].iloc[0])
 
 
-def test_adv_indicator_extend_multiple_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adv_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 21))
     daily_volumes = [
@@ -1013,7 +1047,7 @@ def test_adv_indicator_extend_multiple_days(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADVIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -1030,7 +1064,8 @@ def test_adv_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     assert abs(result_df[indicator.column_name()].iloc[3] - jan22_expected_adv) < 0.001
 
 
-def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 14))
     daily_volumes = [
@@ -1064,7 +1099,7 @@ def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADVIndicator(period=14)
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Calculate expected ADV (average of last 14 days' volume)
     expected_adv = sum(daily_volumes) / 14
@@ -1072,7 +1107,8 @@ def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
     assert abs(actual_adv - expected_adv) < 0.001
 
 
-def test_adv_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_adv_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -1107,14 +1143,14 @@ def test_adv_indicator_extend_realtime_multiple_calls_same_day(
         {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 15, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 15 (same day)
     row2 = pd.Series(
         {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 112},
         name=datetime(2023, 1, 15, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ADV value
     assert result1[indicator.column_name()] == result2[indicator.column_name()]
@@ -1124,7 +1160,8 @@ def test_adv_indicator_extend_realtime_multiple_calls_same_day(
     assert abs(result1[indicator.column_name()] - expected_adv) < 0.001
 
 
-def test_adv_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 14))
     daily_volumes = [
@@ -1157,7 +1194,7 @@ def test_adv_indicator_extend_realtime_different_days(candles: "CandleStoreTest"
         {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
         name=datetime(2023, 1, 15, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ADV value for Jan 15
     jan15_adv = result1[indicator.column_name()]
@@ -1175,7 +1212,7 @@ def test_adv_indicator_extend_realtime_different_days(candles: "CandleStoreTest"
         {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 115},
         name=datetime(2023, 1, 16, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ADV value for Jan 16
     jan16_adv = result2[indicator.column_name()]
@@ -1207,7 +1244,8 @@ def test_adr_indicator_column_name():
     assert indicator.column_name() == "adr_20"
 
 
-def test_adr_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adr_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 20))
     daily_data = pd.DataFrame(
@@ -1301,7 +1339,7 @@ def test_adr_indicator_extend(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADRIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -1322,7 +1360,8 @@ def test_adr_indicator_extend(candles: "CandleStoreTest"):
     assert abs(actual_adr - expected_adr) < 0.001
 
 
-def test_adr_indicator_extend_empty_data(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adr_indicator_extend_empty_data(candles: "CandleStoreTest"):
     # Set up empty data
     daily_data = pd.DataFrame(
         {CandleCol.HIGH: [], CandleCol.LOW: [], CandleCol.CLOSE: []},
@@ -1343,13 +1382,14 @@ def test_adr_indicator_extend_empty_data(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADRIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Should return NaN for empty data
     assert pd.isna(result_df[indicator.column_name()].iloc[0])
 
 
-def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 21))
     daily_data = pd.DataFrame(
@@ -1421,7 +1461,7 @@ def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADRIndicator(period=14)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -1451,7 +1491,8 @@ def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     assert abs(result_df[indicator.column_name()].iloc[3] - jan22_expected_adr) < 0.001
 
 
-def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 14))
     daily_data = pd.DataFrame(
@@ -1522,7 +1563,7 @@ def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     # Test with period=14
     indicator = ADRIndicator(period=14)
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Calculate expected ADR (average of (high-low)/low for the last 14 days)
     expected_adr = 0
@@ -1536,7 +1577,8 @@ def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
     assert abs(actual_adr - expected_adr) < 0.001
 
 
-def test_adr_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_adr_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -1608,7 +1650,7 @@ def test_adr_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 15, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 15 (same day)
     row2 = pd.Series(
@@ -1619,7 +1661,7 @@ def test_adr_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 15, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ADR value
     assert result1[indicator.column_name()] == result2[indicator.column_name()]
@@ -1635,7 +1677,8 @@ def test_adr_indicator_extend_realtime_multiple_calls_same_day(
     assert abs(result1[indicator.column_name()] - expected_adr) < 0.001
 
 
-def test_adr_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 14))
     daily_data = pd.DataFrame(
@@ -1705,7 +1748,7 @@ def test_adr_indicator_extend_realtime_different_days(candles: "CandleStoreTest"
         },
         name=datetime(2023, 1, 15, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ADR value for Jan 15
     jan15_adr = result1[indicator.column_name()]
@@ -1731,7 +1774,7 @@ def test_adr_indicator_extend_realtime_different_days(candles: "CandleStoreTest"
         },
         name=datetime(2023, 1, 16, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ADR value for Jan 16
     jan16_adr = result2[indicator.column_name()]
