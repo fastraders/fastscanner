@@ -69,7 +69,7 @@ class PolygonCandlesProvider:
                 raise exc
 
             try:
-                df = await asyncio.to_thread(pd.read_csv, io.BytesIO(response.content))
+                df = pd.read_csv(io.BytesIO(response.content))
             except pd.errors.EmptyDataError:
                 logger.warning(
                     f"No data returned for {symbol} between {curr_start} and {curr_end}. Skipping this interval."
@@ -124,8 +124,8 @@ class PolygonCandlesProvider:
         symbols_path = os.path.join("data", "polygon_symbols.json")
 
         if os.path.exists(symbols_path):
-            content = await asyncio.to_thread(open, symbols_path, "r")
-            return set(json.load(content))
+            with open(symbols_path, "r") as f:
+                return set(json.load(f))
 
         async with httpx.AsyncClient() as client:
             url = urljoin(self._base_url, "v3/reference/tickers")
@@ -156,7 +156,6 @@ class PolygonCandlesProvider:
                 params = None
 
         os.makedirs(os.path.dirname(symbols_path), exist_ok=True)
-        await asyncio.to_thread(
-            open(symbols_path, "w").write, json.dumps(list(symbols))
-        )
+        with open(symbols_path, "w") as f:
+            json.dump(list(symbols), f)
         return symbols
