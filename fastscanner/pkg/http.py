@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import traceback
@@ -30,4 +31,33 @@ def retry_request(client: httpx.Client, *args, **kwargs):
         logger.info(f"Retry number {retry_count + 1}...")
         time.sleep(0.1 * 2**retry_count)
         retry_count += 1
+    raise MaxRetryError("Max retries reached")
+
+
+async def async_retry_request(
+    client: httpx.AsyncClient, *args, **kwargs
+) -> httpx.Response:
+    retry_count = 0
+    max_retries = 3
+
+    while retry_count <= max_retries:
+        try:
+            response = await client.request(*args, **kwargs)
+            if (
+                200 <= response.status_code < 300
+                or response.status_code not in RETRIABLE_STATUS
+            ):
+                return response
+
+            logger.warning(
+                f"Status code: {response.status_code}\nContent:\n{response.content.decode('utf-8')}"
+            )
+
+        except httpx.RequestError as ex:
+            logger.warning(f"RequestError: {ex}. Will retry...")
+
+        retry_count += 1
+        logger.info(f"Retry number {retry_count}...")
+        await asyncio.sleep(0.1 * 2**retry_count)
+
     raise MaxRetryError("Max retries reached")

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 import time
@@ -10,7 +11,8 @@ from fastscanner.pkg.logging import load_logging_config
 load_logging_config()
 logger = logging.getLogger(__name__)
 
-if __name__ == "__main__":
+
+async def main():
     fetcher = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
     symbol = "AAPL"
 
@@ -18,7 +20,7 @@ if __name__ == "__main__":
 
     start = time.time()
     try:
-        data = fetcher.get(symbol)
+        data = await fetcher.get(symbol)
         logger.info("Successfully retrieved fundamental data.")
         logger.info(data)
     except Exception as e:
@@ -27,3 +29,7 @@ if __name__ == "__main__":
 
     end = time.time()
     logger.info(f"Total time taken: {end - start:.2f} seconds")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

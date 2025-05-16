@@ -23,7 +23,7 @@ class ParquetCandlesProvider(PolygonCandlesProvider):
     CACHE_DIR = os.path.join("data", "parquet_dataset")
     tz: str = LOCAL_TIMEZONE_STR
 
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         dataset_path = self._dataset_path(symbol, freq)
 
         if not os.path.exists(dataset_path):
@@ -32,9 +32,11 @@ class ParquetCandlesProvider(PolygonCandlesProvider):
             missing_ranges = self._missing_ranges(symbol, start, end, freq)
 
         if missing_ranges:
-            with httpx.Client() as client:
+            async with httpx.AsyncClient() as client:
                 for rng_start, rng_end in missing_ranges:
-                    df = self.partition_fetch(client, symbol, rng_start, rng_end, freq)
+                    df = await self.partition_fetch(
+                        client, symbol, rng_start, rng_end, freq
+                    )
                     self._save_cache(symbol, freq, df)
                 self._save_current_range(symbol, freq, missing_ranges)
 
@@ -156,8 +158,8 @@ class ParquetCandlesProvider(PolygonCandlesProvider):
 
         return missing
 
-    def partition_fetch(
-        self, client: httpx.Client, symbol: str, start: date, end: date, freq: str
+    async def partition_fetch(
+        self, client: httpx.AsyncClient, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
         if "min" in freq:
             delta = pd.Timedelta(days=7)
@@ -174,7 +176,7 @@ class ParquetCandlesProvider(PolygonCandlesProvider):
         while curr_start.date() <= end:
             curr_end = min(curr_start + delta, pd.Timestamp(end) + pd.Timedelta(days=1))
             try:
-                df = self._fetch(
+                df = await self._fetch(
                     client, symbol, curr_start.date(), curr_end.date(), freq
                 )
                 if not df.empty:

@@ -21,8 +21,8 @@ class DaysToEarningsIndicator:
     def lookback_days(self) -> int:
         return 0
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        fundamentals = ApplicationRegistry.fundamentals.get(symbol)
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
 
         earnings_dates = fundamentals.earnings_dates.date
@@ -46,11 +46,11 @@ class DaysToEarningsIndicator:
         df = df.join(date_to_earnings, on="date")
         return df.drop(columns=["date"])
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, pd.Timestamp)
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = self.extend(symbol, new_row.to_frame().T).iloc[0]
+            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
             self._last_days[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
 
@@ -73,8 +73,8 @@ class DaysFromEarningsIndicator:
     def lookback_days(self) -> int:
         return 0
 
-    def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        fundamentals = ApplicationRegistry.fundamentals.get(symbol)
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
 
         earnings_dates = fundamentals.earnings_dates.date
@@ -97,11 +97,11 @@ class DaysFromEarningsIndicator:
         df = df.join(date_from_earnings, on="date")
         return df.drop(columns=["date"])
 
-    def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, pd.Timestamp)
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = self.extend(symbol, new_row.to_frame().T).iloc[0]
+            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
             self._last_days[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
 

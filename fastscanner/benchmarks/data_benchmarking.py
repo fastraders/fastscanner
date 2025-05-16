@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 from datetime import date, timedelta
@@ -27,7 +28,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 results = []
 
 
-def benchmark(provider: CandleStore, label):
+async def benchmark(provider: CandleStore, label):
     print(f"\n=== {label} Benchmark ===")
 
     for freq, (duration_label, delta) in product(FREQUENCIES, DURATION_MAP.items()):
@@ -36,13 +37,13 @@ def benchmark(provider: CandleStore, label):
         end = START_DATE + delta
 
         print(f"Priming cache for {case_name}...")
-        df = provider.get(SYMBOL, start, end, freq)
+        df = await provider.get(SYMBOL, start, end, freq)
 
         n_samples = 100
         elapsed = 0
         for _ in range(n_samples):
             t0 = time.perf_counter()
-            df = provider.get(SYMBOL, start, end, freq)
+            df = await provider.get(SYMBOL, start, end, freq)
             t1 = time.perf_counter()
             elapsed += t1 - t0
 
@@ -62,39 +63,29 @@ def benchmark(provider: CandleStore, label):
 
 
 if __name__ == "__main__":
-    polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
-    benchmark(PartitionedCSVCandlesProvider(polygon), "Partitioned CSV")
-    # benchmark(
-    #     ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY),
-    #     "Parquet",
-    # )
 
-    df = pd.DataFrame(results)
+    async def main():
+        polygon = PolygonCandlesProvider(
+            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
+        )
+        await benchmark(PartitionedCSVCandlesProvider(polygon), "Partitioned CSV")
 
-    # Create side-by-side comparison
-    csv_df = df[df["Format"] == "Partitioned CSV"].set_index("Range")
-    # parquet_df = df[df["Format"] == "Parquet"].set_index("Range")
+        df = pd.DataFrame(results)
 
-    side_by_side = (
-        csv_df[["Rows", "Time (s)", "Memory (MB)"]]
-        # .join(
-        #     parquet_df[["Rows", "Time (s)", "Memory (MB)"]],
-        #     lsuffix=" CSV",
-        #     rsuffix=" Parquet",
-        # )
-        .reset_index()
-    )
+        # Create side-by-side comparison
+        csv_df = df[df["Format"] == "Partitioned CSV"].set_index("Range")
 
-    side_by_side.columns = [
-        "Range",
-        "Partitioned CSV Rows",
-        "Partitioned CSV Time (s)",
-        "Partitioned CSV Memory (MB)",
-        # "Parquet Rows",
-        # "Parquet Time (s)",
-        # "Parquet Memory (MB)",
-    ]
+        side_by_side = csv_df[["Rows", "Time (s)", "Memory (MB)"]].reset_index()
 
-    csv_path = os.path.join(OUTPUT_DIR, "benchmark_report.csv")
-    side_by_side.to_csv(csv_path, index=False)
-    print(f"\nSide-by-side benchmark results saved to: {csv_path}")
+        side_by_side.columns = [
+            "Range",
+            "Partitioned CSV Rows",
+            "Partitioned CSV Time (s)",
+            "Partitioned CSV Memory (MB)",
+        ]
+
+        csv_path = os.path.join(OUTPUT_DIR, "benchmark_report.csv")
+        side_by_side.to_csv(csv_path, index=False)
+        print(f"\nSide-by-side benchmark results saved to: {csv_path}")
+
+    asyncio.run(main())

@@ -28,7 +28,8 @@ def test_daily_atr_gap_indicator_column_name():
     assert indicator.column_name() == "daily_atr_gap_5"
 
 
-def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles - using only 7 days
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 7))
     daily_data = pd.DataFrame(
@@ -61,7 +62,7 @@ def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
 
     # Test with period=3
     indicator = DailyATRGapIndicator(period=3)
-    result_df = indicator.extend("AAPL", df.copy())
+    result_df = await indicator.extend("AAPL", df.copy())
 
     # Verify the column exists and has values for all rows
     assert indicator.column_name() in result_df.columns
@@ -71,7 +72,8 @@ def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
     assert result_df[indicator.column_name()].nunique() == 1
 
 
-def test_daily_atr_gap_indicator_calculation(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_calculation(candles: "CandleStoreTest"):
     # Set up test data with known values for manual calculation
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
     daily_data = pd.DataFrame(
@@ -99,7 +101,7 @@ def test_daily_atr_gap_indicator_calculation(candles: "CandleStoreTest"):
 
     # Test with period=5
     atr_indicator = DailyATRIndicator(period=5)
-    atr_df = atr_indicator.extend("AAPL", df.copy())
+    atr_df = await atr_indicator.extend("AAPL", df.copy())
     atr_value = atr_df[atr_indicator.column_name()].iloc[0]
 
     # Calculate expected gap ratio
@@ -110,14 +112,15 @@ def test_daily_atr_gap_indicator_calculation(candles: "CandleStoreTest"):
 
     # Now test the ATR Gap indicator
     gap_indicator = DailyATRGapIndicator(period=5)
-    result_df = gap_indicator.extend("AAPL", df.copy())
+    result_df = await gap_indicator.extend("AAPL", df.copy())
 
     # Verify the ATR Gap value matches our calculation
     gap_value = result_df[gap_indicator.column_name()].iloc[0]
     assert abs(gap_value - expected_gap_ratio) < 1e-4
 
 
-def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
     daily_data = pd.DataFrame(
@@ -144,7 +147,7 @@ def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     # Test with period=5
     indicator = DailyATRGapIndicator(period=5)
-    result_row = indicator.extend_realtime("AAPL", new_row.copy())
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Verify the ATR Gap value exists
     assert indicator.column_name() in result_row.index
@@ -152,7 +155,7 @@ def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     # Calculate expected value for comparison
     atr_indicator = DailyATRIndicator(period=5)
-    atr_df = atr_indicator.extend("AAPL", new_row.to_frame().T.copy())
+    atr_df = await atr_indicator.extend("AAPL", new_row.to_frame().T.copy())
     atr_value = atr_df[atr_indicator.column_name()].iloc[0]
 
     # Gap = (day_open - prev_day_close) / atr
@@ -164,7 +167,8 @@ def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
     assert abs(gap_value - expected_gap_ratio) < 1e-4
 
 
-def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -192,7 +196,7 @@ def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 6, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 6 (same day, later time)
     row2 = pd.Series(
@@ -204,7 +208,7 @@ def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
         },
         name=datetime(2023, 1, 6, 10, 0),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ATR Gap value
     assert result1[indicator.column_name()] == result2[indicator.column_name()]
@@ -213,7 +217,8 @@ def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
     # and should not update with the second row's open price
 
 
-def test_daily_atr_gap_indicator_extend_realtime_different_days(
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_extend_realtime_different_days(
     candles: "CandleStoreTest",
 ):
     # Set up test data for daily candles
@@ -241,7 +246,7 @@ def test_daily_atr_gap_indicator_extend_realtime_different_days(
         },
         name=datetime(2023, 1, 6, 9, 30),
     )
-    result1 = indicator.extend_realtime("AAPL", row1.copy())
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 7 (different day)
     row2 = pd.Series(
@@ -253,7 +258,7 @@ def test_daily_atr_gap_indicator_extend_realtime_different_days(
         },
         name=datetime(2023, 1, 7, 9, 30),
     )
-    result2 = indicator.extend_realtime("AAPL", row2.copy())
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # The values should be different for different days
     assert result1[indicator.column_name()] != result2[indicator.column_name()]
@@ -268,7 +273,10 @@ def test_daily_atr_gap_indicator_extend_realtime_different_days(
     assert not pd.isna(result2[indicator.column_name()])
 
 
-def test_daily_atr_gap_indicator_extend_realtime_premarket(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator_extend_realtime_premarket(
+    candles: "CandleStoreTest",
+):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
     daily_data = pd.DataFrame(
@@ -294,7 +302,7 @@ def test_daily_atr_gap_indicator_extend_realtime_premarket(candles: "CandleStore
         },
         name=datetime(2023, 1, 6, 9, 0),
     )
-    premarket_result = indicator.extend_realtime("AAPL", premarket_row.copy())
+    premarket_result = await indicator.extend_realtime("AAPL", premarket_row.copy())
 
     # Should be NaN because we don't have a market open price yet
     assert pd.isna(premarket_result[indicator.column_name()])
@@ -309,7 +317,7 @@ def test_daily_atr_gap_indicator_extend_realtime_premarket(candles: "CandleStore
         },
         name=datetime(2023, 1, 6, 9, 30),
     )
-    market_open_result = indicator.extend_realtime("AAPL", market_open_row.copy())
+    market_open_result = await indicator.extend_realtime("AAPL", market_open_row.copy())
 
     # Now we should have a value
     assert not pd.isna(market_open_result[indicator.column_name()])
@@ -324,7 +332,9 @@ def test_daily_atr_gap_indicator_extend_realtime_premarket(candles: "CandleStore
         },
         name=datetime(2023, 1, 7, 9, 0),
     )
-    next_premarket_result = indicator.extend_realtime("AAPL", next_premarket_row.copy())
+    next_premarket_result = await indicator.extend_realtime(
+        "AAPL", next_premarket_row.copy()
+    )
 
     # Should be NaN because we don't have a market open price for the new day yet
     assert pd.isna(next_premarket_result[indicator.column_name()])

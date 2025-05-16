@@ -23,7 +23,7 @@ class FundamentalDataStoreTest(FundamentalDataStore):
     def set(self, symbol: str, data: FundamentalData) -> None:
         self._data[symbol] = data
 
-    def get(self, symbol: str) -> FundamentalData:
+    async def get(self, symbol: str) -> FundamentalData:
         return self._data[symbol]
 
 
@@ -59,7 +59,8 @@ def test_days_to_earnings_column_name():
     assert indicator.column_name() == "days_to_earnings"
 
 
-def test_days_to_earnings_extend_with_future_earnings(
+@pytest.mark.asyncio
+async def test_days_to_earnings_extend_with_future_earnings(
     fundamentals: FundamentalDataStoreTest,
 ):
     earnings_dates = [
@@ -82,13 +83,14 @@ def test_days_to_earnings_extend_with_future_earnings(
     )
 
     indicator = DaysToEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     expected_days = [10, 10, 26, 26, 5]
     assert result_df[indicator.column_name()].tolist() == expected_days
 
 
-def test_days_to_earnings_extend_with_no_future_earnings(
+@pytest.mark.asyncio
+async def test_days_to_earnings_extend_with_no_future_earnings(
     fundamentals: FundamentalDataStoreTest,
 ):
     earnings_dates = [date(2022, 12, 15)]
@@ -103,7 +105,7 @@ def test_days_to_earnings_extend_with_no_future_earnings(
     df = pd.DataFrame({CandleCol.CLOSE: [100, 101]}, index=pd.DatetimeIndex(dates))
 
     indicator = DaysToEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     assert pd.isna(result_df[indicator.column_name()]).all()
 
@@ -117,7 +119,8 @@ def test_days_from_earnings_column_name():
     assert indicator.column_name() == "days_from_earnings"
 
 
-def test_days_from_earnings_extend_with_past_earnings(
+@pytest.mark.asyncio
+async def test_days_from_earnings_extend_with_past_earnings(
     fundamentals: FundamentalDataStoreTest,
 ):
     earnings_dates = [
@@ -141,13 +144,14 @@ def test_days_from_earnings_extend_with_past_earnings(
     )
 
     indicator = DaysFromEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     expected_days = [21, 21, 5, 5, 5]
     assert result_df[indicator.column_name()].tolist() == expected_days
 
 
-def test_days_from_earnings_extend_with_no_past_earnings(
+@pytest.mark.asyncio
+async def test_days_from_earnings_extend_with_no_past_earnings(
     fundamentals: FundamentalDataStoreTest,
 ):
     earnings_dates = [date(2023, 2, 15)]
@@ -162,12 +166,13 @@ def test_days_from_earnings_extend_with_no_past_earnings(
     df = pd.DataFrame({CandleCol.CLOSE: [100, 101]}, index=pd.DatetimeIndex(dates))
 
     indicator = DaysFromEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     assert pd.isna(result_df[indicator.column_name()]).all()
 
 
-def test_days_from_earnings_extend_with_multiple_symbols(
+@pytest.mark.asyncio
+async def test_days_from_earnings_extend_with_multiple_symbols(
     fundamentals: FundamentalDataStoreTest,
 ):
     aapl_earnings_dates = [date(2022, 12, 15)]
@@ -183,14 +188,15 @@ def test_days_from_earnings_extend_with_multiple_symbols(
     msft_df = pd.DataFrame({CandleCol.CLOSE: [200]}, index=pd.DatetimeIndex(msft_dates))
 
     indicator = DaysFromEarningsIndicator()
-    aapl_result = indicator.extend("AAPL", aapl_df)
-    msft_result = indicator.extend("MSFT", msft_df)
+    aapl_result = await indicator.extend("AAPL", aapl_df)
+    msft_result = await indicator.extend("MSFT", msft_df)
 
     assert aapl_result[indicator.column_name()].iloc[0] == 21
     assert msft_result[indicator.column_name()].iloc[0] == 16
 
 
-def test_days_to_earnings_array_reduction(fundamentals: FundamentalDataStoreTest):
+@pytest.mark.asyncio
+async def test_days_to_earnings_array_reduction(fundamentals: FundamentalDataStoreTest):
     earnings_dates = [
         date(2023, 1, 15),
         date(2023, 2, 15),
@@ -208,13 +214,16 @@ def test_days_to_earnings_array_reduction(fundamentals: FundamentalDataStoreTest
     df = pd.DataFrame({CandleCol.CLOSE: [100, 101, 102]}, index=pd.DatetimeIndex(dates))
 
     indicator = DaysToEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     expected_days = [10, 26, 23]
     assert result_df[indicator.column_name()].tolist() == expected_days
 
 
-def test_days_from_earnings_array_reduction(fundamentals: FundamentalDataStoreTest):
+@pytest.mark.asyncio
+async def test_days_from_earnings_array_reduction(
+    fundamentals: FundamentalDataStoreTest,
+):
     earnings_dates = [
         date(2023, 1, 15),
         date(2023, 2, 15),
@@ -232,7 +241,7 @@ def test_days_from_earnings_array_reduction(fundamentals: FundamentalDataStoreTe
     df = pd.DataFrame({CandleCol.CLOSE: [100, 101, 102]}, index=pd.DatetimeIndex(dates))
 
     indicator = DaysFromEarningsIndicator()
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     expected_days = [5, 5, 5]
     assert result_df[indicator.column_name()].tolist() == expected_days

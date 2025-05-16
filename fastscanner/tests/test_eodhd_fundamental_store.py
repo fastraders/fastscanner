@@ -46,7 +46,8 @@ def store(tmp_path):
     return store
 
 
-def test_get_from_cache(store):
+@pytest.mark.asyncio
+async def test_get_from_cache(store):
     expected = FundamentalData(
         exchange="NASDAQ",
         country="USA",
@@ -81,7 +82,7 @@ def test_get_from_cache(store):
             f,
         )
 
-    result = store.get("AAPL")
+    result = await store.get("AAPL")
 
     assert result.exchange == expected.exchange
     assert result.country == expected.country
@@ -93,8 +94,9 @@ def test_get_from_cache(store):
     assert result.shares_float == expected.shares_float
 
 
-@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
-def test_get_fetch_and_store(
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
+async def test_get_fetch_and_store(
     mock_retry_request, store, sample_fundamental_data, sample_market_cap
 ):
     mock_fundamentals = MagicMock()
@@ -107,7 +109,7 @@ def test_get_fetch_and_store(
 
     mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
 
-    result = store.get("AAPL")
+    result = await store.get("AAPL")
 
     assert result.exchange == "NASDAQ"
     assert result.city == "Cupertino"
@@ -117,8 +119,9 @@ def test_get_fetch_and_store(
     assert os.path.exists(path)
 
 
-@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
-def test_get_handles_missing_data_gracefully(mock_retry_request, store):
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
+async def test_get_handles_missing_data_gracefully(mock_retry_request, store):
     empty_fundamentals = MagicMock()
     empty_fundamentals.status_code = 200
     empty_fundamentals.json.return_value = {}
@@ -129,7 +132,7 @@ def test_get_handles_missing_data_gracefully(mock_retry_request, store):
 
     mock_retry_request.side_effect = [empty_fundamentals, empty_market_cap]
 
-    result = store.get("AAPL")
+    result = await store.get("AAPL")
 
     assert result is not None
     assert result.exchange == ""
@@ -175,8 +178,9 @@ def test_store_and_load_roundtrip(store, sample_fundamental_data, sample_market_
     )
 
 
-@patch("fastscanner.adapters.fundamental.eodhd.retry_request")
-def test_reload_stores_and_returns_fresh_data(
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
+async def test_reload_stores_and_returns_fresh_data(
     mock_retry_request, store, sample_fundamental_data, sample_market_cap
 ):
     mock_fundamentals = MagicMock()
@@ -189,7 +193,7 @@ def test_reload_stores_and_returns_fresh_data(
 
     mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
 
-    result = store.reload("AAPL")
+    result = await store.reload("AAPL")
 
     assert isinstance(result, FundamentalData)
     assert result.exchange == "NASDAQ"

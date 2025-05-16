@@ -40,7 +40,7 @@ class IndicatorsService:
         self.fundamentals = fundamentals
         self.channel = channel
 
-    def calculate(
+    async def calculate(
         self,
         symbol: str,
         start: date,
@@ -54,12 +54,12 @@ class IndicatorsService:
         days = max(i.lookback_days() for i in ind_instances)
         lagged_start = lookback_days(start, days)
 
-        df = self.candles.get(symbol, lagged_start, end, freq)
+        df = await self.candles.get(symbol, lagged_start, end, freq)
         if df.empty:
             return df
 
         for indicator in ind_instances:
-            df = indicator.extend(symbol, df)
+            df = await indicator.extend(symbol, df)
         return df.loc[df.index.date >= start]  # type: ignore
 
     async def subscribe_realtime(
@@ -86,7 +86,7 @@ class IndicatorsService:
         lookback_start = today - timedelta(days=max_days)
         end_date = today - timedelta(days=1)
 
-        df = self.candles.get(symbol, lookback_start, end_date, freq)
+        df = await self.candles.get(symbol, lookback_start, end_date, freq)
         if df.empty:
             logger.warning(
                 f"No historical data found for {symbol} from {lookback_start} to {end_date}"
@@ -94,7 +94,7 @@ class IndicatorsService:
             return
         for _, row in df.iterrows():
             for ind in indicator_instances:
-                row = ind.extend_realtime(symbol, row)
+                row = await ind.extend_realtime(symbol, row)
         stream_key = f"candles_min_{symbol}"
         await self.channel.subscribe(
             stream_key, CandleChannelHandler(symbol, indicator_instances, handler)
@@ -140,7 +140,7 @@ class CandleChannelHandler(ChannelHandler):
             new_row = pd.Series(data, name=ts)
 
             for indicator in self._indicators:
-                new_row = indicator.extend_realtime(self._symbol, new_row)
+                new_row = await indicator.extend_realtime(self._symbol, new_row)
 
             self._handler.handle(self._symbol, new_row)
 

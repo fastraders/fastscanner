@@ -1,8 +1,7 @@
-import io
+import asyncio
 import json
 import logging
 import os
-import re
 import zoneinfo
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
@@ -22,13 +21,13 @@ class PartitionedCSVCandlesProvider:
     def __init__(self, store: CandleStore):
         self._store = store
 
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         _, unit = split_freq(freq)
         keys = self._partition_keys_in_range(start, end, unit)
 
         dfs: list[pd.DataFrame] = []
         for key in keys:
-            df = self._cache(symbol, key, unit, freq)
+            df = await self._cache(symbol, key, unit, freq)
             if df.empty:
                 continue
             dfs.append(df)
@@ -45,7 +44,7 @@ class PartitionedCSVCandlesProvider:
 
         return df.loc[start_dt:end_dt]
 
-    def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
+    async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
             try:
@@ -60,7 +59,7 @@ class PartitionedCSVCandlesProvider:
                 )
 
         start, end = self._range_from_key(key, unit)
-        df = self._store.get(symbol, start, end, freq).dropna()
+        df = (await self._store.get(symbol, start, end, freq)).dropna()
         self._save_cache(symbol, key, freq, df)
         self._mark_expiration(symbol, key, unit)
         return df

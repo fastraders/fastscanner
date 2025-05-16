@@ -37,7 +37,8 @@ def test_atr_lookback_days():
     assert indicator.lookback_days() == 28  # Actual implementation returns 28 days
 
 
-def test_atr_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_atr_extend(candles: "CandleStoreTest"):
     # Create test data
     dates = pd.date_range(start=datetime(2023, 1, 1, 9, 30), periods=20, freq="1min")
     highs = [
@@ -113,7 +114,7 @@ def test_atr_extend(candles: "CandleStoreTest"):
     )
 
     indicator = ATRIndicator(period=5, freq="1min")
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # Verify ATR column exists
     assert indicator.column_name() in result_df.columns
@@ -135,7 +136,8 @@ def test_atr_extend(candles: "CandleStoreTest"):
         assert abs(actual - expected) < 1e-3
 
 
-def test_atr_extend_realtime_first_candle():
+@pytest.mark.asyncio
+async def test_atr_extend_realtime_first_candle():
     indicator = ATRIndicator(period=5, freq="1m")
 
     # First candle
@@ -144,14 +146,15 @@ def test_atr_extend_realtime_first_candle():
         {CandleCol.HIGH: 105, CandleCol.LOW: 100, CandleCol.CLOSE: 102}, name=row_time
     )
 
-    result_row = indicator.extend_realtime("AAPL", row)
+    result_row = await indicator.extend_realtime("AAPL", row)
 
     # First candle should have NA for ATR since we don't have previous close
     assert pd.isna(result_row[indicator.column_name()])
     assert indicator._last_close["AAPL"] == 102
 
 
-def test_atr_extend_realtime_second_candle():
+@pytest.mark.asyncio
+async def test_atr_extend_realtime_second_candle():
     indicator = ATRIndicator(period=5, freq="1m")
 
     # First candle
@@ -160,7 +163,7 @@ def test_atr_extend_realtime_second_candle():
         {CandleCol.HIGH: 105, CandleCol.LOW: 100, CandleCol.CLOSE: 102}, name=first_time
     )
 
-    indicator.extend_realtime("AAPL", first_row)
+    await indicator.extend_realtime("AAPL", first_row)
 
     # Second candle
     second_time = datetime(2023, 1, 1, 9, 31)
@@ -168,7 +171,7 @@ def test_atr_extend_realtime_second_candle():
         {CandleCol.HIGH: 104, CandleCol.LOW: 99, CandleCol.CLOSE: 100}, name=second_time
     )
 
-    result_row = indicator.extend_realtime("AAPL", second_row)
+    result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # TR = max(high-low, |high-prev_close|, |low-prev_close|)
     # = max(104-99, |104-102|, |99-102|) = max(5, 2, 3) = 5
@@ -178,7 +181,8 @@ def test_atr_extend_realtime_second_candle():
     assert indicator._last_atr["AAPL"] == 5
 
 
-def test_atr_extend_realtime_multiple_candles():
+@pytest.mark.asyncio
+async def test_atr_extend_realtime_multiple_candles():
     indicator = ATRIndicator(period=5, freq="1m")
 
     # First candle
@@ -187,7 +191,7 @@ def test_atr_extend_realtime_multiple_candles():
         {CandleCol.HIGH: 105, CandleCol.LOW: 100, CandleCol.CLOSE: 102}, name=first_time
     )
 
-    indicator.extend_realtime("AAPL", first_row)
+    await indicator.extend_realtime("AAPL", first_row)
 
     # Second candle
     second_time = datetime(2023, 1, 1, 9, 31)
@@ -195,7 +199,7 @@ def test_atr_extend_realtime_multiple_candles():
         {CandleCol.HIGH: 104, CandleCol.LOW: 99, CandleCol.CLOSE: 100}, name=second_time
     )
 
-    indicator.extend_realtime("AAPL", second_row)
+    await indicator.extend_realtime("AAPL", second_row)
 
     # Third candle
     third_time = datetime(2023, 1, 1, 9, 32)
@@ -203,7 +207,7 @@ def test_atr_extend_realtime_multiple_candles():
         {CandleCol.HIGH: 106, CandleCol.LOW: 101, CandleCol.CLOSE: 103}, name=third_time
     )
 
-    result_row = indicator.extend_realtime("AAPL", third_row)
+    result_row = await indicator.extend_realtime("AAPL", third_row)
 
     # TR = max(high-low, |high-prev_close|, |low-prev_close|)
     # = max(106-101, |106-100|, |101-100|) = max(5, 6, 1) = 6
@@ -213,7 +217,8 @@ def test_atr_extend_realtime_multiple_candles():
     assert abs(indicator._last_atr["AAPL"] - 5.2) < 1e-3
 
 
-def test_atr_extend_realtime_multiple_symbols():
+@pytest.mark.asyncio
+async def test_atr_extend_realtime_multiple_symbols():
     indicator = ATRIndicator(period=5, freq="1m")
 
     # AAPL first candle
@@ -222,7 +227,7 @@ def test_atr_extend_realtime_multiple_symbols():
         {CandleCol.HIGH: 105, CandleCol.LOW: 100, CandleCol.CLOSE: 102}, name=aapl_time
     )
 
-    indicator.extend_realtime("AAPL", aapl_row)
+    await indicator.extend_realtime("AAPL", aapl_row)
 
     # MSFT first candle
     msft_time = datetime(2023, 1, 1, 9, 30)
@@ -230,7 +235,7 @@ def test_atr_extend_realtime_multiple_symbols():
         {CandleCol.HIGH: 205, CandleCol.LOW: 200, CandleCol.CLOSE: 202}, name=msft_time
     )
 
-    indicator.extend_realtime("MSFT", msft_row)
+    await indicator.extend_realtime("MSFT", msft_row)
 
     # AAPL second candle
     aapl_time2 = datetime(2023, 1, 1, 9, 31)
@@ -238,7 +243,7 @@ def test_atr_extend_realtime_multiple_symbols():
         {CandleCol.HIGH: 104, CandleCol.LOW: 99, CandleCol.CLOSE: 100}, name=aapl_time2
     )
 
-    aapl_result = indicator.extend_realtime("AAPL", aapl_row2)
+    aapl_result = await indicator.extend_realtime("AAPL", aapl_row2)
 
     # MSFT second candle
     msft_time2 = datetime(2023, 1, 1, 9, 31)
@@ -246,7 +251,7 @@ def test_atr_extend_realtime_multiple_symbols():
         {CandleCol.HIGH: 204, CandleCol.LOW: 199, CandleCol.CLOSE: 200}, name=msft_time2
     )
 
-    msft_result = indicator.extend_realtime("MSFT", msft_row2)
+    msft_result = await indicator.extend_realtime("MSFT", msft_row2)
 
     # Verify each symbol has its own ATR calculation
     assert aapl_result[indicator.column_name()] == 5
@@ -258,7 +263,8 @@ def test_atr_extend_realtime_multiple_symbols():
     assert "MSFT" in indicator._last_close
 
 
-def test_atr_rounding():
+@pytest.mark.asyncio
+async def test_atr_rounding():
     indicator = ATRIndicator(period=5, freq="1m")
 
     # First candle
@@ -268,7 +274,7 @@ def test_atr_rounding():
         name=first_time,
     )
 
-    indicator.extend_realtime("AAPL", first_row)
+    await indicator.extend_realtime("AAPL", first_row)
 
     # Second candle
     second_time = datetime(2023, 1, 1, 9, 31)
@@ -277,7 +283,7 @@ def test_atr_rounding():
         name=second_time,
     )
 
-    result_row = indicator.extend_realtime("AAPL", second_row)
+    result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # Verify the result is rounded to 3 decimal places
     atr_value = result_row[indicator.column_name()]

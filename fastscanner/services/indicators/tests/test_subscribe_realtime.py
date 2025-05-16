@@ -117,19 +117,19 @@ def setup(candles):
     return symbol, ts, handler
 
 
-def test_prev_day_indicator(setup):
+@pytest.mark.asyncio
+async def test_prev_day_indicator(setup):
     symbol, ts, handler = setup
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
 
-    df = ApplicationRegistry.candles.get(
+    df = await ApplicationRegistry.candles.get(
         symbol, date(2023, 1, 1), date(2023, 1, 10), "1D"
     )
-    indicator.extend(symbol, df)
+    await indicator.extend(symbol, df)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    )
+
+    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -137,44 +137,42 @@ def test_prev_day_indicator(setup):
     assert row["prev_day_close"] == 114
 
 
-def test_daily_gap_indicator(setup):
+@pytest.mark.asyncio
+async def test_daily_gap_indicator(setup):
     symbol, ts, handler = setup
     indicator = DailyGapIndicator()
 
     pre_market_ts = ts.replace(hour=9, minute=15)
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(
-            f"candles_min_{symbol}", create_stream_message(pre_market_ts)
-        )
+    await channel_handler.handle(
+        f"candles_min_{symbol}", create_stream_message(pre_market_ts)
     )
     assert len(handler.received) == 1
     _, row = handler.received[0]
     assert pd.isna(row["daily_gap"])
 
     handler.received = []
-    asyncio.run(
-        channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    )
+
+    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+
     assert len(handler.received) == 1
     _, row = handler.received[0]
     assert "daily_gap" in row
     assert round(row["daily_gap"], 4) == round((110 - 114) / 114, 4)
 
 
-def test_daily_atr_indicator(setup):
+@pytest.mark.asyncio
+async def test_daily_atr_indicator(setup):
     symbol, ts, handler = setup
     indicator = DailyATRIndicator(period=3)
 
-    df = ApplicationRegistry.candles.get(
+    df = await ApplicationRegistry.candles.get(
         symbol, date(2023, 1, 1), date(2023, 1, 10), "1D"
     )
-    indicator.extend(symbol, df)
+    await indicator.extend(symbol, df)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    )
+    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -182,14 +180,13 @@ def test_daily_atr_indicator(setup):
     assert row["daily_atr_3"] > 0
 
 
-def test_daily_atr_gap_indicator(setup):
+@pytest.mark.asyncio
+async def test_daily_atr_gap_indicator(setup):
     symbol, ts, handler = setup
     indicator = DailyATRGapIndicator(period=3)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    )
+    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -262,7 +259,8 @@ def test_premarket_cumulative(setup):
     assert row["premarket_total_close"] == 150
 
 
-def test_atr_indicator(setup):
+@pytest.mark.asyncio
+async def test_atr_indicator(setup):
     symbol, _, handler = setup
     indicator = ATRIndicator(period=3, freq="1min")
 
@@ -282,15 +280,13 @@ def test_atr_indicator(setup):
                 LOCAL_TIMEZONE_STR
             ),
         )
-        indicator.extend_realtime(symbol, row)
+        await indicator.extend_realtime(symbol, row)
 
     ts = index[3]
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(
-            f"candles_min_{symbol}",
-            create_stream_message(ts, open=103, high=113, low=93, close=108),
-        )
+    await channel_handler.handle(
+        f"candles_min_{symbol}",
+        create_stream_message(ts, open=103, high=113, low=93, close=108),
     )
 
     assert len(handler.received) == 1
@@ -300,20 +296,20 @@ def test_atr_indicator(setup):
     assert row["atr_3"] > 0, f"ATR is not > 0: {row}"
 
 
-def test_position_in_range(setup):
+@pytest.mark.asyncio
+async def test_position_in_range(setup):
     symbol, ts, handler = setup
     indicator = PositionInRangeIndicator(n_days=3)
 
-    df = ApplicationRegistry.candles.get(
+    df = await ApplicationRegistry.candles.get(
         symbol, date(2023, 1, 1), date(2023, 1, 10), "1D"
     )
-    indicator.extend(symbol, df)
+    await indicator.extend(symbol, df)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler)
-    asyncio.run(
-        channel_handler.handle(
-            f"candles_min_{symbol}", create_stream_message(ts, close=112)
-        )
+
+    await channel_handler.handle(
+        f"candles_min_{symbol}", create_stream_message(ts, close=112)
     )
 
     assert len(handler.received) == 1
@@ -342,7 +338,8 @@ def test_channel_handler_invalid_data(setup):
     assert len(handler.received) == 0
 
 
-def test_channel_handler_multiple_indicators(setup):
+@pytest.mark.asyncio
+async def test_channel_handler_multiple_indicators(setup):
     symbol, ts, handler = setup
     indicators = [
         PrevDayIndicator(candle_col=CandleCol.CLOSE),
@@ -350,17 +347,16 @@ def test_channel_handler_multiple_indicators(setup):
         CumulativeDailyVolumeIndicator(),
     ]
 
-    df = ApplicationRegistry.candles.get(
+    df = await ApplicationRegistry.candles.get(
         symbol, date(2023, 1, 1), date(2023, 1, 10), "1D"
     )
     for indicator in indicators:
         if hasattr(indicator, "extend"):
-            indicator.extend(symbol, df)
+            await indicator.extend(symbol, df)
 
     channel_handler = CandleChannelHandler(symbol, indicators, handler)
-    asyncio.run(
-        channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    )
+
+    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
