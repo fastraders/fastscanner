@@ -20,10 +20,11 @@ class PolygonCandlesProvider:
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
-    def __init__(self, base_url: str, api_key: str,max_concurrent_requests: int = 100):
+    def __init__(self, base_url: str, api_key: str, max_concurrent_requests: int = 100):
         self._base_url = base_url
         self._api_key = api_key
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+
     async def _fetch(
         self,
         client: httpx.AsyncClient,

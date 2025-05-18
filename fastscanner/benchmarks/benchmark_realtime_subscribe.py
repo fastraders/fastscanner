@@ -135,19 +135,25 @@ async def main():
         IndicatorParams(type_=PositionInRangeIndicator.type(), params={"n_days": 5}),
     ]
 
-    for symbol in symbols:
-        try:
-            await service.subscribe_realtime(
-                symbol=symbol,
-                freq="1min",
-                indicators=indicators,
-                handler=BenchmarkHandler(),
-            )
-            logger.info(f"Subscribed to: {symbol}")
-        except Exception as e:
-            logger.warning(f"Subscription failed for {symbol}: {e}")
+    tasks = []
 
-    await monitor_batch_timeout()
+    for symbol in symbols:
+
+        async def subscribe(symbol=symbol):
+            try:
+                await service.subscribe_realtime(
+                    symbol=symbol,
+                    freq="1min",
+                    indicators=indicators,
+                    handler=BenchmarkHandler(),
+                )
+                logger.info(f"Subscribed to: {symbol}")
+            except Exception as e:
+                logger.warning(f"Subscription failed for {symbol}: {e}")
+
+        tasks.append(asyncio.create_task(subscribe()))
+
+    await asyncio.gather(*tasks, monitor_batch_timeout())
 
 
 if __name__ == "__main__":

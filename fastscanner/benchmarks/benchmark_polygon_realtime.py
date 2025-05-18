@@ -38,17 +38,24 @@ class BenchmarkStats:
     async def check_timeout(self):
         now = datetime.now()
         if (
-            self.batch_start_time
-            and self.last_received_time
+            self.last_received_time
             and (now - self.last_received_time).total_seconds() > NO_DATA_TIMEOUT
         ):
             logger.info(
-                f"\nBatch started at: {self.batch_start_time.strftime('%M:%S.%f')}"
+                f"No messages received for {NO_DATA_TIMEOUT} seconds at: {now.strftime('%M:%S.%f')[:-3]}"
             )
-            logger.info(f"Batch ended at:   {now.strftime('%M:%S.%f')}")
-            logger.info(
-                f"Batch duration: {(now - self.batch_start_time).total_seconds():.6f} seconds\n"
-            )
+            if self.batch_start_time:
+                batch_duration = (
+                    self.last_received_time - self.batch_start_time
+                ).total_seconds()
+                logger.info(f"\nBatch Summary:")
+                logger.info(
+                    f"First message timestamp: {self.batch_start_time.strftime('%M:%S.%f')[:-3]}"
+                )
+                logger.info(
+                    f"Last message timestamp:  {self.last_received_time.strftime('%M:%S.%f')[:-3]}"
+                )
+                logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
             self.batch_start_time = None
             self.last_received_time = None
             self.total_messages = 0
@@ -68,6 +75,16 @@ class BenchmarkStats:
         logger.info(f"Total Messages     : {self.total_messages}")
         logger.info(f"Avg Latency        : {avg_latency:.6f}s")
         logger.info(f"Max Latency        : {max_latency:.6f}s")
+        if self.batch_start_time and self.last_received_time:
+            logger.info(
+                f"First message at   : {self.batch_start_time.strftime('%M:%S.%f')[:-3]}"
+            )
+            logger.info(
+                f"Last message at    : {self.last_received_time.strftime('%M:%S.%f')[:-3]}"
+            )
+            logger.info(
+                f"Batch duration     : {(self.last_received_time - self.batch_start_time).total_seconds():.6f}s"
+            )
 
 
 def wrap_handle_messages(realtime: PolygonRealtime, stats: BenchmarkStats):
