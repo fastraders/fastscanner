@@ -139,19 +139,16 @@ async def main():
 
     for symbol in symbols:
 
-        async def subscribe(symbol=symbol):
-            try:
-                await service.subscribe_realtime(
+        tasks.append(
+            asyncio.create_task(
+                service.subscribe_realtime(
                     symbol=symbol,
                     freq="1min",
                     indicators=indicators,
                     handler=BenchmarkHandler(),
                 )
-                logger.info(f"Subscribed to: {symbol}")
-            except Exception as e:
-                logger.warning(f"Subscription failed for {symbol}: {e}")
-
-        tasks.append(asyncio.create_task(subscribe()))
+            )
+        )
 
     await asyncio.gather(*tasks, monitor_batch_timeout())
 

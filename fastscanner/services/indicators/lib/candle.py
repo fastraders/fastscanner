@@ -283,6 +283,10 @@ class PositionInRangeIndicator:
         last_high = max(self._high_n_days[symbol])
         last_low = min(self._low_n_days[symbol])
         last_close = new_row[CandleCol.CLOSE]
-        new_row[self.column_name()] = (last_close - last_low) / (last_high - last_low)
+        range_val = last_high - last_low
+        if range_val == 0:
+            new_row[self.column_name()] = pd.NA
+        else:
+            new_row[self.column_name()] = (last_close - last_low) / range_val
 
         return new_row
