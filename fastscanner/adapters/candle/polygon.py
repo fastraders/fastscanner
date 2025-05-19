@@ -43,7 +43,7 @@ class PolygonCandlesProvider:
         max_days_per_unit = {
             "min": 60,
             "t": 60,
-            "h": 2000,
+            "h": 60,
             "d": 50000,
         }
         max_days = max_days_per_unit[unit]
@@ -93,13 +93,11 @@ class PolygonCandlesProvider:
                         "c": CandleCol.CLOSE,
                         "l": CandleCol.LOW,
                     }
-                )[self.columns]
+                )
+                .dropna(subset=(CandleCol.OPEN,))[self.columns]
             )
-            if unit in ("min", "h", "t"):
-                df = df[
-                    (df.index.time >= pd.Timestamp("04:00").time()) & (df.index.time <= pd.Timestamp("20:00").time())  # type: ignore
-                ]
-            dfs.append(df)
+            if not df.empty:
+                dfs.append(df)
 
             curr_start = curr_end + timedelta(days=1)
             curr_end = min(end, curr_start + timedelta(days=max_days))

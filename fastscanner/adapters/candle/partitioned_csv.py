@@ -44,16 +44,49 @@ class PartitionedCSVCandlesProvider:
 
         return df.loc[start_dt:end_dt]
 
+    _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
+
+    async def cache_all_freqs(
+        self, symbol: str, start: date, end: date
+    ) -> pd.DataFrame:
+        minute_df = await self._store.get(symbol, start, end, "1min")
+        daily_df = await self._store.get(symbol, start, end, "1d")
+        for freq in self._cache_freqs:
+            if freq == "1min":
+                df = minute_df
+            elif freq == "1d":
+                df = daily_df
+            else:
+                df = minute_df.resample(freq).agg(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
+
+            _, unit = split_freq(freq)
+            partition_keys = self._partition_keys_in_range(start, end, unit)
+            for key in partition_keys:
+                start, end = self._range_from_key(key, unit)
+                start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
+                end_dt = pd.Timestamp(
+                    datetime.combine(end, time(23, 59, 59)), tz=self.tz
+                )
+                sub_df = df.loc[start_dt:end_dt]
+                self._save_cache(symbol, key, freq, sub_df)
+                self._mark_expiration(symbol, key, unit)
+
+        return df.loc[start_dt:end_dt].dropna()
+
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
         if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
             try:
                 df = pd.read_csv(partition_path)
-                df[CandleCol.DATETIME] = pd.to_datetime(
-                    df[CandleCol.DATETIME], utc=True
-                )
-                return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
+                if unit.lower() != "d":
+                    df[CandleCol.DATETIME] = pd.to_datetime(
+                        df[CandleCol.DATETIME], utc=True
+                    )
+                    return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
+                df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME])
+                return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
             except Exception as e:
+                logger.exception(e)
                 logger.error(
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
                 )
@@ -69,9 +102,14 @@ class PartitionedCSVCandlesProvider:
         partition_dir = os.path.dirname(partition_path)
         os.makedirs(partition_dir, exist_ok=True)
 
-        df.tz_convert("utc").tz_convert(None).reset_index().to_csv(
-            partition_path, index=False
-        )
+        unit = split_freq(freq)[1]
+        if unit.lower() != "d":
+            df = df.tz_convert("utc").tz_convert(None).reset_index()
+        else:
+            df = df.reset_index()
+            df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
+
+        df.to_csv(partition_path, index=False)
 
     def _partition_path(self, symbol: str, key: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
