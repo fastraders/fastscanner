@@ -21,7 +21,8 @@ def test_position_in_range_column_name():
     assert indicator.column_name() == "position_in_range_20"
 
 
-def test_position_in_range_extend(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
@@ -42,7 +43,7 @@ def test_position_in_range_extend(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
 
     indicator = PositionInRangeIndicator(n_days=5)
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -57,7 +58,8 @@ def test_position_in_range_extend(candles: "CandleStoreTest"):
         assert abs(actual - expected) < 1e-4
 
 
-def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
@@ -80,7 +82,7 @@ def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
 
     indicator = PositionInRangeIndicator(n_days=5)
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
     expected_positions = [
         (135 - 131) / (158 - 131),
         (135 - 131) / (158 - 131),
@@ -94,7 +96,8 @@ def test_position_in_range_extend_multiple_days(candles: "CandleStoreTest"):
         assert abs(actual - expected) < 1e-4
 
 
-def test_position_in_range_extend_empty_data(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_empty_data(candles: "CandleStoreTest"):
     candles.set_data("AAPL", pd.DataFrame(index=pd.DatetimeIndex([])))
 
     dates = [datetime(2023, 1, 10, 9, 30)]
@@ -102,12 +105,15 @@ def test_position_in_range_extend_empty_data(candles: "CandleStoreTest"):
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
 
     indicator = PositionInRangeIndicator(n_days=5)
-    result_df = indicator.extend("AAPL", df)
+    result_df = await indicator.extend("AAPL", df)
 
     assert pd.isna(result_df[indicator.column_name()].iloc[0])
 
 
-def test_position_in_range_extend_realtime_first_candle(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_realtime_first_candle(
+    candles: "CandleStoreTest",
+):
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
     daily_lows = [130, 132, 135, 133, 131, 134, 136, 138, 137, 135]
@@ -122,7 +128,7 @@ def test_position_in_range_extend_realtime_first_candle(candles: "CandleStoreTes
     row_time = datetime(2023, 1, 11, 9, 30)
     row = pd.Series({CandleCol.CLOSE: 140}, name=row_time)
 
-    result_row = indicator.extend_realtime("AAPL", row)
+    result_row = await indicator.extend_realtime("AAPL", row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -133,7 +139,8 @@ def test_position_in_range_extend_realtime_first_candle(candles: "CandleStoreTes
     assert len(indicator._low_n_days["AAPL"]) > 0
 
 
-def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreTest"):
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
     daily_lows = [130, 132, 135, 133, 131, 134, 136, 138, 137, 135]
@@ -147,11 +154,11 @@ def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreTest"):
 
     first_time = datetime(2023, 1, 11, 9, 30)
     first_row = pd.Series({CandleCol.CLOSE: 140}, name=first_time)
-    indicator.extend_realtime("AAPL", first_row)
+    await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 11, 10, 0)
     second_row = pd.Series({CandleCol.CLOSE: 145}, name=second_time)
-    result_row = indicator.extend_realtime("AAPL", second_row)
+    result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -160,7 +167,8 @@ def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreTest"):
     assert indicator._last_date["AAPL"] == first_time.date()
 
 
-def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTest"):
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 11))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155, 160]
     daily_lows = [130, 132, 135, 133, 131, 134, 136, 138, 137, 135, 140]
@@ -174,14 +182,14 @@ def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTest"):
 
     day1_time = datetime(2023, 1, 10, 9, 30)
     day1_row = pd.Series({CandleCol.CLOSE: 140}, name=day1_time)
-    indicator.extend_realtime("AAPL", day1_row)
+    await indicator.extend_realtime("AAPL", day1_row)
 
     high_day1 = indicator._high_n_days["AAPL"].copy()
     low_day1 = indicator._low_n_days["AAPL"].copy()
 
     day2_time = datetime(2023, 1, 12, 9, 30)
     day2_row = pd.Series({CandleCol.CLOSE: 145}, name=day2_time)
-    result_row = indicator.extend_realtime("AAPL", day2_row)
+    result_row = await indicator.extend_realtime("AAPL", day2_row)
 
     assert indicator._last_date["AAPL"] == day2_time.date()
 
@@ -190,7 +198,10 @@ def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTest"):
     assert indicator._last_date["AAPL"] != day1_time.date()
 
 
-def test_position_in_range_extend_realtime_multiple_symbols(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_extend_realtime_multiple_symbols(
+    candles: "CandleStoreTest",
+):
     aapl_daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     aapl_daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
     aapl_daily_lows = [130, 132, 135, 133, 131, 134, 136, 138, 137, 135]
@@ -214,7 +225,7 @@ def test_position_in_range_extend_realtime_multiple_symbols(candles: "CandleStor
 
     aapl_time = datetime(2023, 1, 11, 9, 30)
     aapl_row = pd.Series({CandleCol.CLOSE: 140}, name=aapl_time)
-    result_row = indicator.extend_realtime("AAPL", aapl_row)
+    result_row = await indicator.extend_realtime("AAPL", aapl_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -223,7 +234,7 @@ def test_position_in_range_extend_realtime_multiple_symbols(candles: "CandleStor
 
     msft_time = datetime(2023, 1, 11, 9, 30)
     msft_row = pd.Series({CandleCol.CLOSE: 245}, name=msft_time)
-    result_row = indicator.extend_realtime("MSFT", msft_row)
+    result_row = await indicator.extend_realtime("MSFT", msft_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 258, Lowest low = 234
@@ -238,7 +249,8 @@ def test_position_in_range_extend_realtime_multiple_symbols(candles: "CandleStor
     assert indicator._last_date["MSFT"] == msft_time.date()
 
 
-def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
+@pytest.mark.asyncio
+async def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
     daily_highs = [150, 152, 155, 153, 151, 154, 156, 158, 157, 155]
     daily_lows = [130, 132, 135, 133, 131, 134, 136, 138, 137, 135]
@@ -252,7 +264,7 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
 
     low_time = datetime(2023, 1, 11, 9, 30)
     low_row = pd.Series({CandleCol.CLOSE: 130}, name=low_time)
-    result_row = indicator.extend_realtime("AAPL", low_row)
+    result_row = await indicator.extend_realtime("AAPL", low_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -261,7 +273,7 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
 
     high_time = datetime(2023, 1, 11, 10, 0)
     high_row = pd.Series({CandleCol.CLOSE: 150}, name=high_time)
-    result_row = indicator.extend_realtime("AAPL", high_row)
+    result_row = await indicator.extend_realtime("AAPL", high_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -270,7 +282,7 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
 
     above_time = datetime(2023, 1, 11, 10, 30)
     above_row = pd.Series({CandleCol.CLOSE: 160}, name=above_time)
-    result_row = indicator.extend_realtime("AAPL", above_row)
+    result_row = await indicator.extend_realtime("AAPL", above_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134
@@ -279,7 +291,7 @@ def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
 
     below_time = datetime(2023, 1, 11, 11, 0)
     below_row = pd.Series({CandleCol.CLOSE: 120}, name=below_time)
-    result_row = indicator.extend_realtime("AAPL", below_row)
+    result_row = await indicator.extend_realtime("AAPL", below_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
     # Highest high = 158, Lowest low = 134

@@ -289,7 +289,7 @@ async def calculate_indicators(
     return stats
 
 
-def get_polygon_symbols() -> Set[str]:
+async def get_polygon_symbols() -> Set[str]:
     """Get available symbols from Polygon."""
     logger.info("Fetching symbols from Polygon")
 
@@ -297,13 +297,13 @@ def get_polygon_symbols() -> Set[str]:
     provider = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
     # Get all symbols
-    symbols = provider.all_symbols()
+    symbols = await provider.all_symbols()
     logger.info(f"Found {len(symbols)} symbols from Polygon")
 
     return symbols
 
 
-def main():
+async def main():
     """Main function to run the stress test."""
     parser = argparse.ArgumentParser(description="Stress test the /calculate endpoint")
     parser.add_argument(
@@ -346,7 +346,7 @@ def main():
     args = parser.parse_args()
 
     # Get symbols from Polygon
-    symbols = get_polygon_symbols()
+    symbols = await get_polygon_symbols()
 
     # Generate requests
     requests = generate_requests(symbols, args.num_requests, args.requests_file)
@@ -361,4 +361,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

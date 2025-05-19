@@ -65,20 +65,21 @@ async def monitor_batch_timeout():
     while True:
         await asyncio.sleep(1)
         now = time.time()
-
         if (
             batch_start_time
             and last_received_time
             and (now - last_received_time) > NO_DATA_TIMEOUT
         ):
+            batch_duration = last_received_time - batch_start_time
+            logger.info(f"\nBatch Summary:")
             logger.info(
-                f"\nBatch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
+                f"First message timestamp: {datetime.fromtimestamp(batch_start_time).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(
-                f"Batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
+                f"Last message timestamp:  {datetime.fromtimestamp(last_received_time).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(f"Total messages read: {total_messages}")
-            logger.info(f"Batch duration: {now - batch_start_time:.6f} seconds\n")
+            logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
             batch_start_time = None
             last_received_time = None
             total_messages = 0
@@ -100,7 +101,9 @@ async def main():
         stream_key = f"{STREAM_PREFIX}{symbol}"
         await redis_channel.subscribe(stream_key, BenchmarkHandler())
 
-    await monitor_batch_timeout()
+    monitor_task = asyncio.create_task(monitor_batch_timeout())
+
+    await asyncio.gather(monitor_task)
 
 
 if __name__ == "__main__":

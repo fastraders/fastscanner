@@ -1,8 +1,8 @@
+import asyncio
 import io
 import json
 import logging
 import os
-import re
 from datetime import date, timedelta
 from urllib.parse import urljoin
 
@@ -10,7 +10,7 @@ import httpx
 import pandas as pd
 
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
-from fastscanner.pkg.http import MaxRetryError, retry_request
+from fastscanner.pkg.http import MaxRetryError, async_retry_request
 from fastscanner.services.indicators.ports import CandleCol
 
 logger = logging.getLogger(__name__)
@@ -20,13 +20,14 @@ class PolygonCandlesProvider:
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, max_concurrent_requests: int = 100):
         self._base_url = base_url
         self._api_key = api_key
+        self._semaphore = asyncio.Semaphore(max_concurrent_requests)
 
-    def _fetch(
+    async def _fetch(
         self,
-        client: httpx.Client,
+        client: httpx.AsyncClient,
         symbol: str,
         start: date,
         end: date,
@@ -49,13 +50,14 @@ class PolygonCandlesProvider:
         curr_start = start
         curr_end = min(end, start + timedelta(days=max_days))
         dfs: list[pd.DataFrame] = []
+
         while curr_start <= end:
             url = urljoin(
                 self._base_url,
                 f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start.isoformat()}/{curr_end.isoformat()}",
             )
             try:
-                response = retry_request(
+                response = await async_retry_request(
                     client,
                     "GET",
                     url,
@@ -114,18 +116,20 @@ class PolygonCandlesProvider:
             df = df.tz_localize("utc").tz_convert(self.tz)
         return df
 
-    def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        with httpx.Client() as client:
-            return self._fetch(client, symbol, start, end, freq)
+    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+        async with self._semaphore:
+            async with httpx.AsyncClient() as client:
+                return await self._fetch(client, symbol, start, end, freq)
 
-    def all_symbols(self) -> set[str]:
+    async def all_symbols(self) -> set[str]:
         symbols = set()
-        symbols_path = os.path.join("data/polygon_symbols.json")
+        symbols_path = os.path.join("data", "polygon_symbols.json")
+
         if os.path.exists(symbols_path):
             with open(symbols_path, "r") as f:
                 return set(json.load(f))
 
-        with httpx.Client() as client:
+        async with httpx.AsyncClient() as client:
             url = urljoin(self._base_url, "v3/reference/tickers")
             params = {
                 "apiKey": self._api_key,
@@ -134,7 +138,7 @@ class PolygonCandlesProvider:
                 "limit": 1000,
             }
             while True:
-                response = retry_request(
+                response = await async_retry_request(
                     client,
                     "GET",
                     url,

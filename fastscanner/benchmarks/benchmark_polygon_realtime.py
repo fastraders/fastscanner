@@ -42,13 +42,17 @@ class BenchmarkStats:
             and self.last_received_time
             and (now - self.last_received_time).total_seconds() > NO_DATA_TIMEOUT
         ):
+            batch_duration = (
+                self.last_received_time - self.batch_start_time
+            ).total_seconds()
+            logger.info(f"\nBatch Summary:")
             logger.info(
-                f"\nBatch started at: {self.batch_start_time.strftime('%M:%S.%f')}"
+                f"First message timestamp: {self.batch_start_time.strftime('%M:%S.%f')[:-3]}"
             )
-            logger.info(f"Batch ended at:   {now.strftime('%M:%S.%f')}")
             logger.info(
-                f"Batch duration: {(now - self.batch_start_time).total_seconds():.6f} seconds\n"
+                f"Last message timestamp:  {self.last_received_time.strftime('%M:%S.%f')[:-3]}"
             )
+            logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
             self.batch_start_time = None
             self.last_received_time = None
             self.total_messages = 0

@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import date, datetime, time, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -25,6 +25,7 @@ def provider(tmp_path):
     return provider
 
 
+@pytest.mark.asyncio
 def test_save_and_load_cache(provider):
     df = pd.DataFrame(
         {
@@ -48,8 +49,9 @@ def test_save_and_load_cache(provider):
     assert CandleCol.OPEN in df_loaded.columns
 
 
-def test_fetch_and_cache_new_data(tmp_path):
-    mock_store = MagicMock()
+@pytest.mark.asyncio
+async def test_fetch_and_cache_new_data(tmp_path):
+    mock_store = AsyncMock()
     provider = PartitionedCSVCandlesProvider(mock_store)
     provider.CACHE_DIR = tmp_path
 
@@ -68,16 +70,17 @@ def test_fetch_and_cache_new_data(tmp_path):
 
     mock_store.get.return_value = df
 
-    result_df = provider._cache(SYMBOL, TEST_KEY, UNIT, FREQ)
+    result_df = await provider._cache(SYMBOL, TEST_KEY, UNIT, FREQ)
 
     assert isinstance(result_df, pd.DataFrame)
     assert len(result_df) == 3
 
 
+@pytest.mark.asyncio
 @patch(
     "fastscanner.adapters.candle.partitioned_csv.PartitionedCSVCandlesProvider._cache"
 )
-def test_get_success_path(mock_cache):
+async def test_get_success_path(mock_cache):
     df = pd.DataFrame(
         {
             CandleCol.OPEN: [1, 2, 3, 4],
@@ -94,29 +97,31 @@ def test_get_success_path(mock_cache):
     provider = PartitionedCSVCandlesProvider(MagicMock())
 
     with patch.object(provider, "_partition_keys_in_range", return_value=["2023-01"]):
-        result = provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 4), "1h")
+        result = await provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 4), "1h")
         assert not result.empty
         assert len(result) == 4
 
 
+@pytest.mark.asyncio
 @patch(
     "fastscanner.adapters.candle.partitioned_csv.PartitionedCSVCandlesProvider._cache"
 )
-def test_get_returns_empty_when_no_data(mock_cache):
+async def test_get_returns_empty_when_no_data(mock_cache):
     mock_cache.return_value = pd.DataFrame()
     provider = PartitionedCSVCandlesProvider(MagicMock())
 
     with patch.object(provider, "_partition_keys_in_range", return_value=["2023-01"]):
-        result = provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 5), "1h")
+        result = await provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 5), "1h")
 
         assert result.empty
         assert list(result.columns) == list(CandleCol.RESAMPLE_MAP.keys())
 
 
+@pytest.mark.asyncio
 @patch(
     "fastscanner.adapters.candle.partitioned_csv.PartitionedCSVCandlesProvider._cache"
 )
-def test_get_trims_data_within_start_end(mock_cache):
+async def test_get_trims_data_within_start_end(mock_cache):
     df = pd.DataFrame(
         {
             CandleCol.OPEN: [1, 2, 3],
@@ -133,7 +138,7 @@ def test_get_trims_data_within_start_end(mock_cache):
     provider = PartitionedCSVCandlesProvider(MagicMock())
 
     with patch.object(provider, "_partition_keys_in_range", return_value=["2023-01"]):
-        result = provider.get(SYMBOL, date(2023, 1, 2), date(2023, 1, 3), "1h")
+        result = await provider.get(SYMBOL, date(2023, 1, 2), date(2023, 1, 3), "1h")
 
         assert all(
             (result.index.date >= date(2023, 1, 2))  # type: ignore
@@ -141,19 +146,23 @@ def test_get_trims_data_within_start_end(mock_cache):
         )
 
 
-def test_get_invalid_unit():
+@pytest.mark.asyncio
+async def test_get_invalid_unit():
     provider = PartitionedCSVCandlesProvider((MagicMock()))
     with pytest.raises(ValueError, match="Invalid frequency"):
-        provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 10), FAILFREQ)
+        await provider.get(SYMBOL, date(2023, 1, 1), date(2023, 1, 10), FAILFREQ)
 
 
-def test_range_from_key_invalid_unit(provider):
+@pytest.mark.asyncio
+async def test_range_from_key_invalid_unit(provider):
     with pytest.raises(ValueError, match="Invalid unit"):
         provider._range_from_key("2023-01", "invalid_unit")
 
 
-def test_cache_fallback_on_corrupt_file(tmp_path):
+@pytest.mark.asyncio
+async def test_cache_fallback_on_corrupt_file(tmp_path):
     mock_store = MagicMock()
+
     provider = PartitionedCSVCandlesProvider(store=mock_store)
     provider.CACHE_DIR = tmp_path / "candles"
     path = provider._partition_path("AAPL", "2023-04", "1min")
@@ -174,20 +183,22 @@ def test_cache_fallback_on_corrupt_file(tmp_path):
         }
     ).set_index(CandleCol.DATETIME)
 
-    mock_store.get.return_value = df
+    mock_store.get = AsyncMock(return_value=df)
 
-    result = provider._cache("AAPL", "2023", "d", "1min")
+    result = await provider._cache("AAPL", "2023", "d", "1min")
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 2
 
 
-def test_partition_keys_invalid_unit(provider):
+@pytest.mark.asyncio
+async def test_partition_keys_invalid_unit(provider):
     idx = pd.date_range("2023-01-01", periods=3, freq="D")
     with pytest.raises(ValueError, match="Invalid unit"):
         provider._partition_keys(idx, "badunit")
 
 
+@pytest.mark.asyncio
 def test_partition_keys_in_range(provider):
     keys = provider._partition_keys_in_range(date(2023, 2, 1), date(2023, 2, 5), UNIT)
     assert isinstance(keys, list)
@@ -195,12 +206,14 @@ def test_partition_keys_in_range(provider):
     assert len(set(keys)) == len(keys)
 
 
+@pytest.mark.asyncio
 def test_partition_path(provider):
     path = provider._partition_path(SYMBOL, TEST_KEY, FREQ)
     assert path.endswith(f"{TEST_KEY}.csv")
     assert FREQ in path
 
 
+@pytest.mark.asyncio
 def test_partition_keys(provider):
     idx = pd.date_range("2023-01-01", "2023-01-03", freq="1h")
     keys = provider._partition_keys(idx, UNIT)
@@ -208,12 +221,14 @@ def test_partition_keys(provider):
     assert not keys.empty
 
 
+@pytest.mark.asyncio
 def test_range_from_key_min(provider):
     start, end = provider._range_from_key("2023-01-01", UNIT)
     assert isinstance(start, date)
     assert (end - start).days == 6
 
 
+@pytest.mark.asyncio
 def test_range_from_key_hour(provider):
     start, end = provider._range_from_key("2023-01", "h")
     assert start.month == 1

@@ -16,7 +16,7 @@ class CandleStoreTest(CandleStore):
     def set_data(self, symbol, data):
         self._data[symbol] = data
 
-    def get(self, symbol, start_date, end_date, freq="1m"):
+    async def get(self, symbol, start_date, end_date, freq="1m"):
         df = self._data[symbol]
         return df[
             (df.index.date >= start_date) & (df.index.date <= end_date)  # type: ignore
@@ -24,7 +24,7 @@ class CandleStoreTest(CandleStore):
 
 
 class MockFundamentalDataStore(FundamentalDataStore):
-    def get(self, symbol):
+    async def get(self, symbol):
         return None
 
 
