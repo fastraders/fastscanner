@@ -47,10 +47,10 @@ class BenchmarkStats:
             ).total_seconds()
             logger.info(f"\nBatch Summary:")
             logger.info(
-                f"First message timestamp: {self.batch_start_time.strftime('%M:%S.%f')[:-3]}"
+                f"First message timestamp: {datetime.fromtimestamp(self.batch_start_time.timestamp()).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(
-                f"Last message timestamp:  {self.last_received_time.strftime('%M:%S.%f')[:-3]}"
+                f"Last message timestamp:  {datetime.fromtimestamp(self.last_received_time.timestamp()).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
             self.batch_start_time = None
@@ -93,15 +93,13 @@ async def monitor_inactivity(stats: BenchmarkStats):
         await stats.check_timeout()
 
 
-def load_symbols() -> set[str]:
+async def get_symbols_from_file() -> list[str]:
     if os.path.exists(SYMBOLS_FILE):
         with open(SYMBOLS_FILE, "r") as f:
             symbols = json.load(f)
             logger.info(f"Loaded {len(symbols)} symbols from file.")
-            return set(symbols)
-    else:
-        logger.warning("No symbols.json found.")
-        return set()
+            return symbols
+    return []
 
 
 async def main():
@@ -125,7 +123,9 @@ async def main():
 
         await realtime.start()
         await asyncio.sleep(3)
-        symbols = load_symbols()
+        symbols = await get_symbols_from_file()  # convert set[str] to list[str]
+        symbols = symbols[100:200]
+
         await realtime.subscribe(symbols)
 
         logger.info("Benchmark running...\n")
