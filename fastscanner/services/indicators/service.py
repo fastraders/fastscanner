@@ -83,18 +83,21 @@ class IndicatorsService:
 
         max_days = max(ind.lookback_days() for ind in indicator_instances)
         today = datetime.now().date()
-        lookback_start = today - timedelta(days=max_days)
-        end_date = today - timedelta(days=1)
+        if max_days > 0:
+            lookback_start = lookback_days(today, max_days)
+            end_date = today - timedelta(days=1)
 
-        df = await self.candles.get(symbol, lookback_start, end_date, freq)
-        if df.empty:
-            logger.warning(
-                f"No historical data found for {symbol} from {lookback_start} to {end_date}"
-            )
-            return
-        for _, row in df.iterrows():
-            for ind in indicator_instances:
-                row = await ind.extend_realtime(symbol, row)
+            df = await self.candles.get(symbol, lookback_start, end_date, freq)
+            if df.empty:
+                logger.warning(
+                    f"No historical data found for {symbol} from {lookback_start} to {end_date}"
+                )
+                return
+
+            for _, row in df.iterrows():
+                for ind in indicator_instances:
+                    row = await ind.extend_realtime(symbol, row)
+
         stream_key = f"candles_min_{symbol}"
         await self.channel.subscribe(
             stream_key, CandleChannelHandler(symbol, indicator_instances, handler)
@@ -102,8 +105,7 @@ class IndicatorsService:
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        ...
+    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
 class CandleChannelHandler(ChannelHandler):

@@ -54,7 +54,7 @@ class PolygonRealtime:
             self._running = False
             logger.info("WebSocket stopped.")
 
-    async def subscribe(self, symbols: set[str]):
+    async def subscribe(self, symbols: list[str]):
         if not self._running:
             logger.warning("WebSocket is not running")
             return
@@ -126,7 +126,7 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})
+        await realtime.subscribe(["AAPL", "MSFT", "GOOGL"])
         await asyncio.sleep(300)
         await realtime.unsubscribe({"MSFT", "GOOGL"})
         await realtime.stop()

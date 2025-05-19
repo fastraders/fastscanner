@@ -51,13 +51,20 @@ total_messages = 0
 class BenchmarkHandler(SubscriptionHandler):
     def handle(self, symbol: str, new_row: pd.Series) -> None:
         global batch_start_time, last_received_time, total_messages
+
         now = time.time()
+        ts = (
+            new_row.name.to_pydatetime()
+            if isinstance(new_row.name, pd.Timestamp)
+            else now
+        )
+
+        logger.info(f"[{symbol}] Timestamp: {ts}, Data: {new_row.to_dict()}")
 
         if batch_start_time is None:
             batch_start_time = now
         last_received_time = now
         total_messages += 1
-        logger.debug(f"[{symbol}] New row: {new_row.to_dict()}")
 
 
 async def get_symbols_from_file() -> list[str]:
@@ -81,15 +88,16 @@ async def monitor_batch_timeout():
             and last_received_time
             and (now - last_received_time) > NO_DATA_TIMEOUT
         ):
-            logger.info("\n--- Benchmark Report ---")
+            batch_duration = last_received_time - batch_start_time
+            logger.info(f"\nBatch Summary:")
             logger.info(
-                f"Batch started at: {datetime.fromtimestamp(batch_start_time).strftime('%M:%S.%f')}"
+                f"First message timestamp: {datetime.fromtimestamp(batch_start_time).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(
-                f"Batch ended at:   {datetime.fromtimestamp(now).strftime('%M:%S.%f')}"
+                f"Last message timestamp:  {datetime.fromtimestamp(last_received_time).strftime('%H:%M:%S.%f')[:-3]}"
             )
             logger.info(f"Total messages read: {total_messages}")
-            logger.info(f"Batch duration: {now - batch_start_time:.6f} seconds\n")
+            logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
             batch_start_time = None
             last_received_time = None
             total_messages = 0
@@ -115,7 +123,7 @@ async def main():
     )
 
     symbols = await get_symbols_from_file()
-
+    symbols = symbols[100:200]
     indicators = [
         IndicatorParams(
             type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}

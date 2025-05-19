@@ -53,7 +53,7 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe({"AAPL", "MSFT", "GOOGL"})
+        await realtime.subscribe(["AAPL", "MSFT", "GOOGL"])
 
         await asyncio.sleep(5)
 
