@@ -7,11 +7,13 @@ from typing import Set
 import exchange_calendars as ecals
 import pandas as pd
 
+from fastscanner.pkg import config
+
 logger = logging.getLogger(__name__)
 
 
 class ExchangeCalendarsPublicHolidaysStore:
-    CACHE_DIR = os.path.join("data", "holidays")
+    CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "holidays")
 
     def __init__(self, exchange_code: str = "XNAS"):
         self._exchange_code = exchange_code

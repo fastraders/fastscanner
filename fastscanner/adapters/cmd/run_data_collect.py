@@ -61,7 +61,7 @@ async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
     all_symbols = list(await polygon.all_symbols())
-    n_workers = 2 * multiprocessing.cpu_count() + 1
+    n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [
         all_symbols[i : i + batch_size] for i in range(0, len(all_symbols), batch_size)

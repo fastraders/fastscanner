@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 
+from fastscanner.pkg import config
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class PartitionedCSVCandlesProvider:
-    CACHE_DIR = os.path.join("data", "candles")
+    CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "candles")
     tz: str = LOCAL_TIMEZONE_STR
 
     def __init__(self, store: CandleStore):

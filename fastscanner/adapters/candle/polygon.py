@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 import httpx
 import pandas as pd
 
+from fastscanner.pkg import config
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.pkg.http import MaxRetryError, async_retry_request
 from fastscanner.services.indicators.ports import CandleCol
@@ -121,7 +122,9 @@ class PolygonCandlesProvider:
 
     async def all_symbols(self) -> set[str]:
         symbols = set()
-        symbols_path = os.path.join("data", "polygon_symbols.json")
+        symbols_path = os.path.join(
+            config.DATA_BASE_DIR, "data", "polygon_symbols.json"
+        )
 
         if os.path.exists(symbols_path):
             with open(symbols_path, "r") as f:

@@ -11,6 +11,7 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
+from fastscanner.pkg import config
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class ParquetCandlesProvider(PolygonCandlesProvider):
-    CACHE_DIR = os.path.join("data", "parquet_dataset")
+    CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "parquet_dataset")
     tz: str = LOCAL_TIMEZONE_STR
 
     async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:

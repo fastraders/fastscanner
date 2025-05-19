@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class EODHDFundamentalStore:
-    CACHE_DIR = os.path.join("data", "fundamentals")
+    CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "fundamentals")
 
     def __init__(self, base_url: str, api_key: str):
         self._base_url = base_url
