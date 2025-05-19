@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -18,28 +19,30 @@ logger = logging.getLogger(__name__)
 class EODHDFundamentalStore:
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "fundamentals")
 
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, max_concurrent_requests: int = 50):
         self._base_url = base_url
         self._api_key = api_key
+        self._semaphore = asyncio.Semaphore(max_concurrent_requests)
 
     async def get(self, symbol: str) -> FundamentalData:
         logger.info(f"Retrieving fundamentals for: {symbol}")
 
         cached = self._load_cached(symbol)
         if cached:
-            logger.info(f"Loaded {symbol} fundamentals from cache.")
             return cached
 
-        fundamentals = await self._fetch_fundamentals(symbol)
-        market_cap = await self._fetch_market_cap(symbol)
+        async with self._semaphore:
+            try:
+                fundamentals = await self._fetch_fundamentals(symbol)
+                market_cap = await self._fetch_market_cap(symbol)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    logger.warning(f"Symbol {symbol} not found in EODHD")
+                    raise NotFound(f"Symbol {symbol} not found in EODHD") from e
 
         fd = self._parse_data(fundamentals, market_cap)
-        try:
-            self._store(symbol, fd)
-            logger.info(f"Stored fundamental data for {symbol}")
-        except Exception as e:
-            logger.error(f"Failed to process {symbol}: {e}")
-            raise
+        self._store(symbol, fd)
+        logger.info(f"Stored fundamental data for {symbol}")
         return fd
 
     async def _fetch_fundamentals(self, symbol: str) -> Dict:
@@ -57,15 +60,10 @@ class EODHDFundamentalStore:
         return await self._fetch_json(url, params=params)
 
     async def _fetch_json(self, url: str, params: Dict) -> dict:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await async_retry_request(client, "GET", url, params=params)
-                response.raise_for_status()
-                return response.json()
-        except (MaxRetryError, httpx.HTTPStatusError) as exc:
-            logger.exception(f"HTTP error for {url}: {exc}")
-        except Exception as exc:
-            logger.exception(f"Unexpected error for {url}: {exc}")
+        async with httpx.AsyncClient() as client:
+            response = await async_retry_request(client, "GET", url, params=params)
+            response.raise_for_status()
+            return response.json()
         return {}
 
     def _load_cached(self, symbol: str) -> FundamentalData | None:
@@ -142,10 +140,12 @@ class EODHDFundamentalStore:
             pd.to_datetime(list(earnings.get("History", {}).keys())), name="report_date"
         ).sort_values()
 
+        address_data = general.get("AddressData", {}) or {}
+
         return FundamentalData(
             exchange=general.get("Exchange", ""),
             country=general.get("CountryName", ""),
-            city=general.get("AddressData", {}).get("City", ""),
+            city=address_data.get("City", ""),
             gic_industry=general.get("GicIndustry", ""),
             gic_sector=general.get("GicSector", ""),
             historical_market_cap=historical_market_cap,
@@ -174,3 +174,9 @@ class EODHDFundamentalStore:
 
         with open(path, "w") as f:
             json.dump(data_dict, f, indent=2)
+
+    def _store_empty(self, symbol: str) -> None:
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
+        path = self._get_cache_path(symbol)
+        with open(path, "w") as f:
+            json.dump({}, f, indent=2)
