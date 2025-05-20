@@ -15,6 +15,8 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.logging import load_logging_config
+from fastscanner.services.indicators.clock import ClockRegistry, LocalClock
 from fastscanner.services.indicators.lib import IndicatorsLibrary
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
@@ -36,8 +38,8 @@ from fastscanner.services.indicators.service import (
 )
 from fastscanner.services.registry import ApplicationRegistry
 
+load_logging_config()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
 STREAM_PREFIX = "candles_min_"
@@ -46,6 +48,8 @@ NO_DATA_TIMEOUT = 10
 batch_start_time = None
 last_received_time = None
 total_messages = 0
+
+ClockRegistry.set(LocalClock())
 
 
 class BenchmarkHandler(SubscriptionHandler):
@@ -59,8 +63,11 @@ class BenchmarkHandler(SubscriptionHandler):
             else now
         )
 
-        logger.info(f"[{symbol}] Timestamp: {ts}, Data: {new_row.to_dict()}")
-
+        log_ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        candle_ts = ts.strftime("%H:%M:%S.%f")[:-3]
+        logger.info(
+            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
+        )
         if batch_start_time is None:
             batch_start_time = now
         last_received_time = now
@@ -151,7 +158,7 @@ async def main():
             asyncio.create_task(
                 service.subscribe_realtime(
                     symbol=symbol,
-                    freq="1min",
+                    freq="3min",
                     indicators=indicators,
                     handler=BenchmarkHandler(),
                 )

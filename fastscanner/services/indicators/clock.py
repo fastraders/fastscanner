@@ -1,5 +1,8 @@
 from datetime import date, datetime
 from typing import Protocol
+from zoneinfo import ZoneInfo
+
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 
 
 class Clock(Protocol):
@@ -33,3 +36,8 @@ class ClockRegistry:
     @classmethod
     def unset(cls) -> None:
         delattr(cls, "clock")
+
+
+class LocalClock:
+    def now(self) -> datetime:
+        return datetime.now(tz=ZoneInfo(LOCAL_TIMEZONE_STR))
