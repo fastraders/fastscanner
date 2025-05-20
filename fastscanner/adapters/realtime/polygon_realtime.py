@@ -68,7 +68,6 @@ class PolygonRealtime:
         tickers = [f"AM.{symbol}" for symbol in symbols]
         self._client.subscribe(*tickers)
         self._symbols.update(symbols)
-        logger.info(f"Subscribed to: {tickers}\n")
 
     async def unsubscribe(self, symbols: set[str]):
         if not self._running:

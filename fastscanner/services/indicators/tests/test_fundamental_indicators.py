@@ -13,7 +13,7 @@ from fastscanner.services.indicators.ports import (
     FundamentalData,
     FundamentalDataStore,
 )
-from fastscanner.services.indicators.registry import ApplicationRegistry
+from fastscanner.services.registry import ApplicationRegistry
 
 
 class FundamentalDataStoreTest(FundamentalDataStore):

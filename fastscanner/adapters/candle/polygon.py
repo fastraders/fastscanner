@@ -120,15 +120,15 @@ class PolygonCandlesProvider:
             async with httpx.AsyncClient() as client:
                 return await self._fetch(client, symbol, start, end, freq)
 
-    async def all_symbols(self) -> set[str]:
-        symbols = set()
+    async def all_symbols(self) -> list[str]:
+        symbols: list[str] = []
         symbols_path = os.path.join(
             config.DATA_BASE_DIR, "data", "polygon_symbols.json"
         )
 
         if os.path.exists(symbols_path):
             with open(symbols_path, "r") as f:
-                return set(json.load(f))
+                return json.load(f)
 
         async with httpx.AsyncClient() as client:
             url = urljoin(self._base_url, "v3/reference/tickers")
@@ -151,7 +151,7 @@ class PolygonCandlesProvider:
                     break
 
                 for item in data["results"]:
-                    symbols.add(item["ticker"])
+                    symbols.append(item["ticker"])
 
                 if data.get("next_url") is None:
                     break

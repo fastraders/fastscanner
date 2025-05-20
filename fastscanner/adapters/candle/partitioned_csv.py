@@ -63,16 +63,30 @@ class PartitionedCSVCandlesProvider:
             _, unit = split_freq(freq)
             partition_keys = self._partition_keys_in_range(start, end, unit)
             for key in partition_keys:
-                start, end = self._range_from_key(key, unit)
-                start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
+                curr_start, curr_end = self._range_from_key(key, unit)
+                start_dt = pd.Timestamp(
+                    datetime.combine(curr_start, time(0, 0)), tz=self.tz
+                )
                 end_dt = pd.Timestamp(
-                    datetime.combine(end, time(23, 59, 59)), tz=self.tz
+                    datetime.combine(curr_end, time(23, 59, 59)), tz=self.tz
                 )
                 sub_df = df.loc[start_dt:end_dt]
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit)
 
-        return df.loc[start_dt:end_dt].dropna()
+        return minute_df
+
+    async def cache_all_freqs_empty(self, symbol: str, start: date, end: date):
+        empty_df = pd.DataFrame(
+            columns=list(CandleCol.RESAMPLE_MAP.keys()),
+            index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
+        ).tz_localize(self.tz)
+        for freq in self._cache_freqs:
+            _, unit = split_freq(freq)
+            partition_keys = self._partition_keys_in_range(start, end, unit)
+            for key in partition_keys:
+                self._save_cache(symbol, key, freq, empty_df)
+                self._mark_expiration(symbol, key, unit)
 
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
@@ -165,7 +179,7 @@ class PartitionedCSVCandlesProvider:
         _, end = self._range_from_key(key, unit)
         today = datetime.now(zoneinfo.ZoneInfo(self.tz)).date()
         expiration_key = self._expiration_key(key, unit)
-        expirations = self._expirations.get(symbol, {})
+        expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:
             return
 

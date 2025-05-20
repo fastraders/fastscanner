@@ -11,7 +11,7 @@ sudo nano /etc/redis/redis.conf
 
 
 2.Add or ensure the following lines are uncommented and present:
-unixsocket /run/redis/redis-server.sock
+unixsocket /tmp/redis-server.sock
 unixsocketperm 770
 
 Restart Redis to Apply Changes
@@ -24,7 +24,7 @@ sudo usermod -aG redis $USER
 newgrp redis
 
 4.Verify the UNIX Socket Exists
-ls -l /run/redis/redis-server.sock
+ls -l /tmp/redis-server.sock
 
 Expected output:
 srwxrwx--- 1 redis redis ...
@@ -34,7 +34,7 @@ Update your Redis client initialization:
 
 import redis.asyncio as aioredis
 redis = aioredis.Redis(
-    unix_socket_path="/run/redis/redis-server.sock",
+    unix_socket_path="/tmp/redis-server.sock",
     decode_responses=True,
 )
 
@@ -66,3 +66,4 @@ poetry run python -m fastscanner.benchmarks.benchmark_redis_read
 # Then run the Polygon stream writer
 poetry run python -m fastscanner.benchmarks.benchmark_polygon_realtime
 
+```

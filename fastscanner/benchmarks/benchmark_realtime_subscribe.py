@@ -29,17 +29,17 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import (
     IndicatorParams,
     IndicatorsService,
     SubscriptionHandler,
 )
+from fastscanner.services.registry import ApplicationRegistry
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-SYMBOLS_FILE = "data/symbols/symbols.json"
+SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
 STREAM_PREFIX = "candles_min_"
 NO_DATA_TIMEOUT = 10
 
@@ -67,7 +67,7 @@ class BenchmarkHandler(SubscriptionHandler):
         total_messages += 1
 
 
-async def get_symbols_from_file() -> list[str]:
+def get_symbols_from_file() -> list[str]:
     if os.path.exists(SYMBOLS_FILE):
         with open(SYMBOLS_FILE, "r") as f:
             symbols = json.load(f)
@@ -122,8 +122,8 @@ async def main():
         candles=candles, fundamentals=fundamentals, channel=redis_channel
     )
 
-    symbols = await get_symbols_from_file()
-    symbols = symbols[100:200]
+    symbols = get_symbols_from_file()
+    symbols = symbols[:1000]
     indicators = [
         IndicatorParams(
             type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}

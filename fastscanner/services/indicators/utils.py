@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from .registry import ApplicationRegistry
+from ..registry import ApplicationRegistry
 
 
 def lookback_days(

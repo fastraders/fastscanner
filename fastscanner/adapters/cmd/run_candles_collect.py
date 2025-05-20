@@ -21,19 +21,27 @@ logger = logging.getLogger(__name__)
 async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
     end_date = pd.Timestamp.now(tz=LOCAL_TIMEZONE_STR).date() - timedelta(days=1)
     start_date = end_date - timedelta(days=365)
-    while True:
-        df = await candles.cache_all_freqs(symbol, start_date, end_date)
-        if df.empty:
-            break
+    cache_empty = False
+    try:
+        for _ in range(15):
+            if not cache_empty:
+                df = await candles.cache_all_freqs(symbol, start_date, end_date)
+                if df.empty:
+                    cache_empty = True
+            else:
+                await candles.cache_all_freqs_empty(symbol, start_date, end_date)
 
-        end_date = start_date - timedelta(days=1)
-        start_date = end_date - timedelta(days=365)
+            end_date = start_date - timedelta(days=1)
+            start_date = end_date - timedelta(days=365)
+    except Exception as e:
+        logger.exception(e)
+        logger.error(f"Error collecting data for {symbol}: {e}")
     logger.info(f"Collected data for {symbol} from {start_date}")
 
 
 async def _collect_batch(symbols: list[str]) -> None:
     polygon = PolygonCandlesProvider(
-        config.POLYGON_BASE_URL, config.POLYGON_API_KEY, max_concurrent_requests=10
+        config.POLYGON_BASE_URL, config.POLYGON_API_KEY, max_concurrent_requests=5
     )
     candles = PartitionedCSVCandlesProvider(polygon)
 
@@ -60,7 +68,7 @@ def _run_batch(batch: list[str]) -> None:
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = list(await polygon.all_symbols())
+    all_symbols = await polygon.all_symbols()
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [

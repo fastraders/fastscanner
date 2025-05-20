@@ -26,12 +26,12 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import (
     IndicatorParams,
     IndicatorsService,
     SubscriptionHandler,
 )
+from fastscanner.services.registry import ApplicationRegistry
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

@@ -6,7 +6,7 @@ from fastscanner.services.indicators.ports import (
     FundamentalDataStore,
     PublicHolidaysStore,
 )
-from fastscanner.services.indicators.registry import ApplicationRegistry
+from fastscanner.services.registry import ApplicationRegistry
 
 
 class CandleStoreTest(CandleStore):

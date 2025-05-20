@@ -10,8 +10,8 @@ import pandas as pd
 
 from fastscanner.pkg.datetime import split_freq
 
+from ...registry import ApplicationRegistry
 from ..ports import CandleCol
-from ..registry import ApplicationRegistry
 from ..utils import lookback_days
 
 logger = logging.getLogger(__name__)

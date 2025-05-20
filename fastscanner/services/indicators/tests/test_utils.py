@@ -4,8 +4,8 @@ from typing import Set
 import pytest
 
 from fastscanner.services.indicators.ports import PublicHolidaysStore
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.utils import lookback_days
+from fastscanner.services.registry import ApplicationRegistry
 
 
 class PublicHolidaysTest(PublicHolidaysStore):
