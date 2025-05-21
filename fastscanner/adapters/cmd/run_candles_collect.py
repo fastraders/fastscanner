@@ -57,20 +57,41 @@ async def _collect_batch(symbols: list[str]) -> None:
         for symbol in symbols
     ]
     completed_tasks = 0
+    # start_time = time.time()
+    # for i, symbol in enumerate(symbols, start=1):
+    #     await _collect(symbol, candles)
+    #     if i % 20 == 0:
+    #         end_time = time.time()
+    #         time_left = (end_time - start_time) * (len(symbols) - i) / i
+    #         logger.info(f"Estimated remaining time: {time_left:.2f} seconds")
+
+    tasks = [
+        asyncio.create_task(_collect(symbol, candles), name=symbol)
+        for symbol in symbols
+    ]
+    completed_tasks = 0
     start = time.time()
+    failed_symbols: list[str] = []
     failed_symbols: list[str] = []
     while len(tasks) > 0:
         done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
-            if (ex := task.exception()) is not None:
-                logger.exception(ex)
-                logger.error(f"Error collecting data for {task.get_name()}: {ex}")
+            if task.exception() is not None:
+                logger.error(
+                    f"Error collecting data for {task.get_name()}: {task.exception()}"
+                )
                 failed_symbols.append(task.get_name())
         completed_tasks += len(done)
         total_time = time.time() - start
         logger.info(
             f"Estimated remaining time: {total_time * len(tasks) / completed_tasks:.2f} seconds"
         )
+    logger.info(
+        f"Finished collecting data for {len(symbols) - len(failed_symbols)} symbols"
+    )
+    if failed_symbols:
+        logger.error(f"Failed to collect data for {len(failed_symbols)} symbols")
+        logger.error(f"Failed symbols: {failed_symbols}")
     logger.info(
         f"Finished collecting data for {len(symbols) - len(failed_symbols)} symbols"
     )
