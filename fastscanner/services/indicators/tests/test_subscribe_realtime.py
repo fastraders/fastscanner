@@ -133,7 +133,9 @@ async def test_prev_day_indicator(setup):
     ts_pd = pd.Timestamp(ts)
 
     mock_clock = MagicMock()
-    mock_clock.now.return_value = ts_pd.floor("1min") + timedelta(minutes=1, seconds=21)
+    mock_clock.now.return_value = ts_pd.floor("1min") + pd.Timedelta(
+        seconds=59, milliseconds=990
+    )
     ClockRegistry.set(mock_clock)
 
     channel_handler = CandleChannelHandler(
@@ -141,7 +143,7 @@ async def test_prev_day_indicator(setup):
     )
 
     await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    await asyncio.sleep(0.2)
+
     ClockRegistry.unset()
 
     assert len(handler.received) == 1
@@ -162,7 +164,6 @@ async def test_daily_gap_indicator(setup):
     await channel_handler.handle(
         f"candles_min_{symbol}", create_stream_message(pre_market_ts)
     )
-    await asyncio.sleep(0.2)
     assert len(handler.received) == 1
     _, row = handler.received[0]
     assert pd.isna(row["daily_gap"])
@@ -191,7 +192,6 @@ async def test_daily_atr_indicator(setup):
         symbol, [indicator], handler, "1min", candle_timeout=0.1
     )
     await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -208,7 +208,6 @@ async def test_daily_atr_gap_indicator(setup):
         symbol, [indicator], handler, "1min", candle_timeout=0.1
     )
     await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -227,7 +226,6 @@ async def test_cumulative_daily_volume(setup):
     await channel_handler.handle(
         f"candles_min_{symbol}", create_stream_message(ts, volume=1000)
     )
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -256,7 +254,6 @@ async def test_premarket_cumulative(setup):
     await channel_handler.handle(
         f"candles_min_{symbol}", create_stream_message(pre_market_ts, close=100)
     )
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -313,7 +310,6 @@ async def test_atr_indicator(setup):
         f"candles_min_{symbol}",
         create_stream_message(ts, open=103, high=113, low=93, close=108),
     )
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -339,7 +335,6 @@ async def test_position_in_range(setup):
     await channel_handler.handle(
         f"candles_min_{symbol}", create_stream_message(ts, close=112)
     )
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -369,7 +364,6 @@ async def test_channel_handler_invalid_data(setup):
     await channel_handler.handle(
         f"candles_min_{symbol}", {"timestamp": "invalid", "open": "not_a_number"}
     )
-    await asyncio.sleep(0.2)
     assert len(handler.received) == 0
 
 
@@ -394,7 +388,6 @@ async def test_channel_handler_multiple_indicators(setup):
     )
 
     await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
-    await asyncio.sleep(0.2)
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -404,28 +397,37 @@ async def test_channel_handler_multiple_indicators(setup):
 
 
 @pytest.mark.asyncio
-async def test_interval_calculation():
+async def test_multiple_ticks_aggregation():
     handler = TestHandler()
+    symbol = "AAPL"
+    base_ts = pd.Timestamp("2023-01-01 10:00:00", tz=LOCAL_TIMEZONE_STR)
 
-    channel_handler_1min = CandleChannelHandler(
-        "AAPL", [], handler, "1min", candle_timeout=0.1
+    # 3min frequency - should buffer until 3 ticks arrive
+    channel_handler = CandleChannelHandler(
+        symbol, [], handler, "3min", candle_timeout=0.1
     )
-    assert channel_handler_1min._expected_count == 1
 
-    channel_handler_3min = CandleChannelHandler(
-        "AAPL", [], handler, "3min", candle_timeout=0.1
-    )
-    assert channel_handler_3min._expected_count == 3
+    # Send 3 ticks at 1 minute intervals
+    for i in range(3):
+        ts = base_ts + pd.Timedelta(minutes=i)
+        data = {
+            "timestamp": ts.value // 10**6,
+            "open": 100.0 + i,
+            "high": 101.0 + i,
+            "low": 99.0 - i,
+            "close": 100.5 + i,
+            "volume": 1000 * (i + 1),
+        }
+        await channel_handler.handle(f"candles_min_{symbol}", data)
 
-    channel_handler_1h = CandleChannelHandler(
-        "AAPL", [], handler, "1h", candle_timeout=0.1
-    )
-    assert channel_handler_1h._expected_count == 60
-
-    channel_handler_2h = CandleChannelHandler(
-        "AAPL", [], handler, "2h", candle_timeout=0.1
-    )
-    assert channel_handler_2h._expected_count == 120
+    # Should have one aggregated candle
+    assert len(handler.received) == 1
+    _, candle = handler.received[0]
+    assert candle["open"] == 100.0  # first tick's open
+    assert candle["close"] == 102.5  # last tick's close
+    assert candle["high"] == 103.0  # max high
+    assert candle["low"] == 97.0  # min low
+    assert candle["volume"] == 6000  # sum of volumes (1000+2000+3000)
 
 
 @pytest.mark.asyncio
@@ -499,14 +501,16 @@ async def test_flush_on_timeout_with_partial_buffer(setup):
     )
 
     mock_clock = MagicMock()
+
+    mock_clock.now.return_value = ts_start + timedelta(
+        minutes=2, seconds=59, microseconds=990000
+    )
     ClockRegistry.set(mock_clock)
-    mock_clock.now.return_value = ts_start
 
     try:
         await channel_handler.handle(f"candles_min_{symbol}", msg1)
         await channel_handler.handle(f"candles_min_{symbol}", msg2)
 
-        mock_clock.now.return_value = ts_start + timedelta(minutes=3, seconds=1)
         await asyncio.sleep(0.3)
 
         assert len(handler.received) == 1

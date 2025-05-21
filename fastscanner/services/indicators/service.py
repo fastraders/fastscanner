@@ -126,6 +126,7 @@ class CandleChannelHandler(ChannelHandler):
         self._expected_count = self._calculate_expected_count()
         self._timeout_task: asyncio.Task | None = None
         self._candle_timeout: float = candle_timeout
+        self._buffer_lock = asyncio.Lock()
 
     def _calculate_expected_count(self) -> int:
         n, unit = split_freq(self._freq)
@@ -137,9 +138,6 @@ class CandleChannelHandler(ChannelHandler):
             raise ValueError(
                 f"Unsupported frequency unit: '{unit}'. Only 'min' and 'h' are supported."
             )
-
-    def _get_interval_start(self, ts: pd.Timestamp) -> pd.Timestamp:
-        return ts.floor(self._freq)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
@@ -162,7 +160,13 @@ class CandleChannelHandler(ChannelHandler):
             )
             new_row = pd.Series(data, name=ts)
 
-            await self._add_to_buffer(new_row)
+            if self._freq == "1min":
+                for ind in self._indicators:
+                    new_row = await ind.extend_realtime(self._symbol, new_row)
+                self._handler.handle(self._symbol, new_row)
+            else:
+                async with self._buffer_lock:
+                    await self._add_to_buffer(new_row)
 
         except Exception as e:
             logger.error(
@@ -172,23 +176,13 @@ class CandleChannelHandler(ChannelHandler):
     async def _add_to_buffer(self, new_row: pd.Series):
         assert isinstance(new_row.name, pd.Timestamp)
         ts: pd.Timestamp = new_row.name
-        candle_start = self._get_interval_start(ts)
+        candle_start = ts.floor(self._freq)
         logger.debug(
             f"[{self._symbol}] Buffer updated at {new_row.name} | Buffer keys: {[k for k in self._buffer.keys()]}"
         )
 
-        if (
-            not self._buffer
-            or self._get_interval_start(next(iter(self._buffer))) != candle_start
-        ):
+        if not self._buffer:
             self._buffer.clear()
-
-            if self._timeout_task is not None and not self._timeout_task.done():
-                self._timeout_task.cancel()
-                try:
-                    await self._timeout_task
-                except asyncio.CancelledError:
-                    pass
 
         self._buffer[ts] = new_row
 
@@ -208,33 +202,41 @@ class CandleChannelHandler(ChannelHandler):
         if sleep_duration > 0:
             await asyncio.sleep(sleep_duration)
 
-        await self._flush()
+        async with self._buffer_lock:
+            await self._flush()
 
     async def _flush(self):
         if not self._buffer:
             return
 
+        if self._timeout_task is not None and not self._timeout_task.done():
+            self._timeout_task.cancel()
+            try:
+                await self._timeout_task
+            except asyncio.CancelledError:
+                pass
+            self._timeout_task = None
+
         df = pd.DataFrame(self._buffer.values())
         if df.empty:
             return
 
-        candle_start = self._get_interval_start(df.index[0])
+        candle_start = df.index[0].floor(self._freq)
         logger.info(
             f"[{self._symbol}] Flushing {self._freq} candle | Interval start: {candle_start} | Buffer size: {len(self._buffer)}"
         )
-        resample_map = {
-            col: (
-                (lambda s: s.iloc[0])
-                if agg == "first"
-                else (lambda s: s.iloc[-1]) if agg == "last" else agg
-            )
-            for col, agg in CandleCol.RESAMPLE_MAP.items()
-        }
-        logger.debug(
-            f"[{self._symbol}] Aggregating with {len(df)} rows for {self._freq} candle"
+
+        agg = pd.Series(
+            {
+                CandleCol.OPEN: df[CandleCol.OPEN].iloc[0],
+                CandleCol.HIGH: df[CandleCol.HIGH].max(),
+                CandleCol.LOW: df[CandleCol.LOW].min(),
+                CandleCol.CLOSE: df[CandleCol.CLOSE].iloc[-1],
+                CandleCol.VOLUME: df[CandleCol.VOLUME].sum(),
+            },
+            name=candle_start,
         )
 
-        agg = df.aggregate(resample_map).rename(df.index[0].floor(self._freq))
         for ind in self._indicators:
             try:
                 agg = await ind.extend_realtime(self._symbol, agg)
@@ -245,6 +247,3 @@ class CandleChannelHandler(ChannelHandler):
 
         self._handler.handle(self._symbol, agg)
         self._buffer.clear()
-        if self._timeout_task is not None:
-            self._timeout_task.cancel()
-            self._timeout_task = None
