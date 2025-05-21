@@ -37,7 +37,7 @@ async def run():
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
     freq = "5min"
-    symbols = (await polygon.all_symbols())[:100]
+    symbols = await polygon.all_symbols()
     result: pd.DataFrame | None = None
     scanner = ATRParabolicDownScanner(min_adv=0, min_adr=0.1, min_high_low_ratio=0.01)
 
@@ -48,7 +48,7 @@ async def run():
             symbol=symbol,
             start=start_date,
             end=end_date,
-            freq="5min",
+            freq=freq,
         )
         if i % 20 == 0:
             end_time = time.time()
@@ -80,7 +80,7 @@ async def run():
     logger.info(
         f"Processing rate: {len(symbols) / (end_time - start_time):.2f} symbols/second"
     )
-    logger.info(result.head(10))
+    logger.info(result.head(5))
 
 
 if __name__ == "__main__":

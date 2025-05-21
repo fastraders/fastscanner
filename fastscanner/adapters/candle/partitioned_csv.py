@@ -48,8 +48,17 @@ class PartitionedCSVCandlesProvider:
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
     async def cache_all_freqs(
-        self, symbol: str, start: date, end: date
-    ) -> pd.DataFrame:
+        self, symbol: str, start: date, end: date, force: bool = False
+    ) -> bool:
+        pending_freqs = []
+        for freq in self._cache_freqs:
+            if self._is_cached(symbol, start, end, freq) and not force:
+                continue
+            pending_freqs.append(freq)
+
+        if not pending_freqs:
+            return False
+
         minute_df = await self._store.get(symbol, start, end, "1min")
         daily_df = await self._store.get(symbol, start, end, "1d")
         for freq in self._cache_freqs:
@@ -74,7 +83,18 @@ class PartitionedCSVCandlesProvider:
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit)
 
-        return minute_df
+        return minute_df.empty
+
+    def _is_cached(self, symbol: str, start: date, end: date, freq: str) -> bool:
+        _, unit = split_freq(freq)
+        keys = self._partition_keys_in_range(start, end, unit)
+        for key in keys:
+            partition_path = self._partition_path(symbol, key, freq)
+            if os.path.exists(partition_path) and not self._is_expired(
+                symbol, key, unit
+            ):
+                return True
+        return False
 
     async def cache_all_freqs_empty(self, symbol: str, start: date, end: date):
         empty_df = pd.DataFrame(
@@ -105,6 +125,10 @@ class PartitionedCSVCandlesProvider:
                 logger.error(
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
                 )
+
+        logger.info(
+            f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
+        )
 
         start, end = self._range_from_key(key, unit)
         df = (await self._store.get(symbol, start, end, freq)).dropna()

@@ -95,7 +95,8 @@ class PolygonCandlesProvider:
                         "l": CandleCol.LOW,
                     }
                 )
-                .dropna(subset=(CandleCol.OPEN,))[self.columns]
+                .dropna(subset=(CandleCol.OPEN,))
+                .sort_index()[self.columns]
             )
             if not df.empty:
                 dfs.append(df)
