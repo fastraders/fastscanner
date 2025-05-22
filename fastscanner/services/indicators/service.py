@@ -179,7 +179,9 @@ class CandleChannelHandler(ChannelHandler):
         candle_start = ts.floor(self._freq)
         self._buffer[ts] = new_row
 
-        if len(self._buffer) == self._expected_count:
+        last_candle_ts = candle_start + pd.Timedelta(self._freq) - pd.Timedelta("1min")
+
+        if ts == last_candle_ts:
             await self._flush()
         elif self._timeout_task is None or self._timeout_task.done():
             self._timeout_task = asyncio.create_task(
