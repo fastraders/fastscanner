@@ -57,14 +57,10 @@ class BenchmarkHandler(SubscriptionHandler):
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = (
-            new_row.name.to_pydatetime()
-            if isinstance(new_row.name, pd.Timestamp)
-            else now
-        )
+        ts = new_row.name
 
         log_ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        candle_ts = ts.strftime("%H:%M:%S.%f")[:-3]
+        candle_ts = ts.strftime("%H:%M:%S.%f")[:-3] # type: ignore
         logger.info(
             f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
         )
@@ -130,7 +126,7 @@ async def main():
     )
 
     symbols = get_symbols_from_file()
-    symbols = symbols[:1000]
+    symbols = symbols[:100]
     indicators = [
         IndicatorParams(
             type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}
@@ -151,7 +147,6 @@ async def main():
     ]
 
     tasks = []
-
     for symbol in symbols:
 
         tasks.append(

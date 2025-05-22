@@ -279,7 +279,10 @@ class PositionInRangeIndicator:
             self._high_n_days[symbol] = daily_df[CandleCol.HIGH].to_list()[
                 -self._n_days :
             ]
-
+        if len(self._high_n_days.get(symbol, [])) == 0:
+            logger.debug(f"{symbol}] Insufficient high/low data for indicator")
+            return new_row
+        
         last_high = max(self._high_n_days[symbol])
         last_low = min(self._low_n_days[symbol])
         last_close = new_row[CandleCol.CLOSE]
