@@ -116,7 +116,7 @@ class CandleChannelHandler(ChannelHandler):
         indicators: list[Indicator],
         handler: SubscriptionHandler,
         freq: str,
-        candle_timeout: float = 200,
+        candle_timeout: float = 20,
     ) -> None:
         self._symbol = symbol
         self._indicators = indicators
@@ -169,7 +169,7 @@ class CandleChannelHandler(ChannelHandler):
                     await self._add_to_buffer(new_row)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"[Handler Error] Failed processing message from {channel_id}: {e}"
             )
 
@@ -177,13 +177,6 @@ class CandleChannelHandler(ChannelHandler):
         assert isinstance(new_row.name, pd.Timestamp)
         ts: pd.Timestamp = new_row.name
         candle_start = ts.floor(self._freq)
-        logger.debug(
-            f"[{self._symbol}] Buffer updated at {new_row.name} | Buffer keys: {[k for k in self._buffer.keys()]}"
-        )
-
-        if not self._buffer:
-            self._buffer.clear()
-
         self._buffer[ts] = new_row
 
         if len(self._buffer) == self._expected_count:
@@ -222,9 +215,6 @@ class CandleChannelHandler(ChannelHandler):
             return
 
         candle_start = df.index[0].floor(self._freq)
-        logger.info(
-            f"[{self._symbol}] Flushing {self._freq} candle | Interval start: {candle_start} | Buffer size: {len(self._buffer)}"
-        )
 
         agg = pd.Series(
             {
@@ -241,7 +231,7 @@ class CandleChannelHandler(ChannelHandler):
             try:
                 agg = await ind.extend_realtime(self._symbol, agg)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     f"[{self._symbol}] Indicator error during aggregation: {e}"
                 )
 
