@@ -48,8 +48,17 @@ class PartitionedCSVCandlesProvider:
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
     async def cache_all_freqs(
-        self, symbol: str, start: date, end: date
-    ) -> pd.DataFrame:
+        self, symbol: str, start: date, end: date, force: bool = False
+    ) -> bool:
+        pending_freqs = []
+        for freq in self._cache_freqs:
+            if self._is_cached(symbol, start, end, freq) and not force:
+                continue
+            pending_freqs.append(freq)
+
+        if not pending_freqs:
+            return False
+
         minute_df = await self._store.get(symbol, start, end, "1min")
         daily_df = await self._store.get(symbol, start, end, "1d")
         for freq in self._cache_freqs:
@@ -63,16 +72,41 @@ class PartitionedCSVCandlesProvider:
             _, unit = split_freq(freq)
             partition_keys = self._partition_keys_in_range(start, end, unit)
             for key in partition_keys:
-                start, end = self._range_from_key(key, unit)
-                start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
+                curr_start, curr_end = self._range_from_key(key, unit)
+                start_dt = pd.Timestamp(
+                    datetime.combine(curr_start, time(0, 0)), tz=self.tz
+                )
                 end_dt = pd.Timestamp(
-                    datetime.combine(end, time(23, 59, 59)), tz=self.tz
+                    datetime.combine(curr_end, time(23, 59, 59)), tz=self.tz
                 )
                 sub_df = df.loc[start_dt:end_dt]
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit)
 
-        return df.loc[start_dt:end_dt].dropna()
+        return minute_df.empty
+
+    def _is_cached(self, symbol: str, start: date, end: date, freq: str) -> bool:
+        _, unit = split_freq(freq)
+        keys = self._partition_keys_in_range(start, end, unit)
+        for key in keys:
+            partition_path = self._partition_path(symbol, key, freq)
+            if os.path.exists(partition_path) and not self._is_expired(
+                symbol, key, unit
+            ):
+                return True
+        return False
+
+    async def cache_all_freqs_empty(self, symbol: str, start: date, end: date):
+        empty_df = pd.DataFrame(
+            columns=list(CandleCol.RESAMPLE_MAP.keys()),
+            index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
+        ).tz_localize(self.tz)
+        for freq in self._cache_freqs:
+            _, unit = split_freq(freq)
+            partition_keys = self._partition_keys_in_range(start, end, unit)
+            for key in partition_keys:
+                self._save_cache(symbol, key, freq, empty_df)
+                self._mark_expiration(symbol, key, unit)
 
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
@@ -91,6 +125,10 @@ class PartitionedCSVCandlesProvider:
                 logger.error(
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
                 )
+
+        logger.info(
+            f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
+        )
 
         start, end = self._range_from_key(key, unit)
         df = (await self._store.get(symbol, start, end, freq)).dropna()
@@ -165,7 +203,7 @@ class PartitionedCSVCandlesProvider:
         _, end = self._range_from_key(key, unit)
         today = datetime.now(zoneinfo.ZoneInfo(self.tz)).date()
         expiration_key = self._expiration_key(key, unit)
-        expirations = self._expirations.get(symbol, {})
+        expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:
             return
 

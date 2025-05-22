@@ -17,7 +17,7 @@ async def run_data_collect():
     )
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = list(await polygon.all_symbols())
+    all_symbols = await polygon.all_symbols()
     tasks = [asyncio.create_task(eodhd.get(symbol)) for symbol in all_symbols]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:

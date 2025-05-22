@@ -16,7 +16,6 @@ from .ports import (
     FundamentalDataStore,
     PublicHolidaysStore,
 )
-from .registry import ApplicationRegistry
 from .utils import lookback_days
 
 logger = logging.getLogger(__name__)

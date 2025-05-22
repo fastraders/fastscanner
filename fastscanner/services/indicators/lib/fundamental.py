@@ -3,7 +3,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-from ..registry import ApplicationRegistry
+from ...registry import ApplicationRegistry
 
 
 class DaysToEarningsIndicator:

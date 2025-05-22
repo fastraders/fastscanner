@@ -11,8 +11,8 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.tests.fixtures import CandleStoreTest, candles
+from fastscanner.services.registry import ApplicationRegistry
 
 
 def test_daily_atr_gap_indicator_type():

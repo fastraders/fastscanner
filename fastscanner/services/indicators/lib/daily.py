@@ -2,8 +2,8 @@ from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 
+from ...registry import ApplicationRegistry
 from ..ports import CandleCol
-from ..registry import ApplicationRegistry
 from ..utils import lookback_days
 
 

@@ -19,7 +19,6 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import (
     CandleChannelHandler,
     SubscriptionHandler,
@@ -29,6 +28,7 @@ from fastscanner.services.indicators.tests.fixtures import (
     MockFundamentalDataStore,
     MockPublicHolidaysStore,
 )
+from fastscanner.services.registry import ApplicationRegistry
 
 
 class FakeCandleStore:

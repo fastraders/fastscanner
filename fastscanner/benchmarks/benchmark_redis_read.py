@@ -13,7 +13,7 @@ from fastscanner.services.indicators.ports import ChannelHandler
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-SYMBOLS_FILE = "data/symbols/symbols.json"
+SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
 STREAM_PREFIX = "candles_min_"
 NO_DATA_TIMEOUT = 10
 
@@ -21,28 +21,6 @@ batch_start_time = None
 last_received_time = None
 total_messages = 0
 batch_lock = asyncio.Lock()
-
-
-async def get_or_load_symbols(redis: RedisChannel) -> list[str]:
-    os.makedirs(os.path.dirname(SYMBOLS_FILE), exist_ok=True)
-
-    if os.path.exists(SYMBOLS_FILE):
-        with open(SYMBOLS_FILE, "r") as f:
-            symbols = json.load(f)
-            logger.info(f"Loaded {len(symbols)} symbols from file.")
-            return symbols
-
-    symbols = []
-    async for key in redis.redis.scan_iter(f"{STREAM_PREFIX}*"):
-        if await redis.redis.type(key) == "stream":
-            symbol = key.replace(STREAM_PREFIX, "")
-            symbols.append(symbol)
-
-    with open(SYMBOLS_FILE, "w") as f:
-        json.dump(symbols, f)
-
-    logger.info(f"Discovered and saved {len(symbols)} symbols.")
-    return symbols
 
 
 class BenchmarkHandler(ChannelHandler):
@@ -85,6 +63,15 @@ async def monitor_batch_timeout():
             total_messages = 0
 
 
+def get_symbols_from_file() -> list[str]:
+    if os.path.exists(SYMBOLS_FILE):
+        with open(SYMBOLS_FILE, "r") as f:
+            symbols = json.load(f)
+            logger.info(f"Loaded {len(symbols)} symbols from file.")
+            return symbols
+    return []
+
+
 async def main():
     redis_channel = RedisChannel(
         unix_socket_path=config.UNIX_SOCKET_PATH,
@@ -93,7 +80,7 @@ async def main():
         password=None,
         db=0,
     )
-    symbols = await get_or_load_symbols(redis_channel)
+    symbols = get_symbols_from_file()
 
     logger.info("Read benchmark started...\n")
 

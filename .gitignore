@@ -173,3 +173,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 *.drawio.bkp
+
+# macOS
+.DS_Store
+
+# REdis
+*.rdb

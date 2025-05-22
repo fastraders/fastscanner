@@ -38,7 +38,7 @@ async def async_retry_request(
     client: httpx.AsyncClient, *args, **kwargs
 ) -> httpx.Response:
     retry_count = 0
-    max_retries = 3
+    max_retries = 7
 
     while retry_count <= max_retries:
         try:

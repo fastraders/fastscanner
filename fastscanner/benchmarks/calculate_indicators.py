@@ -102,7 +102,7 @@ def generate_request_body(
 
 
 def generate_requests(
-    symbols: Set[str], num_requests: int, requests_file: str
+    symbols: list[str], num_requests: int, requests_file: str
 ) -> List[Dict[str, Any]]:
     """Generate request bodies and save them to a file."""
     if os.path.exists(requests_file):
@@ -289,7 +289,7 @@ async def calculate_indicators(
     return stats
 
 
-async def get_polygon_symbols() -> Set[str]:
+async def get_polygon_symbols() -> list[str]:
     """Get available symbols from Polygon."""
     logger.info("Fetching symbols from Polygon")
 

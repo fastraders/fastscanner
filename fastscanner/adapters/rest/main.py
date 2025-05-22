@@ -12,8 +12,8 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
-from fastscanner.services.indicators.registry import ApplicationRegistry
 from fastscanner.services.indicators.service import IndicatorsService
+from fastscanner.services.registry import ApplicationRegistry
 
 from .indicators import router as indicators_router
 

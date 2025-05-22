@@ -8,15 +8,18 @@ from datetime import datetime
 from functools import wraps
 from types import MethodType
 
+from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.logging import load_logging_config
 
+load_logging_config()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 NO_DATA_TIMEOUT = 10
-SYMBOLS_FILE = "data/symbols/symbols.json"
+SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
 
 
 class BenchmarkStats:
@@ -99,7 +102,15 @@ async def get_symbols_from_file() -> list[str]:
             symbols = json.load(f)
             logger.info(f"Loaded {len(symbols)} symbols from file.")
             return symbols
-    return []
+
+    os.makedirs(os.path.dirname(SYMBOLS_FILE), exist_ok=True)
+    polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
+    symbols = await polygon.all_symbols()
+    with open(SYMBOLS_FILE, "w") as f:
+        json.dump(symbols, f)
+        logger.info(f"Saved {len(symbols)} symbols to file.")
+
+    return symbols
 
 
 async def main():
@@ -124,7 +135,6 @@ async def main():
         await realtime.start()
         await asyncio.sleep(3)
         symbols = await get_symbols_from_file()  # convert set[str] to list[str]
-        symbols = symbols[100:200]
 
         await realtime.subscribe(symbols)
 
