@@ -40,6 +40,12 @@ class PartitionedCSVCandlesProvider:
             ).tz_localize(self.tz)
 
         df = pd.concat(dfs)
+        if not df.index.is_monotonic_increasing:
+            logger.warning(
+                f"Data for {symbol} ({freq}) is not sorted between {start} and {end}"
+            )
+            df = df.sort_index()
+
         start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
         end_dt = pd.Timestamp(datetime.combine(end, time(23, 59, 59)), tz=self.tz)
 
@@ -50,7 +56,7 @@ class PartitionedCSVCandlesProvider:
     async def cache_all_freqs(
         self, symbol: str, start: date, end: date, force: bool = False
     ) -> bool:
-        pending_freqs = []
+        pending_freqs: list[str] = []
         for freq in self._cache_freqs:
             if self._is_cached(symbol, start, end, freq) and not force:
                 continue
@@ -61,7 +67,7 @@ class PartitionedCSVCandlesProvider:
 
         minute_df = await self._store.get(symbol, start, end, "1min")
         daily_df = await self._store.get(symbol, start, end, "1d")
-        for freq in self._cache_freqs:
+        for freq in pending_freqs:
             if freq == "1min":
                 df = minute_df
             elif freq == "1d":
@@ -90,11 +96,11 @@ class PartitionedCSVCandlesProvider:
         keys = self._partition_keys_in_range(start, end, unit)
         for key in keys:
             partition_path = self._partition_path(symbol, key, freq)
-            if os.path.exists(partition_path) and not self._is_expired(
+            if not os.path.exists(partition_path) or self._is_expired(
                 symbol, key, unit
             ):
-                return True
-        return False
+                return False
+        return True
 
     async def cache_all_freqs_empty(self, symbol: str, start: date, end: date):
         empty_df = pd.DataFrame(

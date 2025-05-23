@@ -12,6 +12,7 @@ import pandas as pd
 from fastscanner.pkg import config
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.pkg.http import MaxRetryError, async_retry_request
+from fastscanner.pkg.ratelimit import RateLimiter
 from fastscanner.services.indicators.ports import CandleCol
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,10 @@ class PolygonCandlesProvider:
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
-    def __init__(self, base_url: str, api_key: str, max_concurrent_requests: int = 100):
+    def __init__(self, base_url: str, api_key: str, max_requests_per_sec: int = 100):
         self._base_url = base_url
         self._api_key = api_key
-        self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self._rate_limit = RateLimiter(max_requests_per_sec)
 
     async def _fetch(
         self,
@@ -117,7 +118,7 @@ class PolygonCandlesProvider:
         return df
 
     async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        async with self._semaphore:
+        async with self._rate_limit:
             async with httpx.AsyncClient() as client:
                 return await self._fetch(client, symbol, start, end, freq)
 

@@ -24,7 +24,7 @@ async def run():
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
-        max_concurrent_requests=50,
+        max_requests_per_sec=50,
     )
     candles = PartitionedCSVCandlesProvider(polygon)
     holidays = ExchangeCalendarsPublicHolidaysStore()
@@ -39,7 +39,9 @@ async def run():
     freq = "5min"
     symbols = await polygon.all_symbols()
     result: pd.DataFrame | None = None
-    scanner = ATRParabolicDownScanner(min_adv=0, min_adr=0.1, min_high_low_ratio=0.01)
+    scanner = ATRParabolicDownScanner(
+        min_adv=1_000_000, min_adr=0.1, min_high_low_ratio=0.01
+    )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
     start_time = time.time()

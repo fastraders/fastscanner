@@ -46,7 +46,7 @@ class FakeCandleStore:
         return df[(df.index.date >= start) & (df.index.date <= end)]
 
 
-class TestHandler(SubscriptionHandler):
+class HandlerTest(SubscriptionHandler):
     def __init__(self):
         self.received = []
 
@@ -116,7 +116,7 @@ def setup(candles):
         index=pd.date_range("2023-01-01", periods=15, freq="D", tz=LOCAL_TIMEZONE_STR),
     )
     candles.set_data(symbol, df)
-    handler = TestHandler()
+    handler = HandlerTest()
     return symbol, ts, handler
 
 
@@ -398,7 +398,7 @@ async def test_channel_handler_multiple_indicators(setup):
 
 @pytest.mark.asyncio
 async def test_multiple_ticks_aggregation():
-    handler = TestHandler()
+    handler = HandlerTest()
     symbol = "AAPL"
     base_ts = pd.Timestamp("2023-01-01 10:00:00", tz=LOCAL_TIMEZONE_STR)
 
