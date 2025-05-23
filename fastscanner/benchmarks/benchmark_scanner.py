@@ -37,10 +37,10 @@ async def run():
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
     freq = "5min"
-    symbols = await polygon.all_symbols()
+    symbols = (await polygon.all_symbols())[:100]
     result: pd.DataFrame | None = None
     scanner = ATRParabolicDownScanner(
-        min_adv=1_000_000, min_adr=0.1, min_high_low_ratio=0.01
+        min_adv=1_000_000, min_adr=0.1, min_high_low_ratio=0.01, min_volume=10_000
     )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")

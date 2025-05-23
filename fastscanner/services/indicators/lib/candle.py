@@ -132,6 +132,42 @@ class PremarketCumulativeIndicator:
         return new_row
 
 
+class CumulativeIndicator:
+    def __init__(self, candle_col: str, op: str):
+        self._candle_col = candle_col
+        self._op = CumulativeOperation(op)
+        self._last_value: dict[str, float] = {}
+
+    def lookback_days(self) -> int:
+        return 0
+
+    @classmethod
+    def type(cls):
+        return "cumulative"
+
+    def column_name(self):
+        return f"{self._op.label()}_{self._candle_col}"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        values = df[self._candle_col]
+        assert isinstance(values.index, pd.DatetimeIndex)
+        df[self.column_name()] = values.groupby(values.index.date).agg(
+            self._op.pandas_func()
+        )
+        return df
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        last_value = self._last_value.get(symbol)
+        value = new_row[self._candle_col]
+        if last_value is not None:
+            value = self._op.func()(value, last_value)
+
+        new_row[self.column_name()] = value
+        self._last_value[symbol] = value
+        return new_row
+
+
 class ATRIndicator:
     def __init__(self, period: int, freq: str):
         self._period = period
@@ -282,7 +318,7 @@ class PositionInRangeIndicator:
         if len(self._high_n_days.get(symbol, [])) == 0:
             logger.debug(f"{symbol}] Insufficient high/low data for indicator")
             return new_row
-        
+
         last_high = max(self._high_n_days[symbol])
         last_low = min(self._low_n_days[symbol])
         last_close = new_row[CandleCol.CLOSE]

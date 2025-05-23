@@ -2,8 +2,11 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.services.indicators.lib.candle import (
+    CumulativeDailyVolumeIndicator,
+    CumulativeIndicator,
+)
 from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
-from fastscanner.services.indicators.lib.candle import PremarketCumulativeIndicator
 from fastscanner.services.indicators.lib.daily import ADRIndicator, ADVIndicator
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
@@ -11,11 +14,16 @@ from fastscanner.services.registry import ApplicationRegistry
 
 class ATRParabolicDownScanner:
     def __init__(
-        self, min_adv: float, min_adr: float, min_high_low_ratio: float
+        self,
+        min_adv: float,
+        min_adr: float,
+        min_high_low_ratio: float,
+        min_volume: float,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._min_high_low_ratio = min_high_low_ratio
+        self._min_volume = min_volume
 
     # async def scan(
     #     self, symbol: str, start: date, end: date, freq: str
@@ -82,13 +90,15 @@ class ATRParabolicDownScanner:
         if df.empty:
             return df
 
+        cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
+        df = await cum_low.extend(symbol, df)
+        cum_volume = CumulativeDailyVolumeIndicator()
+        df = await cum_volume.extend(symbol, df)
+
         df = df[(df[C.HIGH] - df[C.LOW]) / df[C.LOW] > self._min_high_low_ratio]
         df = df[df[C.CLOSE] < df[C.OPEN]]
-        if df.empty:
-            return df
-
-        cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
-        df = await cum_low.extend(symbol, df)
-        # Test that they're virtually equal
+        df = df[df[cum_volume.column_name()] >= self._min_volume]
+        # lowest low and low are virtually equal
         df = df[(df[cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
+
         return df
