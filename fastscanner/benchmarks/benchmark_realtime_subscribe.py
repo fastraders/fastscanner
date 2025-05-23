@@ -15,6 +15,8 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.logging import load_logging_config
+from fastscanner.services.indicators.clock import ClockRegistry, LocalClock
 from fastscanner.services.indicators.lib import IndicatorsLibrary
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
@@ -36,8 +38,8 @@ from fastscanner.services.indicators.service import (
 )
 from fastscanner.services.registry import ApplicationRegistry
 
+load_logging_config()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
 STREAM_PREFIX = "candles_min_"
@@ -47,20 +49,21 @@ batch_start_time = None
 last_received_time = None
 total_messages = 0
 
+ClockRegistry.set(LocalClock())
+
 
 class BenchmarkHandler(SubscriptionHandler):
     def handle(self, symbol: str, new_row: pd.Series) -> None:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = (
-            new_row.name.to_pydatetime()
-            if isinstance(new_row.name, pd.Timestamp)
-            else now
+        ts = new_row.name
+
+        log_ts = datetime.now().strftime("%H:%M:%S")
+        candle_ts = ts.strftime("%H:%M:%S") # type: ignore
+        logger.info(
+            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
         )
-
-        logger.info(f"[{symbol}] Timestamp: {ts}, Data: {new_row.to_dict()}")
-
         if batch_start_time is None:
             batch_start_time = now
         last_received_time = now
@@ -123,7 +126,7 @@ async def main():
     )
 
     symbols = get_symbols_from_file()
-    symbols = symbols[:1000]
+    symbols = symbols[:100]
     indicators = [
         IndicatorParams(
             type_=PrevDayIndicator.type(), params={"candle_col": CandleCol.CLOSE}
@@ -144,14 +147,13 @@ async def main():
     ]
 
     tasks = []
-
     for symbol in symbols:
 
         tasks.append(
             asyncio.create_task(
                 service.subscribe_realtime(
                     symbol=symbol,
-                    freq="1min",
+                    freq="3min",
                     indicators=indicators,
                     handler=BenchmarkHandler(),
                 )

@@ -115,10 +115,14 @@ class PartitionedCSVCandlesProvider:
                 df = pd.read_csv(partition_path)
                 if unit.lower() != "d":
                     df[CandleCol.DATETIME] = pd.to_datetime(
-                        df[CandleCol.DATETIME], utc=True
+                        df[CandleCol.DATETIME],
+                        utc=True,
+                        format="%Y-%m-%d %H:%M:%S",
                     )
                     return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
-                df[CandleCol.DATETIME] = pd.to_datetime(df[CandleCol.DATETIME])
+                df[CandleCol.DATETIME] = pd.to_datetime(
+                    df[CandleCol.DATETIME], format="%Y-%m-%d"
+                )
                 return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
             except Exception as e:
                 logger.exception(e)
