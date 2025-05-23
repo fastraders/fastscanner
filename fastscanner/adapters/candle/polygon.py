@@ -22,10 +22,17 @@ class PolygonCandlesProvider:
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
-    def __init__(self, base_url: str, api_key: str, max_requests_per_sec: int = 100):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        max_requests_per_sec: int = 100,
+        max_concurrent_requests: int = 50,
+    ):
         self._base_url = base_url
         self._api_key = api_key
         self._rate_limit = RateLimiter(max_requests_per_sec)
+        self._semaphore = asyncio.Semaphore(max_concurrent_requests)
 
     async def _fetch(
         self,
@@ -118,9 +125,10 @@ class PolygonCandlesProvider:
         return df
 
     async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        async with self._rate_limit:
-            async with httpx.AsyncClient() as client:
-                return await self._fetch(client, symbol, start, end, freq)
+        async with self._semaphore:
+            async with self._rate_limit:
+                async with httpx.AsyncClient() as client:
+                    return await self._fetch(client, symbol, start, end, freq)
 
     async def all_symbols(self) -> list[str]:
         symbols: list[str] = []

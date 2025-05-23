@@ -36,7 +36,10 @@ async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
 
 async def _collect_batch(symbols: list[str]) -> None:
     polygon = PolygonCandlesProvider(
-        config.POLYGON_BASE_URL, config.POLYGON_API_KEY, max_requests_per_sec=9
+        config.POLYGON_BASE_URL,
+        config.POLYGON_API_KEY,
+        max_requests_per_sec=9,
+        max_concurrent_requests=5,
     )
     candles = PartitionedCSVCandlesProvider(polygon)
 
