@@ -14,6 +14,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.registry import ApplicationRegistry
+from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import ATRParabolicDownScanner
 
 load_logging_config()
@@ -36,12 +37,11 @@ async def run():
 
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
-    freq = "5min"
-    symbols = (await polygon.all_symbols())[:100]
+    freq = "2min"
+    symbols = await polygon.all_symbols()
+    # symbols = symbols[:1000]
     result: pd.DataFrame | None = None
-    scanner = ATRParabolicDownScanner(
-        min_adv=1_000_000, min_adr=0.1, min_high_low_ratio=0.01, min_volume=10_000
-    )
+    scanner = ATRGapDownScanner(min_adv=1_000_000, min_adr=0.1, atr_multiplier=1.5)
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
     start_time = time.time()

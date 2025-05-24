@@ -60,7 +60,7 @@ class BenchmarkHandler(SubscriptionHandler):
         ts = new_row.name
 
         log_ts = datetime.now().strftime("%H:%M:%S")
-        candle_ts = ts.strftime("%H:%M:%S") # type: ignore
+        candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
         logger.info(
             f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
         )
