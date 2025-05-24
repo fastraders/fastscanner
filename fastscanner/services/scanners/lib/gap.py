@@ -57,8 +57,8 @@ class ATRGapDownScanner:
                 prev_close.column_name(),
             ]
         ].set_index(
-            daily_df.index.date # type: ignore
-        )  
+            daily_df.index.date  # type: ignore
+        )
 
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
@@ -121,8 +121,8 @@ class ATRGapUpScanner:
                 prev_close.column_name(),
             ]
         ].set_index(
-            daily_df.index.date # type: ignore
-        )  
+            daily_df.index.date  # type: ignore
+        )
 
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
