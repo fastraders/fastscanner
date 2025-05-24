@@ -2,24 +2,20 @@ from datetime import date, time
 
 import pandas as pd
 
-from fastscanner.services.indicators.lib.candle import (
-    CumulativeOperation as CumOp,
-    PremarketCumulativeIndicator,
-)
+from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
+from fastscanner.services.indicators.lib.candle import PremarketCumulativeIndicator
 from fastscanner.services.indicators.lib.daily import (
     ADRIndicator,
     ADVIndicator,
-    PrevDayIndicator,
     DailyATRIndicator,
+    PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
 
 class ATRGapDownScanner:
-    def __init__(
-        self, min_adv: float, min_adr: float, atr_multiplier: float
-    ) -> None:
+    def __init__(self, min_adv: float, min_adr: float, atr_multiplier: float) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
@@ -41,10 +37,8 @@ class ATRGapDownScanner:
         daily_df = await atr.extend(symbol, daily_df)
         daily_df = await prev_close.extend(symbol, daily_df)
 
-        daily_df = daily_df[
-            (daily_df[adv.column_name()] >= self._min_adv)
-            & (daily_df[adr.column_name()] >= self._min_adr)
-        ]
+        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
         if daily_df.empty:
             return daily_df
 
@@ -55,12 +49,18 @@ class ATRGapDownScanner:
 
         df["date"] = df.index.date
 
-        daily_meta = daily_df[
-            [adv.column_name(), adr.column_name(), atr.column_name(), prev_close.column_name()]
-        ].copy()
-        daily_meta.index = daily_meta.index.date   # type: ignore
+        daily_df = daily_df[
+            [
+                adv.column_name(),
+                adr.column_name(),
+                atr.column_name(),
+                prev_close.column_name(),
+            ]
+        ].set_index(
+            daily_df.index.date # type: ignore
+        )  
 
-        df = df.join(daily_meta, on="date", how="inner")
+        df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
         if df.empty:
             return df
@@ -73,10 +73,10 @@ class ATRGapDownScanner:
         atr_col = atr.column_name()
 
         df = df[
-            (df[gap_col] - df[prev_close_col])
-            < (df[atr_col] * self._atr_multiplier)
+            (df[gap_col] - df[prev_close_col]) < (df[atr_col] * self._atr_multiplier)
         ]
         return df
+
 
 class ATRGapUpScanner:
     def __init__(self, min_adv: float, min_adr: float, atr_multiplier: float) -> None:
@@ -84,7 +84,9 @@ class ATRGapUpScanner:
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
 
-    async def scan(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    async def scan(
+        self, symbol: str, start: date, end: date, freq: str
+    ) -> pd.DataFrame:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         atr = DailyATRIndicator(period=14)
@@ -99,10 +101,8 @@ class ATRGapUpScanner:
         daily_df = await atr.extend(symbol, daily_df)
         daily_df = await prev_close.extend(symbol, daily_df)
 
-        daily_df = daily_df[
-            (daily_df[adv.column_name()] >= self._min_adv)
-            & (daily_df[adr.column_name()] >= self._min_adr)
-        ]
+        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
         if daily_df.empty:
             return daily_df
 
@@ -113,12 +113,18 @@ class ATRGapUpScanner:
 
         df["date"] = df.index.date
 
-        daily_meta = daily_df[
-            [adv.column_name(), adr.column_name(), atr.column_name(), prev_close.column_name()]
-        ].copy()
-        daily_meta.index = daily_meta.index.date  # type: ignore
+        daily_df = daily_df[
+            [
+                adv.column_name(),
+                adr.column_name(),
+                atr.column_name(),
+                prev_close.column_name(),
+            ]
+        ].set_index(
+            daily_df.index.date # type: ignore
+        )  
 
-        df = df.join(daily_meta, on="date", how="inner")
+        df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
         if df.empty:
             return df
