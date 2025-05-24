@@ -44,12 +44,8 @@ async def run():
     symbols = await polygon.all_symbols()
     symbols = symbols[:1000]
     result: pd.DataFrame | None = None
-    scanner = ATRGapDownScanner(
-        min_adv=1_000_000,
-        min_adr=0.1,
-        atr_multiplier=1.5,
-        start_time=time(9, 20),
-        end_time=time(9, 25),
+    scanner = ATRParabolicUpScanner(
+        min_adv=0, min_adr=0.1, min_volume=50_000, atr_multiplier=1
     )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
