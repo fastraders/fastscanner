@@ -116,7 +116,7 @@ class PartitionedCSVCandlesProvider:
 
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
-        if os.path.exists(partition_path) and not self._is_expired(symbol, key, unit):
+        if not self._is_expired(symbol, key, unit):
             try:
                 df = pd.read_csv(partition_path)
                 if unit.lower() != "d":
@@ -130,15 +130,15 @@ class PartitionedCSVCandlesProvider:
                     df[CandleCol.DATETIME], format="%Y-%m-%d"
                 )
                 return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
+            except FileNotFoundError:
+                logger.info(
+                    f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
+                )
             except Exception as e:
                 logger.exception(e)
                 logger.error(
                     f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
                 )
-
-        logger.info(
-            f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
-        )
 
         start, end = self._range_from_key(key, unit)
         df = (await self._store.get(symbol, start, end, freq)).dropna()

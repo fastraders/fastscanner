@@ -82,7 +82,7 @@ async def run():
     logger.info(
         f"Processing rate: {len(symbols) / (end_time - start_time):.2f} symbols/second"
     )
-    logger.info(result.head(5))
+    logger.info(result.head(10))
 
 
 if __name__ == "__main__":
