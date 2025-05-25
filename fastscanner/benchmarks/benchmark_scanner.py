@@ -14,7 +14,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.registry import ApplicationRegistry
-from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
+from fastscanner.services.scanners.lib.gap import ATRGapDownScanner
 from fastscanner.services.scanners.lib.parabolic import (
     ATRParabolicDownScanner,
     ATRParabolicUpScanner,
