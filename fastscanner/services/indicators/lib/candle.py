@@ -36,7 +36,7 @@ class CumulativeDailyVolumeIndicator:
         volume = df[CandleCol.VOLUME]
         assert isinstance(volume.index, pd.DatetimeIndex)
         cum_volume = volume.groupby(volume.index.date).cumsum()
-        df[self.column_name()] = cum_volume
+        df.loc[:, self.column_name()] = cum_volume
         return df
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
@@ -203,7 +203,6 @@ class ATRIndicator:
             .max(axis=1)
             .ewm(alpha=1 / self._period)
             .mean()
-            .round(3)
         )
         return df
 
@@ -276,7 +275,7 @@ class PositionInRangeIndicator:
 
         daily_df = (
             daily_df[[CandleCol.HIGH, CandleCol.LOW]]
-            .rolling(self._n_days)
+            .rolling(self._n_days, min_periods=1)
             .agg(
                 {
                     CandleCol.HIGH: "max",
@@ -295,10 +294,10 @@ class PositionInRangeIndicator:
         daily_df.loc[df.index[-1].date(), ["_highest", "_lowest"]] = pd.NA
         daily_df = daily_df.shift(1)
 
-        df["date"] = df.index.date  # type: ignore
+        df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(daily_df, on="date")
-        df[self.column_name()] = (df[CandleCol.CLOSE] - df["_lowest"]) / (
-            df["_highest"] - df["_lowest"]
+        df[self.column_name()] = (df[CandleCol.CLOSE] - df.loc[:, "_lowest"]) / (
+            df.loc[:, "_highest"] - df.loc[:, "_lowest"]
         )
 
         return df.drop(columns=["date", "_lowest", "_highest"])

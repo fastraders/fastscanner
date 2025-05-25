@@ -31,10 +31,10 @@ def test_daily_atr_gap_indicator_column_name():
 @pytest.mark.asyncio
 async def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles - using only 7 days
-    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 7))
+    daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 8))
     daily_data = pd.DataFrame(
         {
-            CandleCol.OPEN: [100, 102, 105, 103, 101, 104, 106],
+            CandleCol.OPEN: [100, 102, 105, 103, 101, 104, 110],
             CandleCol.HIGH: [105, 107, 110, 108, 106, 109, 111],
             CandleCol.LOW: [95, 97, 100, 98, 96, 99, 101],
             CandleCol.CLOSE: [102, 105, 103, 101, 104, 106, 108],
@@ -75,12 +75,13 @@ async def test_daily_atr_gap_indicator_extend(candles: "CandleStoreTest"):
 @pytest.mark.asyncio
 async def test_daily_atr_gap_indicator_calculation(candles: "CandleStoreTest"):
     # Set up test data with known values for manual calculation
-    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 5))
+    daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 6))
     daily_data = pd.DataFrame(
         {
+            CandleCol.OPEN: [95, 105, 115, 125, 145],
             CandleCol.HIGH: [100, 110, 120, 130, 140],
             CandleCol.LOW: [90, 95, 105, 115, 125],
-            CandleCol.CLOSE: [95, 105, 115, 125, 135],
+            CandleCol.CLOSE: [95, 105, 115, 135, 125],
         },
         index=daily_dates,
     )

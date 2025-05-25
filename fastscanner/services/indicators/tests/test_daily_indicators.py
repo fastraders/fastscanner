@@ -131,7 +131,6 @@ async def test_prev_day_indicator_extend_different_columns(candles: "CandleStore
     assert result_df[open_indicator.column_name()].to_list() == [103, 103]
 
 
-@pytest.mark.asyncio
 def test_daily_gap_indicator_type():
     indicator = DailyGapIndicator()
     assert indicator.type() == "daily_gap"
@@ -146,15 +145,18 @@ def test_daily_gap_indicator_column_name():
 async def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
     # Set up test data for daily candles
     daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
-    daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
-    daily_data = pd.DataFrame({CandleCol.CLOSE: daily_closes}, index=daily_dates)
+    daily_closes = [100, 102, 105, 103, 101, 104, 106, 107, 105, 108]
+    daily_opens = [98, 100, 103, 101, 99, 102, 104, 106, 110, 115]
+    daily_data = pd.DataFrame(
+        {CandleCol.CLOSE: daily_closes, CandleCol.OPEN: daily_opens}, index=daily_dates
+    )
 
     candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 11, 9, 30),  # Market open
-        datetime(2023, 1, 11, 10, 0),
+        datetime(2023, 1, 10, 9, 30),  # Market open
+        datetime(2023, 1, 10, 10, 0),
         datetime(2023, 1, 11, 8, 0),  # Pre-market (should be ignored for daily open)
         datetime(2023, 1, 11, 10, 30),
     ]
@@ -177,9 +179,12 @@ async def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
 @pytest.mark.asyncio
 async def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     # Set up test data for daily candles
-    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
-    daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
-    daily_data = pd.DataFrame({CandleCol.CLOSE: daily_closes}, index=daily_dates)
+    daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
+    daily_closes = [100, 102, 105, 103, 101, 104, 106, 107, 105, 108]
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 110, 120]
+    daily_data = pd.DataFrame(
+        {CandleCol.CLOSE: daily_closes, CandleCol.OPEN: daily_opens}, index=daily_dates
+    )
 
     candles.set_data("AAPL", daily_data)
 
@@ -187,8 +192,8 @@ async def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTes
     dates = [
         datetime(2023, 1, 10, 9, 30),  # Day 1 market open
         datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 12, 9, 30),  # Day 2 market open
-        datetime(2023, 1, 12, 10, 0),
+        datetime(2023, 1, 11, 9, 30),  # Day 2 market open
+        datetime(2023, 1, 11, 10, 0),
     ]
     opens = [110, 112, 120, 122]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -215,16 +220,19 @@ async def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTes
 @pytest.mark.asyncio
 async def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTest"):
     # Set up test data for daily candles
-    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
-    daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
-    daily_data = pd.DataFrame({CandleCol.CLOSE: daily_closes}, index=daily_dates)
+    daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
+    daily_closes = [100, 102, 105, 103, 101, 104, 106, 107, 105, 108]
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 108, 110]
+    daily_data = pd.DataFrame(
+        {CandleCol.CLOSE: daily_closes, CandleCol.OPEN: daily_opens}, index=daily_dates
+    )
 
     candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles with pre-market data
     dates = [
-        datetime(2023, 1, 11, 8, 0),  # Pre-market (should be ignored for daily open)
-        datetime(2023, 1, 11, 8, 30),  # Pre-market (should be ignored for daily open)
+        datetime(2023, 1, 10, 8, 0),  # Pre-market (should be ignored for daily open)
+        datetime(2023, 1, 10, 8, 30),  # Pre-market (should be ignored for daily open)
         datetime(2023, 1, 11, 9, 30),  # Market open (should be used for daily open)
         datetime(2023, 1, 11, 10, 0),
     ]
@@ -250,9 +258,12 @@ async def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTe
 @pytest.mark.asyncio
 async def test_daily_gap_indicator_extend_no_market_open(candles: "CandleStoreTest"):
     # Set up test data for daily candles
-    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
+    daily_dates = pd.date_range(start=date(2023, 1, 2), end=date(2023, 1, 11))
     daily_closes = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
-    daily_data = pd.DataFrame({CandleCol.CLOSE: daily_closes}, index=daily_dates)
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
+    daily_data = pd.DataFrame(
+        {CandleCol.CLOSE: daily_closes, CandleCol.OPEN: daily_opens}, index=daily_dates
+    )
 
     candles.set_data("AAPL", daily_data)
 

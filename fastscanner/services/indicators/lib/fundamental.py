@@ -42,7 +42,7 @@ class DaysToEarningsIndicator:
 
             date_to_earnings[date] = days
 
-        df["date"] = df.index.date
+        df.loc[:, "date"] = df.index.date
         df = df.join(date_to_earnings, on="date")
         return df.drop(columns=["date"])
 
@@ -93,7 +93,7 @@ class DaysFromEarningsIndicator:
                 break
 
             date_from_earnings[date] = days
-        df["date"] = df.index.date
+        df.loc[:, "date"] = df.index.date
         df = df.join(date_from_earnings, on="date")
         return df.drop(columns=["date"])
 

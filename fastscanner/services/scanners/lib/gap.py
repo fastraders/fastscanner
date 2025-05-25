@@ -2,6 +2,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.services.indicators.lib.candle import ATRIndicator
 from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
 from fastscanner.services.indicators.lib.candle import PremarketCumulativeIndicator
 from fastscanner.services.indicators.lib.daily import (
@@ -11,14 +12,24 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
+from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
 
 class ATRGapDownScanner:
-    def __init__(self, min_adv: float, min_adr: float, atr_multiplier: float) -> None:
+    def __init__(
+        self,
+        min_adv: float,
+        min_adr: float,
+        atr_multiplier: float,
+        start_time: time,
+        end_time: time,
+    ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
+        self._start_time = start_time
+        self._end_time = end_time
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -42,23 +53,26 @@ class ATRGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        df = await ApplicationRegistry.candles.get(symbol, start, end, freq)
-        df = df.loc[df.index.time <= time(9, 30)]  # type: ignore
+        atr_iday = ATRIndicator(period=140, freq=freq)
+        start_atr = lookback_days(start, atr_iday.lookback_days())
+        df = await ApplicationRegistry.candles.get(symbol, start_atr, end, freq)
+        df = await atr_iday.extend(symbol, df)
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df[df.loc[:, "date"] >= start]
+
+        df = df.loc[df.index.time <= self._end_time]  # type: ignore
+        df = df.loc[df.index.time >= self._start_time]  # type: ignore
         if df.empty:
             return df
 
-        df["date"] = df.index.date
-
-        daily_df = daily_df[
+        daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
                 adv.column_name(),
                 adr.column_name(),
                 atr.column_name(),
                 prev_close.column_name(),
             ]
-        ].set_index(
-            daily_df.index.date # type: ignore
-        )  
+        ]
 
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
@@ -79,10 +93,19 @@ class ATRGapDownScanner:
 
 
 class ATRGapUpScanner:
-    def __init__(self, min_adv: float, min_adr: float, atr_multiplier: float) -> None:
+    def __init__(
+        self,
+        min_adv: float,
+        min_adr: float,
+        atr_multiplier: float,
+        start_time: time,
+        end_time: time,
+    ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
+        self._start_time = start_time
+        self._end_time = end_time
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -106,23 +129,26 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        df = await ApplicationRegistry.candles.get(symbol, start, end, freq)
-        df = df.loc[df.index.time <= time(9, 30)]  # type: ignore
+        atr_iday = ATRIndicator(period=140, freq=freq)
+        start_atr = lookback_days(start, atr_iday.lookback_days())
+        df = await ApplicationRegistry.candles.get(symbol, start_atr, end, freq)
+        df = await atr_iday.extend(symbol, df)
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df[df.loc[:, "date"] >= start]
+
+        df = df.loc[df.index.time <= self._end_time]  # type: ignore
+        df = df.loc[df.index.time >= self._start_time]  # type: ignore
         if df.empty:
             return df
 
-        df["date"] = df.index.date
-
-        daily_df = daily_df[
+        daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
                 adv.column_name(),
                 adr.column_name(),
                 atr.column_name(),
                 prev_close.column_name(),
             ]
-        ].set_index(
-            daily_df.index.date # type: ignore
-        )  
+        ]
 
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])

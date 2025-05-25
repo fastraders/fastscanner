@@ -14,6 +14,7 @@ from fastscanner.services.indicators.ports import FundamentalData
 def sample_fundamental_data():
     return {
         "General": {
+            "Type": "Common Stock",
             "Exchange": "NASDAQ",
             "CountryName": "USA",
             "AddressData": {"City": "Cupertino"},
@@ -49,6 +50,7 @@ def store(tmp_path):
 @pytest.mark.asyncio
 async def test_get_from_cache(store):
     expected = FundamentalData(
+        type="Common Stock",
         exchange="NASDAQ",
         country="USA",
         city="Cupertino",
@@ -61,6 +63,7 @@ async def test_get_from_cache(store):
         insiders_ownership_perc=1.23,
         institutional_ownership_perc=65.4,
         shares_float=123456789,
+        beta=1,
     )
 
     cache_path = os.path.join(store.CACHE_DIR, "AAPL.json")
@@ -68,6 +71,7 @@ async def test_get_from_cache(store):
     with open(cache_path, "w") as f:
         json.dump(
             {
+                "type": expected.type,
                 "exchange": expected.exchange,
                 "country": expected.country,
                 "city": expected.city,
@@ -78,6 +82,7 @@ async def test_get_from_cache(store):
                 "insiders_ownership_perc": expected.insiders_ownership_perc,
                 "institutional_ownership_perc": expected.institutional_ownership_perc,
                 "shares_float": expected.shares_float,
+                "beta": expected.beta,
             },
             f,
         )

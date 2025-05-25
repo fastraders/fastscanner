@@ -88,7 +88,7 @@ class PolygonCandlesProvider:
                 curr_end = min(end, curr_start + timedelta(days=max_days))
                 continue
 
-            df[CandleCol.DATETIME] = pd.to_datetime(df["t"], unit="ms")
+            df[CandleCol.DATETIME] = pd.to_datetime(df.loc[:, "t"], unit="ms")
             df = df.set_index(CandleCol.DATETIME)
             df = df.tz_localize("utc").tz_convert(self.tz)
             df = (

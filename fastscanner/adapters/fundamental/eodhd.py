@@ -25,12 +25,11 @@ class EODHDFundamentalStore:
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
 
     async def get(self, symbol: str) -> FundamentalData:
-        logger.info(f"Retrieving fundamentals for: {symbol}")
-
         cached = self._load_cached(symbol)
         if cached:
             return cached
 
+        logger.info(f"Fetching fundamentals for {symbol} from EODHD")
         async with self._semaphore:
             try:
                 fundamentals = await self._fetch_fundamentals(symbol)
@@ -88,18 +87,18 @@ class EODHDFundamentalStore:
             pd.to_datetime(earnings_dates_data), name="report_date"
         )
         return FundamentalData(
-            exchange=data.get("exchange", ""),
-            country=data.get("country", ""),
-            city=data.get("city", ""),
-            gic_industry=data.get("gic_industry", ""),
-            gic_sector=data.get("gic_sector", ""),
+            type=data["type"],
+            exchange=data["exchange"],
+            country=data["country"],
+            city=data["city"],
+            gic_industry=data["gic_industry"],
+            gic_sector=data["gic_sector"],
             historical_market_cap=market_cap,
             earnings_dates=earnings_dates,
-            insiders_ownership_perc=float(data.get("insiders_ownership_perc", 0.0)),
-            institutional_ownership_perc=float(
-                data.get("institutional_ownership_perc", 0.0)
-            ),
-            shares_float=float(data.get("shares_float", 0.0)),
+            insiders_ownership_perc=data["insiders_ownership_perc"],
+            institutional_ownership_perc=data["institutional_ownership_perc"],
+            shares_float=data["shares_float"],
+            beta=data["beta"],
         )
 
     async def reload(self, symbol: str) -> FundamentalData:
@@ -124,6 +123,7 @@ class EODHDFundamentalStore:
         general = fundamentals.get("General") or {}
         shares_stats = fundamentals.get("SharesStats") or {}
         earnings = fundamentals.get("Earnings") or {}
+        technicals = fundamentals.get("Technicals", {}) or {}
 
         market_cap_data = {
             v["date"]: float(v["value"])
@@ -141,8 +141,21 @@ class EODHDFundamentalStore:
         ).sort_values()
 
         address_data = general.get("AddressData", {}) or {}
+        insiders_ownership_perc = None
+        institutional_ownership_perc = None
+        shares_float = None
+        beta = None
+        if shares_stats.get("PercentInstitutions") is not None:
+            insiders_ownership_perc = float(shares_stats["PercentInsiders"])
+        if shares_stats.get("PercentInsiders") is not None:
+            institutional_ownership_perc = float(shares_stats["PercentInstitutions"])
+        if shares_stats.get("SharesFloat") is not None:
+            shares_float = float(shares_stats["SharesFloat"])
+        if technicals.get("Beta") is not None:
+            beta = float(technicals["Beta"])
 
         return FundamentalData(
+            type=general.get("Type", ""),
             exchange=general.get("Exchange", ""),
             country=general.get("CountryName", ""),
             city=address_data.get("City", ""),
@@ -150,11 +163,10 @@ class EODHDFundamentalStore:
             gic_sector=general.get("GicSector", ""),
             historical_market_cap=historical_market_cap,
             earnings_dates=earnings_dates,
-            insiders_ownership_perc=float(shares_stats.get("PercentInsiders", 0.0)),
-            institutional_ownership_perc=float(
-                shares_stats.get("PercentInstitutions", 0.0)
-            ),
-            shares_float=float(shares_stats.get("SharesFloat", 0.0)),
+            insiders_ownership_perc=insiders_ownership_perc,
+            institutional_ownership_perc=institutional_ownership_perc,
+            shares_float=shares_float,
+            beta=beta,
         )
 
     def _get_cache_path(self, symbol: str) -> str:
