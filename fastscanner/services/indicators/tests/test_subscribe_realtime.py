@@ -285,7 +285,7 @@ async def test_atr_indicator(setup):
     indicator = ATRIndicator(period=3, freq="1min")
 
     index = pd.date_range(
-        "2023-01-11 12:56", periods=4, freq="T", tz=LOCAL_TIMEZONE_STR
+        "2023-01-11 12:56", periods=4, freq="1min", tz=LOCAL_TIMEZONE_STR
     )
     historical_rows = [
         create_stream_message(index[0], open=100, high=110, low=90, close=105),

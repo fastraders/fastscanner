@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import time
-from datetime import date
+import time as time_count
+from datetime import date, time
 
 import pandas as pd
 
@@ -37,14 +37,20 @@ async def run():
 
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
-    freq = "2min"
+    freq = "5min"
     symbols = await polygon.all_symbols()
-    # symbols = symbols[:1000]
+    symbols = symbols[:1000]
     result: pd.DataFrame | None = None
-    scanner = ATRGapDownScanner(min_adv=1_000_000, min_adr=0.1, atr_multiplier=1.5)
+    scanner = ATRGapDownScanner(
+        min_adv=1_000_000,
+        min_adr=0.1,
+        atr_multiplier=1.5,
+        start_time=time(9, 20),
+        end_time=time(9, 25),
+    )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
-    start_time = time.time()
+    start_time = time_count.time()
     for i, symbol in enumerate(symbols, start=1):
         df = await scanner.scan(
             symbol=symbol,
@@ -52,8 +58,8 @@ async def run():
             end=end_date,
             freq=freq,
         )
-        if i % 20 == 0:
-            end_time = time.time()
+        if i % 100 == 0:
+            end_time = time_count.time()
             time_left = (end_time - start_time) * (len(symbols) - i) / i
             logger.info(
                 f"Processed {i} symbols. Estimated time left: {time_left:.2f} seconds"
@@ -62,20 +68,20 @@ async def run():
         if df.empty:
             continue
 
-        df["symbol"] = symbol
+        df.loc[:, "symbol"] = symbol
         if result is None:
             result = df
         else:
             result = pd.concat([result, df])
 
     logger.info(
-        f"Finished processing {len(symbols)} symbols in {time.time() - start_time:.4f} seconds"
+        f"Finished processing {len(symbols)} symbols in {time_count.time() - start_time:.4f} seconds"
     )
     if result is None:
         logger.info("No rows passed the given scanner criteria")
         return
 
-    end_time = time.time()
+    end_time = time_count.time()
     matching_symbols = result["symbol"].unique()
     logger.info(f"Found {len(matching_symbols)} matching symbols")
     logger.info(f"Average rows per symbol: {len(result) / len(matching_symbols):.2f}")

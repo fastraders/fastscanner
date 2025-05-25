@@ -37,6 +37,7 @@ def fundamentals():
 
 def create_fundamental_data(earnings_dates: list[date]) -> FundamentalData:
     return FundamentalData(
+        type="Common Stock",
         exchange="NYSE",
         country="USA",
         city="New York",
@@ -47,6 +48,7 @@ def create_fundamental_data(earnings_dates: list[date]) -> FundamentalData:
         insiders_ownership_perc=10.0,
         institutional_ownership_perc=70.0,
         shares_float=1000000.0,
+        beta=1.2,
     )
 
 

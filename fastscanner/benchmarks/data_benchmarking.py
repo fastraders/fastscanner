@@ -73,7 +73,7 @@ if __name__ == "__main__":
         df = pd.DataFrame(results)
 
         # Create side-by-side comparison
-        csv_df = df[df["Format"] == "Partitioned CSV"].set_index("Range")
+        csv_df = df[df.loc[:, "Format"] == "Partitioned CSV"].set_index("Range")
 
         side_by_side = csv_df[["Rows", "Time (s)", "Memory (MB)"]].reset_index()
 

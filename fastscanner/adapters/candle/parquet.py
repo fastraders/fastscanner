@@ -82,7 +82,7 @@ class ParquetCandlesProvider(PolygonCandlesProvider):
         os.makedirs(path, exist_ok=True)
 
         df = df.reset_index()
-        df["date"] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
+        df.loc[:, "date"] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
         df[CandleCol.DATETIME] = (
             df[CandleCol.DATETIME].dt.tz_convert("UTC").dt.tz_localize(None)
         )

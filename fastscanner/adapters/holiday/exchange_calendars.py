@@ -33,7 +33,6 @@ class ExchangeCalendarsPublicHolidaysStore:
         path = self._get_cache_path()
 
         if not force_reload and os.path.exists(path):
-            logger.info(f"Loading holidays from cache for {self._exchange_code}")
             return self._load_cache(path)
 
         logger.info(

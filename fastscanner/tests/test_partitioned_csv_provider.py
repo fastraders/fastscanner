@@ -25,7 +25,6 @@ def provider(tmp_path):
     return provider
 
 
-@pytest.mark.asyncio
 def test_save_and_load_cache(provider):
     df = pd.DataFrame(
         {
@@ -198,7 +197,6 @@ async def test_partition_keys_invalid_unit(provider):
         provider._partition_keys(idx, "badunit")
 
 
-@pytest.mark.asyncio
 def test_partition_keys_in_range(provider):
     keys = provider._partition_keys_in_range(date(2023, 2, 1), date(2023, 2, 5), UNIT)
     assert isinstance(keys, list)
@@ -206,14 +204,12 @@ def test_partition_keys_in_range(provider):
     assert len(set(keys)) == len(keys)
 
 
-@pytest.mark.asyncio
 def test_partition_path(provider):
     path = provider._partition_path(SYMBOL, TEST_KEY, FREQ)
     assert path.endswith(f"{TEST_KEY}.csv")
     assert FREQ in path
 
 
-@pytest.mark.asyncio
 def test_partition_keys(provider):
     idx = pd.date_range("2023-01-01", "2023-01-03", freq="1h")
     keys = provider._partition_keys(idx, UNIT)
@@ -221,14 +217,12 @@ def test_partition_keys(provider):
     assert not keys.empty
 
 
-@pytest.mark.asyncio
 def test_range_from_key_min(provider):
     start, end = provider._range_from_key("2023-01-01", UNIT)
     assert isinstance(start, date)
     assert (end - start).days == 6
 
 
-@pytest.mark.asyncio
 def test_range_from_key_hour(provider):
     start, end = provider._range_from_key("2023-01", "h")
     assert start.month == 1

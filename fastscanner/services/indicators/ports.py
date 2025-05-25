@@ -23,6 +23,7 @@ class Cache(Protocol):
 
 @dataclass
 class FundamentalData:
+    type: str
     exchange: str
     country: str
     city: str
@@ -30,9 +31,10 @@ class FundamentalData:
     gic_sector: str
     historical_market_cap: "pd.Series[float]"
     earnings_dates: pd.DatetimeIndex
-    insiders_ownership_perc: float
-    institutional_ownership_perc: float
-    shares_float: float
+    insiders_ownership_perc: float | None
+    institutional_ownership_perc: float | None
+    shares_float: float | None
+    beta: float | None
 
 
 class PublicHolidaysStore(Protocol):
