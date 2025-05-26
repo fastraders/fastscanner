@@ -11,8 +11,10 @@ from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.adapters.holiday.exchange_calendars import (
     ExchangeCalendarsPublicHolidaysStore,
 )
+from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import (
@@ -36,20 +38,23 @@ async def run():
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,
     )
+    indicator_service = IndicatorsService(candles, fundamentals, VoidChannel())
+
     ApplicationRegistry.init(candles, fundamentals, holidays)
+    ApplicationRegistry.set_indicators(indicator_service)
 
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
     freq = "5min"
     symbols = await polygon.all_symbols()
-    #symbols = symbols[:1000]
+    symbols = symbols[:1000]
     result: pd.DataFrame | None = None
     scanner = ATRParabolicUpScanner(
         min_adv=1_000_000,
         min_adr=0.1,
-        atr_multiplier=1.5,
+        atr_multiplier=0.5,
         min_volume=500_000,
-        end_time=time(9, 30),
+        end_time=time(11, 0),
     )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")

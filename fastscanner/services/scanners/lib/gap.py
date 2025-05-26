@@ -12,7 +12,6 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
-from fastscanner.services.indicators.utils import get_df_with_atr, lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
 
@@ -39,29 +38,35 @@ class ATRGapDownScanner:
         atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(candle_col=C.CLOSE)
 
-        daily_df = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
+        daily_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            "1d",
+            [adv, adr, atr, prev_close],
+        )
         if daily_df.empty:
             return daily_df
-
-        daily_df = await adv.extend(symbol, daily_df)
-        daily_df = await adr.extend(symbol, daily_df)
-        daily_df = await atr.extend(symbol, daily_df)
-        daily_df = await prev_close.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
         if daily_df.empty:
             return daily_df
 
-        df = await get_df_with_atr(symbol, start, end, freq)
-        df.loc[:, "date"] = df.index.date  # type: ignore
-        df = df[df.loc[:, "date"] >= start]
-
+        atr_iday = ATRIndicator(period=140, freq="1d")
+        cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
+        df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            freq,
+            [atr_iday, cum_low],
+        )
         df = df.loc[df.index.time <= self._end_time]  # type: ignore
-        df = df.loc[df.index.time >= self._start_time]  # type: ignore
         if df.empty:
             return df
 
+        df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
                 adv.column_name(),
@@ -70,22 +75,17 @@ class ATRGapDownScanner:
                 prev_close.column_name(),
             ]
         ]
-
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
         if df.empty:
             return df
 
-        cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
-        df = await cum_low.extend(symbol, df)
-
         gap_col = cum_low.column_name()
         prev_close_col = prev_close.column_name()
         atr_col = atr.column_name()
 
-        df = df[
-            (df[gap_col] - df[prev_close_col]) < (df[atr_col] * self._atr_multiplier)
-        ]
+        df["signal"] = (df[gap_col] - df[prev_close_col]) / df[atr_col]
+        df = df[df["signal"] < self._atr_multiplier]
         return df
 
 
@@ -112,30 +112,35 @@ class ATRGapUpScanner:
         atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(candle_col=C.CLOSE)
 
-        daily_df = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
+        daily_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            "1d",
+            [adv, adr, atr, prev_close],
+        )
         if daily_df.empty:
             return daily_df
-
-        daily_df = await adv.extend(symbol, daily_df)
-        daily_df = await adr.extend(symbol, daily_df)
-        daily_df = await atr.extend(symbol, daily_df)
-        daily_df = await prev_close.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
         if daily_df.empty:
             return daily_df
 
-        df = await get_df_with_atr(symbol, start, end, freq)
-
-        df.loc[:, "date"] = df.index.date  # type: ignore
-        df = df[df.loc[:, "date"] >= start]
-
+        atr_iday = ATRIndicator(period=140, freq="1d")
+        cum_high = PremarketCumulativeIndicator(C.HIGH, CumOp.MAX)
+        df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            freq,
+            [atr_iday, cum_high],
+        )
         df = df.loc[df.index.time <= self._end_time]  # type: ignore
-        df = df.loc[df.index.time >= self._start_time]  # type: ignore
         if df.empty:
             return df
 
+        df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
                 adv.column_name(),
@@ -150,14 +155,10 @@ class ATRGapUpScanner:
         if df.empty:
             return df
 
-        cum_high = PremarketCumulativeIndicator(C.HIGH, CumOp.MAX)
-        df = await cum_high.extend(symbol, df)
-
         gap_col = cum_high.column_name()
         prev_close_col = prev_close.column_name()
         atr_col = atr.column_name()
+        df["signal"] = (df[gap_col] - df[prev_close_col]) / df[atr_col]
+        df = df[df["signal"] > self._atr_multiplier]
 
-        df = df[
-            (df[gap_col] - df[prev_close_col]) > (df[atr_col] * self._atr_multiplier)
-        ]
         return df

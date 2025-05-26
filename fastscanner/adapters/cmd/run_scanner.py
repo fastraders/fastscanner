@@ -14,6 +14,7 @@ from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.adapters.holiday.exchange_calendars import (
     ExchangeCalendarsPublicHolidaysStore,
 )
+from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.lib import Indicator
@@ -27,6 +28,7 @@ from fastscanner.services.indicators.lib.fundamental import (
     DaysFromEarningsIndicator,
     DaysToEarningsIndicator,
 )
+from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import ATRParabolicDownScanner
@@ -76,7 +78,7 @@ async def _add_report_indicators(
             continue
         df = await i.extend(symbol, df)
 
-    return df
+    return df.round(4)
 
 
 async def _run_async(
@@ -98,7 +100,10 @@ async def _run_async(
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,
     )
+    indicator_service = IndicatorsService(candles, fundamentals, VoidChannel())
+
     ApplicationRegistry.init(candles, fundamentals, holidays)
+    ApplicationRegistry.set_indicators(indicator_service)
 
     result: pd.DataFrame | None = None
     logger.info(f"Running scanner for {len(symbols)} symbols")
@@ -185,7 +190,11 @@ async def run_scanner():
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with multiprocessing.Pool(n_workers) as pool:
         results = pool.map(_run_worker, batches)
-        df = pd.concat([r for r in results if r is not None and not r.empty])
+        dfs = [r for r in results if r is not None and not r.empty]
+        if len(dfs) == 0:
+            logger.warning("The scanner returned zero results.")
+            return
+        df = pd.concat(dfs)
     df.to_csv(path)
 
 

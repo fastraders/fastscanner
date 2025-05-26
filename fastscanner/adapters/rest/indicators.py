@@ -52,7 +52,7 @@ async def calculate(
 
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        df = await service.calculate(
+        df = await service.calculate_from_params(
             ic.symbol,
             ic.start,
             ic.end,

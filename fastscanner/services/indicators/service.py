@@ -41,7 +41,7 @@ class IndicatorsService:
         self.fundamentals = fundamentals
         self.channel = channel
 
-    async def calculate(
+    async def calculate_from_params(
         self,
         symbol: str,
         start: date,
@@ -52,14 +52,24 @@ class IndicatorsService:
         ind_instances = [
             IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
         ]
-        days = max(i.lookback_days() for i in ind_instances)
+        return await self.calculate(symbol, start, end, freq, ind_instances)
+
+    async def calculate(
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        freq: str,
+        indicators: list[Indicator],
+    ) -> pd.DataFrame:
+        days = max(ind.lookback_days() for ind in indicators)
         lagged_start = lookback_days(start, days)
 
         df = await self.candles.get(symbol, lagged_start, end, freq)
         if df.empty:
             return df
 
-        for indicator in ind_instances:
+        for indicator in indicators:
             df = await indicator.extend(symbol, df)
         return df.loc[df.index.date >= start]  # type: ignore
 

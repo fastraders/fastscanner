@@ -47,7 +47,7 @@ class EODHDFundamentalStore:
     async def _fetch_fundamentals(self, symbol: str) -> Dict:
         url = f"{self._base_url}/fundamentals/{symbol}"
         params = {
-            "filter": "General::Code,General,Earnings,SharesStats",
+            "filter": "General::Code,General,Earnings,SharesStats,Technicals",
             "api_token": self._api_key,
             "fmt": "json",
         }
