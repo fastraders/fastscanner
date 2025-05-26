@@ -12,7 +12,7 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
-from fastscanner.services.indicators.utils import lookback_days
+from fastscanner.services.indicators.utils import get_df_with_atr, lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
 
@@ -53,10 +53,7 @@ class ATRGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        start_atr = lookback_days(start, atr_iday.lookback_days())
-        df = await ApplicationRegistry.candles.get(symbol, start_atr, end, freq)
-        df = await atr_iday.extend(symbol, df)
+        df = await get_df_with_atr(symbol, start, end, freq)
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df[df.loc[:, "date"] >= start]
 
@@ -129,10 +126,8 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        start_atr = lookback_days(start, atr_iday.lookback_days())
-        df = await ApplicationRegistry.candles.get(symbol, start_atr, end, freq)
-        df = await atr_iday.extend(symbol, df)
+        df = await get_df_with_atr(symbol, start, end, freq)
+
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df[df.loc[:, "date"] >= start]
 
