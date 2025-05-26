@@ -14,7 +14,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
-from fastscanner.services.indicators.utils import lookback_days
+from fastscanner.services.indicators.utils import get_df_with_atr, lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
 
@@ -52,10 +52,7 @@ class ATRParabolicDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        start_atr = lookback_days(start, atr_iday.lookback_days())
-        df = await ApplicationRegistry.candles.get(symbol, start_atr, end, freq)
-        df = await atr_iday.extend(symbol, df)
+        df = await get_df_with_atr(symbol, start, end, freq)
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df[df.loc[:, "date"] >= start]
 
@@ -87,23 +84,26 @@ class ATRParabolicUpScanner:
         min_adr: float,
         atr_multiplier: float,
         min_volume: float,
+        end_time: time,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
+        self._end_time = end_time
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
-        atr = ATRIndicator(period=14, freq=freq)
+        atr = DailyATRIndicator(period=14)
 
         daily_df = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
         if daily_df.empty:
             return daily_df
 
+        daily_df = await atr.extend(symbol, daily_df)
         daily_df = await adv.extend(symbol, daily_df)
         daily_df = await adr.extend(symbol, daily_df)
 
@@ -112,34 +112,33 @@ class ATRParabolicUpScanner:
         if daily_df.empty:
             return daily_df
 
-        df = await ApplicationRegistry.candles.get(symbol, start, end, freq)
-        df = df.loc[df.index.time <= time(9, 30)]  # type: ignore
+        df = await get_df_with_atr(symbol, start, end, freq)
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df[df.loc[:, "date"] >= start]
+
+        df = df.loc[df.index.time <= self._end_time]  # type: ignore
         if df.empty:
             return df
 
-        df["date"] = df.index.date
-        daily_df = daily_df.set_index(daily_df.index.date)[[adv.column_name(), adr.column_name()]]  # type: ignore
+        daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
+            [adv.column_name(), adr.column_name(), atr.column_name()]  
+        ]
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
 
         if df.empty:
             return df
 
-        df = await atr.extend(symbol, df)
-
         cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         df = await cum_high.extend(symbol, df)
+
         cum_volume = CumulativeDailyVolumeIndicator()
         df = await cum_volume.extend(symbol, df)
 
-        df = df[
-            (df[C.CLOSE] - df[C.OPEN]) > df[atr.column_name()] * self._atr_multiplier
-        ]
-
-        df = df[df[C.CLOSE] > df[C.OPEN]]
-
+        # Logic: parabolic up condition
+        atr_col = ATRIndicator(period=140, freq=freq).column_name()
+        df = df[(df[C.CLOSE] - df[C.OPEN]) > df[atr_col] * self._atr_multiplier]
         df = df[df[cum_volume.column_name()] >= self._min_volume]
-
         df = df[(df[cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         return df
