@@ -85,31 +85,23 @@ async def collect_data_for_symbol(
 
     _, unit = split_freq(freq)
 
-    # Adjust date parsing based on the unit
-    if unit in ("min", "t"):
-        partition_key_dt = datetime.strptime(partition_key, "%Y-%m-%d").date()
-    elif unit == "h":
-        partition_key_dt = datetime.strptime(partition_key, "%Y-%m").date()
-    elif unit == "d":
-        partition_key_dt = date(int(partition_key), 1, 1)
-    else:
-        raise ValueError(f"Invalid unit: {unit}")
-
-    if partition_key_dt >= end_date:
-        return False
-
+    partitioned_provider = PartitionedCSVCandlesProvider(provider)
     try:
+        start_date, _ = partitioned_provider._range_from_key(partition_key, unit)
+
+        if start_date >= end_date:
+            return False
+
         df = await provider.get(
-            symbol=symbol, start=partition_key_dt, end=end_date, freq=freq
+            symbol=symbol, start=start_date, end=end_date, freq=freq
         )
 
         if df.empty:
             return False
 
-        partitioned_provider = PartitionedCSVCandlesProvider(provider)
         partitioned_provider._save_cache(symbol, partition_key, freq, df)
-
         return True
+
     except Exception as e:
         logger.error(f"Error collecting data for {symbol} {freq} {partition_key}: {e}")
         return False
@@ -127,7 +119,7 @@ async def collect_daily_data() -> None:
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     symbols = await provider.all_symbols()
-    symbols = ["MSFT"]
+    #symbols=["MSFT"]
     unit_freqs = {
         "min": ["1min", "2min", "3min", "5min", "10min", "15min"],
         "h": ["1h"],
