@@ -17,11 +17,17 @@ async def collect_daily_data() -> None:
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     symbols = await provider.all_symbols()
-    for symbol in symbols:
 
-        data_collected = await partitioned_provider.collect_expired_data(symbol, today)
+    tasks = [
+        partitioned_provider.collect_expired_data(symbol, today) for symbol in symbols
+    ]
+
+    results = await asyncio.gather(*tasks)
+
+    for symbol, data_collected in zip(symbols, results):
         if data_collected:
             logger.info(f"Data collection completed for {symbol}")
+
     logger.info("Data collection completed for all symbols")
 
 
