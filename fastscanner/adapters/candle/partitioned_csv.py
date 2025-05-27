@@ -243,3 +243,52 @@ class PartitionedCSVCandlesProvider:
                 }
         except FileNotFoundError:
             self._expirations[symbol] = {}
+
+    async def collect_expired_data(self, symbol: str, today: date) -> bool:
+        self._load_expirations(symbol)
+        expirations = self._expirations.get(symbol, {})
+        grouped_by_unit: dict[str, list[str]] = {}
+
+        for exp_key, exp_date in expirations.items():
+            if exp_date >= today:
+                continue
+            try:
+                partition_key, unit = exp_key.rsplit("_", 1)
+            except ValueError:
+                continue
+            grouped_by_unit.setdefault(unit, []).append(partition_key)
+
+        any_data_collected = False
+
+        for unit, partition_keys in grouped_by_unit.items():
+            updated_keys: set[str] = set()
+
+            for freq in [f for f in self._cache_freqs if split_freq(f)[1] == unit]:
+                for partition_key in partition_keys:
+                    try:
+                        start_date, _ = self._range_from_key(partition_key, unit)
+                        if start_date >= today:
+                            continue
+
+                        df = await self._store.get(symbol, start_date, today, freq)
+                        if df.empty:
+                            continue
+
+                        self._save_cache(symbol, partition_key, freq, df)
+                        updated_keys.add(f"{partition_key}_{unit}")
+                    except Exception as e:
+                        logger.error(
+                            f"Error collecting {symbol} {freq} {partition_key}: {e}"
+                        )
+
+            if updated_keys:
+                for key in updated_keys:
+                    expirations[key] = today
+                expiration_path = os.path.join(
+                    self.CACHE_DIR, symbol, "expirations.json"
+                )
+                with open(expiration_path, "w") as f:
+                    json.dump({k: v.isoformat() for k, v in expirations.items()}, f)
+                any_data_collected = True
+
+        return any_data_collected
