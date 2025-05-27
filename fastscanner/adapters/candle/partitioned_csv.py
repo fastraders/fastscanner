@@ -10,6 +10,7 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
+from fastscanner.services.indicators.clock import ClockRegistry
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 logger = logging.getLogger(__name__)
@@ -211,7 +212,9 @@ class PartitionedCSVCandlesProvider:
         self._load_expirations(symbol)
 
         _, end = self._range_from_key(key, unit)
-        today = datetime.now(zoneinfo.ZoneInfo(self.tz)).date()
+        today = datetime.now(
+            zoneinfo.ZoneInfo(self.tz)
+        ).date()  # Need to Do clock registry here
         expiration_key = self._expiration_key(key, unit)
         expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:
@@ -244,51 +247,31 @@ class PartitionedCSVCandlesProvider:
         except FileNotFoundError:
             self._expirations[symbol] = {}
 
-    async def collect_expired_data(self, symbol: str, today: date) -> bool:
+    async def collect_expired_data(self, symbol: str) -> None:
+        yesterday = ClockRegistry.clock.now().date() - timedelta(days=1)
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
-        grouped_by_unit: dict[str, list[str]] = {}
-
+        grouped_by_unit: dict[str, str] = {}
+        # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
+        all_units = set()
+        for freq in self._cache_freqs:
+            _, unit = split_freq(freq)
+            all_units.add(unit)
         for exp_key, exp_date in expirations.items():
-            if exp_date >= today:
+            if exp_date > yesterday:
                 continue
-            try:
-                partition_key, unit = exp_key.rsplit("_", 1)
-            except ValueError:
-                continue
-            grouped_by_unit.setdefault(unit, []).append(partition_key)
+            partition_key, unit = exp_key.rsplit("_", 1)
+            grouped_by_unit[unit] = partition_key
 
-        any_data_collected = False
+        for unit in all_units:
+            if unit not in grouped_by_unit:
+                partition_key = self._partition_key(yesterday, unit)  # type: ignore
+                grouped_by_unit[unit] = partition_key
 
-        for unit, partition_keys in grouped_by_unit.items():
-            updated_keys: set[str] = set()
-
-            for freq in [f for f in self._cache_freqs if split_freq(f)[1] == unit]:
-                for partition_key in partition_keys:
-                    try:
-                        start_date, _ = self._range_from_key(partition_key, unit)
-                        if start_date >= today:
-                            continue
-
-                        df = await self._store.get(symbol, start_date, today, freq)
-                        if df.empty:
-                            continue
-
-                        self._save_cache(symbol, partition_key, freq, df)
-                        updated_keys.add(f"{partition_key}_{unit}")
-                    except Exception as e:
-                        logger.error(
-                            f"Error collecting {symbol} {freq} {partition_key}: {e}"
-                        )
-
-            if updated_keys:
-                for key in updated_keys:
-                    expirations[key] = today
-                expiration_path = os.path.join(
-                    self.CACHE_DIR, symbol, "expirations.json"
-                )
-                with open(expiration_path, "w") as f:
-                    json.dump({k: v.isoformat() for k, v in expirations.items()}, f)
-                any_data_collected = True
-
-        return any_data_collected
+        for unit, partition_key in grouped_by_unit.items():
+            freqs = [f for f in self._cache_freqs if split_freq(f)[1] == unit]
+            for freq in freqs:
+                start_date, _ = self._range_from_key(partition_key, unit)
+                df = await self.get(symbol, start_date, yesterday, freq)
+                if df.empty:
+                    continue

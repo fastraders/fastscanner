@@ -5,29 +5,26 @@ from datetime import date, timedelta
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
+from fastscanner.services.indicators.clock import ClockRegistry, LocalClock
 
 logger = logging.getLogger(__name__)
 
 
 async def collect_daily_data() -> None:
-    today = date.today()
+    ClockRegistry.set(LocalClock())
     provider = PolygonCandlesProvider(
-        base_url=config.POLYGON_BASE_URL, api_key=config.POLYGON_API_KEY
+        base_url=config.POLYGON_BASE_URL,
+        api_key=config.POLYGON_API_KEY,
+        max_requests_per_sec=20,
+        max_concurrent_requests=20,
     )
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     symbols = await provider.all_symbols()
+    symbols = ["GOOG"]
+    tasks = [partitioned_provider.collect_expired_data(symbol) for symbol in symbols]
 
-    tasks = [
-        partitioned_provider.collect_expired_data(symbol, today) for symbol in symbols
-    ]
-
-    results = await asyncio.gather(*tasks)
-
-    for symbol, data_collected in zip(symbols, results):
-        if data_collected:
-            logger.info(f"Data collection completed for {symbol}")
-
+    await asyncio.gather(*tasks)
     logger.info("Data collection completed for all symbols")
 
 
