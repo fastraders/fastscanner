@@ -17,7 +17,6 @@ async def collect_daily_data() -> None:
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     symbols = await provider.all_symbols()
-    symbols = ["AAPL"]
     for symbol in symbols:
 
         data_collected = await partitioned_provider.collect_expired_data(symbol, today)
