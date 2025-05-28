@@ -46,7 +46,7 @@ async def run():
 
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
-    freq = "5min"
+    freq = "1d"
     symbols = await polygon.all_symbols()
     symbols = symbols[:1000]
     result: pd.DataFrame | None = None
