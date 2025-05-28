@@ -161,10 +161,10 @@ def _next_scan_path(name: str, start_date: date, end_date: date, freq: str):
 async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = (await polygon.all_symbols())[:1000]
+    all_symbols = await polygon.all_symbols()  # [:1000]
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
-    freq = "5min"
+    freq = "1min"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.1,
@@ -173,11 +173,11 @@ async def run_scanner():
     #     end_time=time(9, 25),
     # )
     scanner = ATRParabolicDownScanner(
-        min_adv=1_000_000,
-        min_adr=0.1,
+        min_adv=2_000_000,
+        min_adr=0.03,
         atr_multiplier=0.5,
-        min_volume=1_000_000,
-        end_time=time(11, 0),
+        min_volume=250_000,
+        end_time=time(10, 0),
     )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1
