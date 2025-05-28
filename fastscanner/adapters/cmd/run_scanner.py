@@ -45,7 +45,6 @@ async def _add_report_indicators(
 ) -> pd.DataFrame:
     fundamental_data = await ApplicationRegistry.fundamentals.get(symbol)
     df.loc[:, "symbol"] = symbol
-    df.loc[:, "date"] = df.index.date  # type: ignore
     df.loc[:, "scan_time"] = df.index + pd.Timedelta(freq)  # type: ignore
     df.loc[:, "type"] = fundamental_data.type
     df.loc[:, "exchange"] = fundamental_data.exchange
@@ -54,6 +53,7 @@ async def _add_report_indicators(
     df.loc[:, "industry"] = fundamental_data.gic_industry
     df.loc[:, "sector"] = fundamental_data.gic_sector
     market_cap = fundamental_data.historical_market_cap.rename("market_cap")
+    df.loc[:, "date"] = df.index.date  # type: ignore
     dates = list(set(df.loc[:, "date"].unique()).union(market_cap.index))  # type: ignore
     market_cap = market_cap.reindex(dates).sort_index().ffill()
     df = df.join(market_cap, on="date", how="left")
@@ -77,6 +77,7 @@ async def _add_report_indicators(
         if i.column_name() in df.columns:
             continue
         df = await i.extend(symbol, df)
+    df.loc[:, "date"] = df.index.date  # type: ignore
 
     return df.round(4)
 

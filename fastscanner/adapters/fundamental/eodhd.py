@@ -38,6 +38,10 @@ class EODHDFundamentalStore:
                 if e.response.status_code == 404:
                     logger.warning(f"Symbol {symbol} not found in EODHD")
                     raise NotFound(f"Symbol {symbol} not found in EODHD") from e
+                logger.error(
+                    f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
+                )
+                raise e
 
         fd = self._parse_data(fundamentals, market_cap)
         self._store(symbol, fd)
