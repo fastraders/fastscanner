@@ -163,7 +163,7 @@ class DailyATRParabolicUpScanner:
         self._atr_multiplier = atr_multiplier
 
     async def scan(
-        self, symbol: str, start: date, end: date, freq: str
+        self, symbol: str, start: date, end: date , freq: str
     ) -> pd.DataFrame:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
@@ -175,7 +175,7 @@ class DailyATRParabolicUpScanner:
             symbol,
             start,
             end,
-            "1d",
+            freq,
             [adv, adr, daily_atr, prev_close, prev_open],
         )
         if daily_df.empty:
@@ -186,13 +186,9 @@ class DailyATRParabolicUpScanner:
         if daily_df.empty:
             return daily_df
 
-        daily_df["gap"] = (
-            daily_df[prev_close.column_name()] - daily_df[prev_open.column_name()]
-        )
+        daily_df["gap"] = daily_df[prev_close.column_name()] - daily_df[prev_open.column_name()]
 
-        daily_df = daily_df[
-            daily_df["gap"] > daily_df[daily_atr.column_name()] * self._atr_multiplier
-        ]
+        daily_df = daily_df[daily_df["gap"] > daily_df[daily_atr.column_name()] * self._atr_multiplier]
         if daily_df.empty:
             return daily_df
 
