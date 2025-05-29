@@ -186,19 +186,11 @@ class DailyATRParabolicUpScanner:
         if daily_df.empty:
             return daily_df
 
-        daily_df["gap"] = (
+        daily_df["signal"] = (
             daily_df[prev_close.column_name()] - daily_df[prev_open.column_name()]
-        )
+        ) / daily_df[daily_atr.column_name()]
 
-        daily_df = daily_df[
-            daily_df["gap"] > daily_df[daily_atr.column_name()] * self._atr_multiplier
-        ]
-        if daily_df.empty:
-            return daily_df
-
-        daily_df["gap_atr_ratio"] = daily_df["gap"] / daily_df[daily_atr.column_name()]
-
-        return daily_df
+        return daily_df[daily_df["signal"] > self._atr_multiplier]
 
 
 class DailyATRParabolicDownScanner:
@@ -236,16 +228,8 @@ class DailyATRParabolicDownScanner:
         if daily_df.empty:
             return daily_df
 
-        daily_df["gap"] = (
+        daily_df["signal"] = (
             daily_df[prev_open.column_name()] - daily_df[prev_close.column_name()]
-        )
+        ) / daily_df[daily_atr.column_name()]
 
-        daily_df = daily_df[
-            daily_df["gap"] > daily_df[daily_atr.column_name()] * self._atr_multiplier
-        ]
-        if daily_df.empty:
-            return daily_df
-
-        daily_df["gap_atr_ratio"] = daily_df["gap"] / daily_df[daily_atr.column_name()]
-
-        return daily_df
+        return daily_df[daily_df["signal"] > self._atr_multiplier]
