@@ -164,7 +164,7 @@ class PartitionedCSVCandlesProvider:
     def _partition_path(self, symbol: str, key: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
 
-    def _partition_key(self, dt: datetime, unit: str) -> str:
+    def _partition_key(self, dt: date, unit: str) -> str:
         return self._partition_keys(pd.DatetimeIndex([dt]), unit)[0]
 
     def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> "pd.Series[str]":
@@ -253,25 +253,23 @@ class PartitionedCSVCandlesProvider:
         expirations = self._expirations.get(symbol, {})
         grouped_by_unit: dict[str, str] = {}
         # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
-        all_units = set()
+        unit_to_freqs: dict[str, list[str]] = {}
         for freq in self._cache_freqs:
             _, unit = split_freq(freq)
-            all_units.add(unit)
+            unit_to_freqs.setdefault(unit, []).append(freq)
         for exp_key, exp_date in expirations.items():
             if exp_date > yesterday:
                 continue
             partition_key, unit = exp_key.rsplit("_", 1)
             grouped_by_unit[unit] = partition_key
 
-        for unit in all_units:
+        for unit in unit_to_freqs.keys():
             if unit not in grouped_by_unit:
-                partition_key = self._partition_key(yesterday, unit)  # type: ignore
+                partition_key = self._partition_key(yesterday, unit)
                 grouped_by_unit[unit] = partition_key
 
         for unit, partition_key in grouped_by_unit.items():
-            freqs = [f for f in self._cache_freqs if split_freq(f)[1] == unit]
+            freqs = unit_to_freqs[unit]
             for freq in freqs:
                 start_date, _ = self._range_from_key(partition_key, unit)
                 df = await self.get(symbol, start_date, yesterday, freq)
-                if df.empty:
-                    continue

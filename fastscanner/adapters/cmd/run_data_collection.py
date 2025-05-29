@@ -21,7 +21,6 @@ async def collect_daily_data() -> None:
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     symbols = await provider.all_symbols()
-    symbols = ["GOOG"]
     tasks = [partitioned_provider.collect_expired_data(symbol) for symbol in symbols]
 
     await asyncio.gather(*tasks)
