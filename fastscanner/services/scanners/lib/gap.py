@@ -1,3 +1,4 @@
+import math
 from datetime import date, time
 
 import pandas as pd
@@ -11,6 +12,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
     PrevDayIndicator,
 )
+from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -23,12 +25,16 @@ class ATRGapDownScanner:
         atr_multiplier: float,
         start_time: time,
         end_time: time,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -37,19 +43,22 @@ class ATRGapDownScanner:
         adr = ADRIndicator(period=14)
         atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(candle_col=C.CLOSE)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr, prev_close],
+            [adv, adr, atr, prev_close, market_cap],
         )
         if daily_df.empty:
             return daily_df
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 
@@ -97,12 +106,16 @@ class ATRGapUpScanner:
         atr_multiplier: float,
         start_time: time,
         end_time: time,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -111,19 +124,22 @@ class ATRGapUpScanner:
         adr = ADRIndicator(period=14)
         atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(candle_col=C.CLOSE)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr, prev_close],
+            [adv, adr, atr, prev_close, market_cap],
         )
         if daily_df.empty:
             return daily_df
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 

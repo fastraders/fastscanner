@@ -30,6 +30,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyGapIndicator,
     PrevDayIndicator,
 )
+from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import CandleCol
 from fastscanner.services.indicators.service import (
     IndicatorParams,
@@ -37,7 +38,6 @@ from fastscanner.services.indicators.service import (
     SubscriptionHandler,
 )
 from fastscanner.services.registry import ApplicationRegistry
-from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 
 load_logging_config()
 logger = logging.getLogger(__name__)

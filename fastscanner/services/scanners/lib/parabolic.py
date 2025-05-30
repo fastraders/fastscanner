@@ -1,3 +1,4 @@
+import math
 from datetime import date, time
 
 import pandas as pd
@@ -14,6 +15,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
     PrevDayIndicator,
 )
+from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -26,12 +28,16 @@ class ATRParabolicDownScanner:
         atr_multiplier: float,
         min_volume: float,
         end_time: time,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
         self._end_time = end_time
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -39,13 +45,14 @@ class ATRParabolicDownScanner:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         atr = DailyATRIndicator(period=14)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr],
+            [adv, adr, atr, market_cap],
         )
         if daily_df.empty:
             return daily_df
@@ -53,6 +60,8 @@ class ATRParabolicDownScanner:
         # High level filtering
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 
@@ -92,12 +101,16 @@ class ATRParabolicUpScanner:
         atr_multiplier: float,
         min_volume: float,
         end_time: time,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
-        self._end_time = end_time
+        self._end_time = (end_time,)
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -105,19 +118,22 @@ class ATRParabolicUpScanner:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         atr = DailyATRIndicator(period=14)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr],
+            [adv, adr, atr, market_cap],
         )
         if daily_df.empty:
             return daily_df
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 
@@ -157,10 +173,14 @@ class DailyATRParabolicUpScanner:
         min_adv: float,
         min_adr: float,
         atr_multiplier: float,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -170,19 +190,22 @@ class DailyATRParabolicUpScanner:
         daily_atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(C.CLOSE)
         prev_open = PrevDayIndicator(C.OPEN)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, daily_atr, prev_close, prev_open],
+            [adv, adr, daily_atr, prev_close, prev_open, market_cap],
         )
         if daily_df.empty:
             return daily_df
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 
@@ -199,10 +222,14 @@ class DailyATRParabolicDownScanner:
         min_adv: float,
         min_adr: float,
         atr_multiplier: float,
+        min_market_cap: float = 0,
+        max_market_cap: float = math.inf,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
+        self.min_market_cap = (min_market_cap,)
+        self._max_market_cap = max_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -212,19 +239,22 @@ class DailyATRParabolicDownScanner:
         daily_atr = DailyATRIndicator(period=14)
         prev_close = PrevDayIndicator(C.CLOSE)
         prev_open = PrevDayIndicator(C.OPEN)
+        market_cap = MarketCapIndicator()
 
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, daily_atr, prev_close, prev_open],
+            [adv, adr, daily_atr, prev_close, prev_open, market_cap],
         )
         if daily_df.empty:
             return daily_df
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
 
