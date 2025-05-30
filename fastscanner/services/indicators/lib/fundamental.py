@@ -107,3 +107,61 @@ class DaysFromEarningsIndicator:
 
         new_row[self.column_name()] = self._last_days[symbol]
         return new_row
+
+
+class MarketCapIndicator:
+    def __init__(self) -> None:
+        self._last_date: dict[str, date] = {}
+        self._last_market_cap: dict[str, float] = {}
+
+    @classmethod
+    def type(cls):
+        return "market_cap"
+
+    def column_name(self):
+        return self.type()
+
+    def lookback_days(self) -> int:
+        return 0
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
+        assert isinstance(df.index, pd.DatetimeIndex)
+
+        historical_market_cap = fundamentals.historical_market_cap
+
+        if historical_market_cap is None or historical_market_cap.empty:
+            df[self.column_name()] = np.nan
+            return df
+
+        unique_dates = np.unique(df.index.date)
+
+        date_to_market_cap = pd.Series(
+            np.nan, index=unique_dates, dtype=float, name=self.column_name()
+        )
+
+        for date in unique_dates:
+            available_dates = historical_market_cap.index[
+                historical_market_cap.index.date <= date  # type: ignore
+            ]
+
+            if len(available_dates) > 0:
+                closest_date = available_dates[-1]
+                market_cap = historical_market_cap.loc[closest_date]
+                date_to_market_cap[date] = market_cap
+
+        df.loc[:, "date"] = df.index.date
+        df = df.join(date_to_market_cap, on="date")
+        return df.drop(columns=["date"])
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, pd.Timestamp)
+        new_date = new_row.name.date()
+
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            self._last_market_cap[symbol] = new_row[self.column_name()]
+            self._last_date[symbol] = new_date
+
+        new_row[self.column_name()] = self._last_market_cap.get(symbol, np.nan)
+        return new_row
