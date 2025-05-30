@@ -142,7 +142,7 @@ class MarketCapIndicator:
 
         for date in unique_dates:
             available_dates = historical_market_cap.index[
-                historical_market_cap.index.date <= date  # type: ignore
+                historical_market_cap.index <= date  # type: ignore
             ]
 
             if len(available_dates) > 0:

@@ -38,7 +38,7 @@ def create_fundamental_data_with_market_caps(market_caps: pd.Series) -> Fundamen
         gic_industry="Technology",
         gic_sector="Information Technology",
         historical_market_cap=market_caps,
-        earnings_dates=pd.DatetimeIndex([]), # type: ignore
+        earnings_dates=pd.DatetimeIndex([]),  # type: ignore
         insiders_ownership_perc=10.0,
         institutional_ownership_perc=70.0,
         shares_float=1000000.0,

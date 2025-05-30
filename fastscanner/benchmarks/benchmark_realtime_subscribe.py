@@ -37,6 +37,7 @@ from fastscanner.services.indicators.service import (
     SubscriptionHandler,
 )
 from fastscanner.services.registry import ApplicationRegistry
+from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ async def main():
             params={"candle_col": CandleCol.CLOSE, "op": "sum"},
         ),
         IndicatorParams(type_=PositionInRangeIndicator.type(), params={"n_days": 5}),
+        IndicatorParams(type_=MarketCapIndicator.type(), params={}),
     ]
 
     tasks = []

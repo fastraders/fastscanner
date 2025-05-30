@@ -16,7 +16,11 @@ from .daily import (
     DailyGapIndicator,
     PrevDayIndicator,
 )
-from .fundamental import DaysFromEarningsIndicator, DaysToEarningsIndicator
+from .fundamental import (
+    DaysFromEarningsIndicator,
+    DaysToEarningsIndicator,
+    MarketCapIndicator,
+)
 
 _indicators: list[type["Indicator"]] = [
     CumulativeDailyVolumeIndicator,
@@ -29,6 +33,7 @@ _indicators: list[type["Indicator"]] = [
     DaysToEarningsIndicator,
     DailyATRIndicator,
     DailyATRGapIndicator,
+    MarketCapIndicator,
 ]
 
 
