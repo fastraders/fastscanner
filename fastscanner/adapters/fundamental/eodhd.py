@@ -37,7 +37,7 @@ class EODHDFundamentalStore:
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
                     logger.warning(f"Symbol {symbol} not found in EODHD")
-                    raise NotFound(f"Symbol {symbol} not found in EODHD") from e
+                    return self._empty_data()
                 logger.error(
                     f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
                 )
@@ -196,3 +196,19 @@ class EODHDFundamentalStore:
         path = self._get_cache_path(symbol)
         with open(path, "w") as f:
             json.dump({}, f, indent=2)
+
+    def _empty_data(self) -> FundamentalData:
+        return FundamentalData(
+            type="",
+            exchange="",
+            country="",
+            city="",
+            gic_industry="",
+            gic_sector="",
+            historical_market_cap=pd.Series(dtype=float),
+            earnings_dates=pd.DatetimeIndex([], name="report_date"),  # type: ignore
+            insiders_ownership_perc=None,
+            institutional_ownership_perc=None,
+            shares_float=None,
+            beta=None,
+        )

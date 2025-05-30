@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import time as time_count
 from datetime import date, time
 
@@ -20,6 +21,7 @@ from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpSca
 from fastscanner.services.scanners.lib.parabolic import (
     ATRParabolicDownScanner,
     ATRParabolicUpScanner,
+    DailyATRParabolicDownScanner,
     DailyATRParabolicUpScanner,
 )
 
@@ -48,12 +50,14 @@ async def run():
     end_date = date(2023, 3, 31)
     freq = "1d"
     symbols = await polygon.all_symbols()
-    symbols = symbols[:1000]
+    #symbols = symbols[:1000]
     result: pd.DataFrame | None = None
-    scanner = DailyATRParabolicUpScanner(
+    scanner = DailyATRParabolicDownScanner(
         min_adv=1_000_000,
         min_adr=0.1,
         atr_multiplier=0.5,
+        min_market_cap=1e9,  #only companies > $1B market cap
+        max_market_cap=math.inf,  # no upper limit
     )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
