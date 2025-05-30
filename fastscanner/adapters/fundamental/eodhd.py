@@ -206,7 +206,9 @@ class EODHDFundamentalStore:
             gic_industry="",
             gic_sector="",
             historical_market_cap=pd.Series(dtype=float),
-            earnings_dates=pd.DatetimeIndex([], name="report_date"),  # type: ignore
+            earnings_dates=pd.DatetimeIndex(
+                [], dtype="datetime64[ns]", name="report_date"
+            ),
             insiders_ownership_perc=None,
             institutional_ownership_perc=None,
             shares_float=None,

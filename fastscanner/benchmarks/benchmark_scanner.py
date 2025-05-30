@@ -56,7 +56,7 @@ async def run():
         min_adv=1_000_000,
         min_adr=0.1,
         atr_multiplier=0.5,
-        min_market_cap=1e9,  #only companies > $1B market cap
+        min_market_cap=1e9,  # only companies > $1B market cap
         max_market_cap=math.inf,  # no upper limit
     )
 

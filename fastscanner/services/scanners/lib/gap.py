@@ -33,7 +33,7 @@ class ATRGapDownScanner:
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
-        self.min_market_cap = min_market_cap
+        self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -57,7 +57,7 @@ class ATRGapDownScanner:
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
         daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df
@@ -114,7 +114,7 @@ class ATRGapUpScanner:
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
-        self.min_market_cap = min_market_cap
+        self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -138,7 +138,7 @@ class ATRGapUpScanner:
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self.min_market_cap]
+        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
         daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
         if daily_df.empty:
             return daily_df

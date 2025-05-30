@@ -130,10 +130,6 @@ class MarketCapIndicator:
 
         historical_market_cap = fundamentals.historical_market_cap
 
-        if historical_market_cap is None or historical_market_cap.empty:
-            df[self.column_name()] = np.nan
-            return df
-
         unique_dates = np.unique(df.index.date)
 
         date_to_market_cap = pd.Series(
@@ -141,13 +137,10 @@ class MarketCapIndicator:
         )
 
         for date in unique_dates:
-            available_dates = historical_market_cap.index[
-                historical_market_cap.index <= date  # type: ignore
-            ]
+            filtered_series = historical_market_cap[historical_market_cap.index <= date]
 
-            if len(available_dates) > 0:
-                closest_date = available_dates[-1]
-                market_cap = historical_market_cap.loc[closest_date]
+            if not filtered_series.empty:
+                market_cap = filtered_series.iloc[-1]
                 date_to_market_cap[date] = market_cap
 
         df.loc[:, "date"] = df.index.date
