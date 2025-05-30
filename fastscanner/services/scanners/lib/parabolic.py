@@ -36,7 +36,7 @@ class ATRParabolicDownScanner:
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
         self._end_time = end_time
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -109,7 +109,7 @@ class ATRParabolicUpScanner:
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
         self._end_time = (end_time,)
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -179,7 +179,7 @@ class DailyATRParabolicUpScanner:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -228,7 +228,7 @@ class DailyATRParabolicDownScanner:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(

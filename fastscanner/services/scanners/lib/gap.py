@@ -33,7 +33,7 @@ class ATRGapDownScanner:
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
@@ -114,7 +114,7 @@ class ATRGapUpScanner:
         self._atr_multiplier = atr_multiplier
         self._start_time = start_time
         self._end_time = end_time
-        self.min_market_cap = (min_market_cap,)
+        self.min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
 
     async def scan(
