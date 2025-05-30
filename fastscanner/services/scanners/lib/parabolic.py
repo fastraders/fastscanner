@@ -12,6 +12,7 @@ from fastscanner.services.indicators.lib.daily import (
     ADRIndicator,
     ADVIndicator,
     DailyATRIndicator,
+    PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
@@ -148,3 +149,87 @@ class ATRParabolicUpScanner:
         df = df[(df[cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         return df
+
+
+class DailyATRParabolicUpScanner:
+    def __init__(
+        self,
+        min_adv: float,
+        min_adr: float,
+        atr_multiplier: float,
+    ) -> None:
+        self._min_adv = min_adv
+        self._min_adr = min_adr
+        self._atr_multiplier = atr_multiplier
+
+    async def scan(
+        self, symbol: str, start: date, end: date, freq: str
+    ) -> pd.DataFrame:
+        adv = ADVIndicator(period=14)
+        adr = ADRIndicator(period=14)
+        daily_atr = DailyATRIndicator(period=14)
+        prev_close = PrevDayIndicator(C.CLOSE)
+        prev_open = PrevDayIndicator(C.OPEN)
+
+        daily_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            "1d",
+            [adv, adr, daily_atr, prev_close, prev_open],
+        )
+        if daily_df.empty:
+            return daily_df
+
+        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        if daily_df.empty:
+            return daily_df
+
+        daily_df["signal"] = (
+            daily_df[prev_close.column_name()] - daily_df[prev_open.column_name()]
+        ) / daily_df[daily_atr.column_name()]
+
+        return daily_df[daily_df["signal"] > self._atr_multiplier]
+
+
+class DailyATRParabolicDownScanner:
+    def __init__(
+        self,
+        min_adv: float,
+        min_adr: float,
+        atr_multiplier: float,
+    ) -> None:
+        self._min_adv = min_adv
+        self._min_adr = min_adr
+        self._atr_multiplier = atr_multiplier
+
+    async def scan(
+        self, symbol: str, start: date, end: date, freq: str
+    ) -> pd.DataFrame:
+        adv = ADVIndicator(period=14)
+        adr = ADRIndicator(period=14)
+        daily_atr = DailyATRIndicator(period=14)
+        prev_close = PrevDayIndicator(C.CLOSE)
+        prev_open = PrevDayIndicator(C.OPEN)
+
+        daily_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            "1d",
+            [adv, adr, daily_atr, prev_close, prev_open],
+        )
+        if daily_df.empty:
+            return daily_df
+
+        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        if daily_df.empty:
+            return daily_df
+
+        daily_df["signal"] = (
+            daily_df[prev_open.column_name()] - daily_df[prev_close.column_name()]
+        ) / daily_df[daily_atr.column_name()]
+
+        return daily_df[daily_df["signal"] > self._atr_multiplier]

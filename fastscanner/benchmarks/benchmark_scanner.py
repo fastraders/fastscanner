@@ -20,6 +20,7 @@ from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpSca
 from fastscanner.services.scanners.lib.parabolic import (
     ATRParabolicDownScanner,
     ATRParabolicUpScanner,
+    DailyATRParabolicUpScanner,
 )
 
 load_logging_config()
@@ -45,16 +46,14 @@ async def run():
 
     start_date = date(2023, 1, 1)
     end_date = date(2023, 3, 31)
-    freq = "5min"
+    freq = "1d"
     symbols = await polygon.all_symbols()
     symbols = symbols[:1000]
     result: pd.DataFrame | None = None
-    scanner = ATRParabolicUpScanner(
+    scanner = DailyATRParabolicUpScanner(
         min_adv=1_000_000,
         min_adr=0.1,
         atr_multiplier=0.5,
-        min_volume=500_000,
-        end_time=time(11, 0),
     )
 
     logger.info(f"Running scanner for {len(symbols)} symbols")
