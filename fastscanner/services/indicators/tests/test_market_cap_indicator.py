@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import FundamentalData, FundamentalDataStore
 from fastscanner.services.registry import ApplicationRegistry
@@ -54,18 +55,21 @@ async def test_market_cap_indicator_with_historical_data(fundamentals):
             "2023-01-05",
             "2023-01-10",
         ]
-    )
+    ).date
     market_caps = pd.Series([1000.0, 1100.0, 1200.0], index=dates)
 
     fundamentals.set("AAPL", create_fundamental_data_with_market_caps(market_caps))
 
     df_dates = [
-        datetime(2023, 1, 2),
-        datetime(2023, 1, 5),
-        datetime(2023, 1, 7),
-        datetime(2023, 1, 12),
+        pd.Timestamp("2023-01-02"),
+        pd.Timestamp("2023-01-05"),
+        pd.Timestamp("2023-01-07"),
+        pd.Timestamp("2023-01-12"),
     ]
-    df = pd.DataFrame({"some_col": [1, 2, 3, 4]}, index=pd.DatetimeIndex(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1, 2, 3, 4]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
     extended_df = await indicator.extend("AAPL", df)
@@ -92,7 +96,10 @@ async def test_market_cap_indicator_with_no_market_caps(fundamentals):
         datetime(2023, 2, 1),
         datetime(2023, 2, 2),
     ]
-    df = pd.DataFrame({"some_col": [1, 2]}, index=pd.DatetimeIndex(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1, 2]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
     extended_df = await indicator.extend("MSFT", df)
@@ -103,13 +110,16 @@ async def test_market_cap_indicator_with_no_market_caps(fundamentals):
 
 @pytest.mark.asyncio
 async def test_market_cap_indicator_extend_realtime(fundamentals):
-    dates = pd.to_datetime(["2023-01-01"])
+    dates = pd.to_datetime(["2023-01-01"]).date
     market_caps = pd.Series([1000.0], index=dates)
 
     fundamentals.set("GOOG", create_fundamental_data_with_market_caps(market_caps))
 
     df_dates = [datetime(2023, 1, 1, 10, 0)]
-    df = pd.DataFrame({"some_col": [1]}, index=pd.DatetimeIndex(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
 
