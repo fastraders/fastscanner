@@ -30,6 +30,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyGapIndicator,
     PrevDayIndicator,
 )
+from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import CandleCol
 from fastscanner.services.indicators.service import (
     IndicatorParams,
@@ -144,6 +145,7 @@ async def main():
             params={"candle_col": CandleCol.CLOSE, "op": "sum"},
         ),
         IndicatorParams(type_=PositionInRangeIndicator.type(), params={"n_days": 5}),
+        IndicatorParams(type_=MarketCapIndicator.type(), params={}),
     ]
 
     tasks = []
