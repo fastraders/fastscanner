@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import FundamentalData, FundamentalDataStore
 from fastscanner.services.registry import ApplicationRegistry
@@ -65,7 +66,10 @@ async def test_market_cap_indicator_with_historical_data(fundamentals):
         pd.Timestamp("2023-01-07"),
         pd.Timestamp("2023-01-12"),
     ]
-    df = pd.DataFrame({"some_col": [1, 2, 3, 4]}, index=pd.Index(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1, 2, 3, 4]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
     extended_df = await indicator.extend("AAPL", df)
@@ -92,7 +96,10 @@ async def test_market_cap_indicator_with_no_market_caps(fundamentals):
         datetime(2023, 2, 1),
         datetime(2023, 2, 2),
     ]
-    df = pd.DataFrame({"some_col": [1, 2]}, index=pd.DatetimeIndex(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1, 2]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
     extended_df = await indicator.extend("MSFT", df)
@@ -109,7 +116,10 @@ async def test_market_cap_indicator_extend_realtime(fundamentals):
     fundamentals.set("GOOG", create_fundamental_data_with_market_caps(market_caps))
 
     df_dates = [datetime(2023, 1, 1, 10, 0)]
-    df = pd.DataFrame({"some_col": [1]}, index=pd.DatetimeIndex(df_dates))
+    df = pd.DataFrame(
+        {"some_col": [1]},
+        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
+    )
 
     indicator = MarketCapIndicator()
 
