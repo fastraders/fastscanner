@@ -29,6 +29,7 @@ class ATRParabolicDownScanner:
         min_adr: float,
         atr_multiplier: float,
         min_volume: float,
+        start_time: time,
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -38,6 +39,7 @@ class ATRParabolicDownScanner:
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
+        self._start_time = start_time
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
@@ -84,7 +86,7 @@ class ATRParabolicDownScanner:
             freq,
             [atr_iday, cum_low, cum_volume],
         )
-        df = df.loc[df.index.time <= self._end_time]  # type: ignore
+        df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
 
@@ -109,6 +111,7 @@ class ATRParabolicUpScanner:
         min_adr: float,
         atr_multiplier: float,
         min_volume: float,
+        start_time: time,
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -118,6 +121,7 @@ class ATRParabolicUpScanner:
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
+        self._start_time = start_time
         self._end_time = (end_time,)
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
@@ -162,7 +166,7 @@ class ATRParabolicUpScanner:
             freq,
             [atr_iday, cum_high, cum_volume],
         )
-        df = df.loc[df.index.time <= self._end_time]  # type: ignore
+        df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
 
