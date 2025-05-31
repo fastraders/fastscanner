@@ -177,6 +177,7 @@ async def run_scanner():
         min_adr=0.03,
         atr_multiplier=0.5,
         min_volume=250_000,
+        start_time=time(9, 30),
         end_time=time(10, 0),
     )
 
