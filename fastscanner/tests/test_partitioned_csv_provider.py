@@ -247,26 +247,16 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
         }
     }
 
-    provider._cache_freqs = [
-        "1min",
-        "2min",
-        "3min",
-        "5min",
-        "10min",
-        "15min",
-        "1h",
-        "1d",
-    ]
-
     dummy_df = pd.DataFrame(
         {"OPEN": [1], "CLOSE": [2]},
-        index=pd.date_range("2023-05-22", periods=1, freq="T"),
+        index=pd.date_range("2023-05-22", periods=1, freq="T", tz=LOCAL_TIMEZONE_STR),
     )
-    provider.get = AsyncMock(return_value=dummy_df)
+    dummy_df["datetime"] = dummy_df.index
+    provider._store.get = AsyncMock(return_value=dummy_df)
 
     await provider.collect_expired_data(symbol)
 
-    calls = provider.get.call_args_list
+    calls = provider._store.get.call_args_list
 
     called_freqs = [call.args[3] for call in calls]
     called_start_dates = [call.args[1] for call in calls]
@@ -277,12 +267,12 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
 
     assert all(isinstance(sd, date) for sd in called_start_dates)
 
-    expected_call_count = sum(
-        len(freqs)
-        for freqs in {
-            "min": ["1min", "2min", "3min", "5min", "10min", "15min"],
-            "h": ["1h"],
-            "d": ["1d"],
-        }.values()
-    )
-    assert len(calls) == expected_call_count
+    expected_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
+    assert set(called_freqs) == set(expected_freqs)
+
+    for call in calls:
+        symbol_arg, start_arg, end_arg, freq_arg = call.args
+        assert symbol_arg == "AAPL"
+        assert isinstance(start_arg, date)
+        assert isinstance(end_arg, date)
+        assert freq_arg in expected_freqs
