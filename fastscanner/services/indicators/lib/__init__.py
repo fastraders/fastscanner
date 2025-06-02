@@ -7,6 +7,7 @@ import pandas as pd
 from .candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
+    DailyRollingIndicator,
     PositionInRangeIndicator,
     PremarketCumulativeIndicator,
 )
@@ -26,6 +27,7 @@ _indicators: list[type["Indicator"]] = [
     CumulativeDailyVolumeIndicator,
     PremarketCumulativeIndicator,
     PositionInRangeIndicator,
+    DailyRollingIndicator,
     ATRIndicator,
     DailyGapIndicator,
     PrevDayIndicator,

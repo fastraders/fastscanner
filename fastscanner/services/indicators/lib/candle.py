@@ -3,7 +3,7 @@ import math
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from operator import add
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -241,8 +241,8 @@ class PositionInRangeIndicator:
 
     def __init__(self, n_days: int):
         self._n_days = n_days
-        self._high_n_days: dict[str, list[float]] = {}
-        self._low_n_days: dict[str, list[float]] = {}
+        self._high_n_days = DailyRollingIndicator(n_days, "max", CandleCol.HIGH)
+        self._low_n_days = DailyRollingIndicator(n_days, "min", CandleCol.LOW)
         self._last_date: dict[str, date] = {}
 
     @classmethod
@@ -251,6 +251,69 @@ class PositionInRangeIndicator:
 
     def column_name(self):
         return f"position_in_range_{self._n_days}"
+
+    def lookback_days(self) -> int:
+        return 0
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        df = await self._high_n_days.extend(symbol, df)
+        df = await self._low_n_days.extend(symbol, df)
+
+        high_col = self._high_n_days.column_name()
+        low_col = self._low_n_days.column_name()
+
+        df[self.column_name()] = (df[CandleCol.CLOSE] - df[low_col]) / (
+            df[high_col] - df[low_col]
+        )
+
+        return df.drop(columns=[high_col, low_col])
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        new_row = await self._high_n_days.extend_realtime(symbol, new_row)
+        new_row = await self._low_n_days.extend_realtime(symbol, new_row)
+
+        high_col = self._high_n_days.column_name()
+        low_col = self._low_n_days.column_name()
+
+        try:
+            high = new_row[high_col]
+            low = new_row[low_col]
+            close = new_row[CandleCol.CLOSE]
+
+            if pd.isna(high) or pd.isna(low) or high == low:
+                new_row[self.column_name()] = pd.NA
+            else:
+                new_row[self.column_name()] = (close - low) / (high - low)
+        except KeyError:
+            new_row[self.column_name()] = pd.NA
+
+        return new_row
+
+
+class DailyRollingIndicator:
+    """
+    Computes a rolling aggregation (min, max, sum) on a specified candle column over the last n_days.
+    """
+
+    def __init__(self, n_days: int, operation: str, candle_col: str):
+        assert operation in {
+            "min",
+            "max",
+            "sum",
+        }, "Operation must be one of min, max, sum"
+        self._n_days = n_days
+        self._operation = operation
+        self._candle_col = candle_col
+
+        self._rolling_values: dict[str, list[float]] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "daily_rolling"
+
+    def column_name(self) -> str:
+        return f"{self._operation}_{self._candle_col}_{self._n_days}d"
 
     def lookback_days(self) -> int:
         return 0
@@ -273,58 +336,50 @@ class PositionInRangeIndicator:
             df[self.column_name()] = pd.NA
             return df
 
-        daily_df = (
-            daily_df[[CandleCol.HIGH, CandleCol.LOW]]
+        rolling_df = (
+            daily_df[[self._candle_col]]
             .rolling(self._n_days, min_periods=1)
-            .agg(
-                {
-                    CandleCol.HIGH: "max",
-                    CandleCol.LOW: "min",
-                }
-            )
-            .rename(
-                columns={
-                    CandleCol.HIGH: "_highest",
-                    CandleCol.LOW: "_lowest",
-                }
-            )
+            .agg(self._operation)
+            .rename(columns={self._candle_col: f"_rolling_{self._candle_col}"})
             .set_index(daily_df.index.date)  # type: ignore
         )
 
-        daily_df.loc[df.index[-1].date(), ["_highest", "_lowest"]] = pd.NA
-        daily_df = daily_df.shift(1)
+        rolling_df = rolling_df.shift(1)
 
         df.loc[:, "date"] = df.index.date  # type: ignore
-        df = df.join(daily_df, on="date")
-        df[self.column_name()] = (df[CandleCol.CLOSE] - df.loc[:, "_lowest"]) / (
-            df.loc[:, "_highest"] - df.loc[:, "_lowest"]
-        )
+        df = df.join(rolling_df, on="date")
 
-        return df.drop(columns=["date", "_lowest", "_highest"])
+        df[self.column_name()] = df[f"_rolling_{self._candle_col}"]
+
+        return df.drop(columns=["date", f"_rolling_{self._candle_col}"])
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
+
         if last_date is None or last_date != new_row.name.date():
             daily_df = await self._get_high_low_n_days(symbol, new_row.to_frame().T)
-            self._last_date[symbol] = new_row.name.date()  # type: ignore
-            self._low_n_days[symbol] = daily_df[CandleCol.LOW].to_list()[
+            self._last_date[symbol] = new_row.name.date()
+
+            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
                 -self._n_days :
             ]
-            self._high_n_days[symbol] = daily_df[CandleCol.HIGH].to_list()[
-                -self._n_days :
-            ]
-        if len(self._high_n_days.get(symbol, [])) == 0:
-            logger.debug(f"{symbol}] Insufficient high/low data for indicator")
+
+        values = self._rolling_values.get(symbol, [])
+
+        if not values:
+            logger.debug(f"{symbol}] Insufficient data for {self.column_name()}")
+            new_row[self.column_name()] = pd.NA
             return new_row
 
-        last_high = max(self._high_n_days[symbol])
-        last_low = min(self._low_n_days[symbol])
-        last_close = new_row[CandleCol.CLOSE]
-        range_val = last_high - last_low
-        if range_val == 0:
-            new_row[self.column_name()] = pd.NA
+        if self._operation == "min":
+            agg_val = min(values)
+        elif self._operation == "max":
+            agg_val = max(values)
+        elif self._operation == "sum":
+            agg_val = sum(values)
         else:
-            new_row[self.column_name()] = (last_close - last_low) / range_val
+            agg_val = pd.NA
 
+        new_row[self.column_name()] = agg_val
         return new_row
