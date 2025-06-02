@@ -77,18 +77,30 @@ class ATRParabolicDownScanner:
             return daily_df
 
         atr_iday = ATRIndicator(period=140, freq=freq)
-        cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
-        cum_volume = CumulativeDailyVolumeIndicator()
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [atr_iday, cum_low, cum_volume],
+            [atr_iday],
         )
+
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
+
         if df.empty:
             return df
+
+        cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
+        cum_volume = CumulativeDailyVolumeIndicator()
+        cum_indicators_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            freq,
+            [cum_low, cum_volume],
+        )
+
+        df = df.join(cum_indicators_df, how="left")
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[[adv.column_name(), adr.column_name(), atr.column_name()]]  # type: ignore
@@ -122,7 +134,7 @@ class ATRParabolicUpScanner:
         self._atr_multiplier = atr_multiplier
         self._min_volume = min_volume
         self._start_time = start_time
-        self._end_time = (end_time,)
+        self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
@@ -157,19 +169,27 @@ class ATRParabolicUpScanner:
             return daily_df
 
         atr_iday = ATRIndicator(period=140, freq=freq)
-        cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
-        cum_volume = CumulativeDailyVolumeIndicator()
+
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [atr_iday, cum_high, cum_volume],
+            [atr_iday],
         )
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
-
+        cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
+        cum_volume = CumulativeDailyVolumeIndicator()
+        cum_indicators_df = await ApplicationRegistry.indicators.calculate(
+            symbol,
+            start,
+            end,
+            freq,
+            [cum_high, cum_volume],
+        )
+        df = df.join(cum_indicators_df, how="left")
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [adv.column_name(), adr.column_name(), atr.column_name()]
