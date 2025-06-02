@@ -54,27 +54,38 @@ class PartitionedCSVCandlesProvider:
 
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
-    async def cache_all_freqs(
-        self, symbol: str, start: date, end: date, force: bool = False
-    ) -> bool:
-        pending_freqs: list[str] = []
+    async def cache_all_freqs(self, symbol: str, year: int) -> None:
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        minute_range = self._covering_range(start, end, "min")
+        hourly_range = self._covering_range(start, end, "h")
+        daily_range = self._covering_range(start, end, "d")
+        if self._is_all_freqs_cached(symbol, year):
+            logger.info(
+                f"Cache for {symbol} ({year}) already exists. Skipping cache creation."
+            )
+            return
+
+        minute_df = await self._store.get(
+            symbol,
+            min(minute_range[0], hourly_range[0]),
+            max(minute_range[1], hourly_range[1]),
+            "1min",
+        )
+        # Caches daily data
+        daily_df = await self._store.get(symbol, daily_range[0], daily_range[1], "1d")
+
         for freq in self._cache_freqs:
-            if self._is_cached(symbol, start, end, freq) and not force:
-                continue
-            pending_freqs.append(freq)
-
-        if not pending_freqs:
-            return False
-
-        minute_df = await self._store.get(symbol, start, end, "1min")
-        daily_df = await self._store.get(symbol, start, end, "1d")
-        for freq in pending_freqs:
             if freq == "1min":
                 df = minute_df
             elif freq == "1d":
                 df = daily_df
-            else:
+            elif freq.endswith("min") or freq.endswith("h"):
                 df = minute_df.resample(freq).agg(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
+            elif freq.endswith("d"):
+                df = daily_df.resample(freq).agg(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
+            else:
+                raise ValueError(f"Unsupported frequency: {freq}")
 
             _, unit = split_freq(freq)
             partition_keys = self._partition_keys_in_range(start, end, unit)
@@ -90,30 +101,8 @@ class PartitionedCSVCandlesProvider:
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit)
 
-        return minute_df.empty
-
-    def _is_cached(self, symbol: str, start: date, end: date, freq: str) -> bool:
-        _, unit = split_freq(freq)
-        keys = self._partition_keys_in_range(start, end, unit)
-        for key in keys:
-            partition_path = self._partition_path(symbol, key, freq)
-            if not os.path.exists(partition_path) or self._is_expired(
-                symbol, key, unit
-            ):
-                return False
-        return True
-
-    async def cache_all_freqs_empty(self, symbol: str, start: date, end: date):
-        empty_df = pd.DataFrame(
-            columns=list(CandleCol.RESAMPLE_MAP.keys()),
-            index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
-        ).tz_localize(self.tz)
-        for freq in self._cache_freqs:
-            _, unit = split_freq(freq)
-            partition_keys = self._partition_keys_in_range(start, end, unit)
-            for key in partition_keys:
-                self._save_cache(symbol, key, freq, empty_df)
-                self._mark_expiration(symbol, key, unit)
+    def _is_all_freqs_cached(self, symbol: str, year: int) -> bool:
+        return os.path.exists(self._partition_path(symbol, f"{year}", "1d"))
 
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)
@@ -165,7 +154,7 @@ class PartitionedCSVCandlesProvider:
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
 
     def _partition_key(self, dt: date, unit: str) -> str:
-        return self._partition_keys(pd.DatetimeIndex([dt]), unit)[0]
+        return self._partition_keys(pd.DatetimeIndex([dt]), unit).iat[0]
 
     def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> "pd.Series[str]":
         if unit.lower() in ("min", "t"):
@@ -182,6 +171,14 @@ class PartitionedCSVCandlesProvider:
     def _partition_keys_in_range(self, start: date, end: date, unit: str) -> list[str]:
         keys = self._partition_keys(pd.date_range(start, end, freq="1d"), unit)
         return keys.drop_duplicates().tolist()
+
+    def _covering_range(self, start: date, end: date, unit: str) -> tuple[date, date]:
+        start_key = self._partition_key(start, unit)
+        end_key = self._partition_key(end, unit)
+        return (
+            self._range_from_key(start_key, unit)[0],
+            self._range_from_key(end_key, unit)[1],
+        )
 
     def _range_from_key(self, key: str, unit: str) -> tuple[date, date]:
         if unit.lower() in ("min", "t"):

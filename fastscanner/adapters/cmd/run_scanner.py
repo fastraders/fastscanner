@@ -162,8 +162,8 @@ async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
     all_symbols = await polygon.all_symbols()  # [:1000]
-    start_date = date(2023, 1, 1)
-    end_date = date(2023, 3, 31)
+    start_date = date(2014, 1, 1)
+    end_date = date(2014, 1, 3)
     freq = "1min"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
@@ -174,11 +174,12 @@ async def run_scanner():
     # )
     scanner = ATRParabolicDownScanner(
         min_adv=2_000_000,
-        min_adr=0.03,
+        min_adr=0.005,
         atr_multiplier=0.5,
-        min_volume=250_000,
+        min_volume=50_000,
         start_time=time(9, 30),
-        end_time=time(10, 0),
+        end_time=time(15, 59),
+        include_null_market_cap=True,
     )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1

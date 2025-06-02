@@ -20,26 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
-    end_date = pd.Timestamp.now(tz=LOCAL_TIMEZONE_STR).date() - timedelta(days=1)
-    start_date = end_date - timedelta(days=365)
-    cache_empty = False
-    for _ in range(15):
-        if not cache_empty:
-            cache_empty = await candles.cache_all_freqs(symbol, start_date, end_date)
-        else:
-            await candles.cache_all_freqs_empty(symbol, start_date, end_date)
+    for year in range(2010, 2025):
+        await candles.cache_all_freqs(symbol, year)
+        logger.info(f"Collected data for {symbol} in {year}")
 
-        end_date = start_date - timedelta(days=1)
-        start_date = end_date - timedelta(days=365)
-    logger.info(f"Collected data for {symbol} from {start_date}")
+    logger.info(f"Finished data collection for {symbol}")
 
 
 async def _collect_batch(symbols: list[str]) -> None:
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
-        max_requests_per_sec=9,
-        max_concurrent_requests=5,
+        max_requests_per_sec=2,
+        max_concurrent_requests=2,
     )
     candles = PartitionedCSVCandlesProvider(polygon)
 
