@@ -19,6 +19,8 @@ from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
+from .utils import filter_by_market_cap
+
 
 class ATRParabolicDownScanner:
     def __init__(
@@ -30,6 +32,7 @@ class ATRParabolicDownScanner:
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        include_null_market_cap: bool = False,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
@@ -38,6 +41,7 @@ class ATRParabolicDownScanner:
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._include_null_market_cap = include_null_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -60,12 +64,17 @@ class ATRParabolicDownScanner:
         # High level filtering
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
-        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
+        daily_df = filter_by_market_cap(
+            daily_df,
+            self._min_market_cap,
+            self._max_market_cap,
+            self._include_null_market_cap,
+        )
+
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq="1d")
+        atr_iday = ATRIndicator(period=140, freq=freq)
         cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
         cum_volume = CumulativeDailyVolumeIndicator()
         df = await ApplicationRegistry.indicators.calculate(
@@ -103,6 +112,7 @@ class ATRParabolicUpScanner:
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        include_null_market_cap: bool = False,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
@@ -111,6 +121,7 @@ class ATRParabolicUpScanner:
         self._end_time = (end_time,)
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._include_null_market_cap = include_null_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -132,12 +143,16 @@ class ATRParabolicUpScanner:
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
-        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
+        daily_df = filter_by_market_cap(
+            daily_df,
+            self._min_market_cap,
+            self._max_market_cap,
+            self._include_null_market_cap,
+        )
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq="1d")
+        atr_iday = ATRIndicator(period=140, freq=freq)
         cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         cum_volume = CumulativeDailyVolumeIndicator()
         df = await ApplicationRegistry.indicators.calculate(
@@ -175,12 +190,14 @@ class DailyATRParabolicUpScanner:
         atr_multiplier: float,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        include_null_market_cap: bool = False,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._include_null_market_cap = include_null_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -204,8 +221,12 @@ class DailyATRParabolicUpScanner:
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
-        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
+        daily_df = filter_by_market_cap(
+            daily_df,
+            self._min_market_cap,
+            self._max_market_cap,
+            self._include_null_market_cap,
+        )
         if daily_df.empty:
             return daily_df
 
@@ -224,12 +245,14 @@ class DailyATRParabolicDownScanner:
         atr_multiplier: float,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        include_null_market_cap: bool = False,
     ) -> None:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._include_null_market_cap = include_null_market_cap
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -253,8 +276,12 @@ class DailyATRParabolicDownScanner:
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
-        daily_df = daily_df[daily_df[market_cap.column_name()] >= self._min_market_cap]
-        daily_df = daily_df[daily_df[market_cap.column_name()] <= self._max_market_cap]
+        daily_df = filter_by_market_cap(
+            daily_df,
+            self._min_market_cap,
+            self._max_market_cap,
+            self._include_null_market_cap,
+        )
         if daily_df.empty:
             return daily_df
 
