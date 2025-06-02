@@ -227,3 +227,52 @@ def test_range_from_key_hour(provider):
     start, end = provider._range_from_key("2023-01", "h")
     assert start.month == 1
     assert end.month == 1
+
+
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.candle.partitioned_csv.ClockRegistry")
+async def test_collect_expired_data_basic(mock_clock_registry, provider):
+    today = datetime(2023, 5, 30, 12, 0, 0)
+    mock_clock_registry.clock.now.return_value = today
+
+    symbol = "AAPL"
+
+    yesterday = today.date() - timedelta(days=1)
+    provider._expirations = {
+        symbol: {
+            "2023-05-22_min": yesterday - timedelta(days=5),  # expired
+            "2023-05-29_min": yesterday + timedelta(days=2),  # not expired
+            "2023-05_h": yesterday - timedelta(days=3),  # expired
+            "2023-01_d": yesterday + timedelta(days=10),  # not expired
+        }
+    }
+
+    dummy_df = pd.DataFrame(
+        {"OPEN": [1], "CLOSE": [2]},
+        index=pd.date_range("2023-05-22", periods=1, freq="T", tz=LOCAL_TIMEZONE_STR),
+    )
+    dummy_df["datetime"] = dummy_df.index
+    provider._store.get = AsyncMock(return_value=dummy_df)
+
+    await provider.collect_expired_data(symbol)
+
+    calls = provider._store.get.call_args_list
+
+    called_freqs = [call.args[3] for call in calls]
+    called_start_dates = [call.args[1] for call in calls]
+
+    assert "1min" in called_freqs
+    assert "1h" in called_freqs
+    assert "1d" in called_freqs
+
+    assert all(isinstance(sd, date) for sd in called_start_dates)
+
+    expected_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
+    assert set(called_freqs) == set(expected_freqs)
+
+    for call in calls:
+        symbol_arg, start_arg, end_arg, freq_arg = call.args
+        assert symbol_arg == "AAPL"
+        assert isinstance(start_arg, date)
+        assert isinstance(end_arg, date)
+        assert freq_arg in expected_freqs
