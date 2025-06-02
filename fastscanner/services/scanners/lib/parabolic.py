@@ -92,15 +92,8 @@ class ATRParabolicDownScanner:
 
         cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
         cum_volume = CumulativeDailyVolumeIndicator()
-        cum_indicators_df = await ApplicationRegistry.indicators.calculate(
-            symbol,
-            start,
-            end,
-            freq,
-            [cum_low, cum_volume],
-        )
-
-        df = df.join(cum_indicators_df, how="left")
+        df = await cum_low.extend(symbol, df)
+        df = await cum_volume.extend(symbol, df)
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[[adv.column_name(), adr.column_name(), atr.column_name()]]  # type: ignore
@@ -182,14 +175,8 @@ class ATRParabolicUpScanner:
             return df
         cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         cum_volume = CumulativeDailyVolumeIndicator()
-        cum_indicators_df = await ApplicationRegistry.indicators.calculate(
-            symbol,
-            start,
-            end,
-            freq,
-            [cum_high, cum_volume],
-        )
-        df = df.join(cum_indicators_df, how="left")
+        df = await cum_high.extend(symbol, df)
+        df = await cum_volume.extend(symbol, df)
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [adv.column_name(), adr.column_name(), atr.column_name()]
