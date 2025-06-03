@@ -73,6 +73,11 @@ class PolygonCandlesProvider:
                     params={"apiKey": self._api_key, "limit": 50000},
                     headers={"Accept": "text/csv"},
                 )
+                if response.status_code == 404:
+                    curr_start = curr_end + timedelta(days=1)
+                    curr_end = min(end, curr_start + timedelta(days=max_days))
+                    continue
+
                 response.raise_for_status()
             except (MaxRetryError, httpx.HTTPStatusError) as exc:
                 logger.error(f"Failed to get ticker details for {symbol}")
