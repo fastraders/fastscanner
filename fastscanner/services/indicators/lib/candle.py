@@ -344,8 +344,9 @@ class DailyRollingIndicator:
             .set_index(daily_df.index.date)  # type: ignore
         )
 
-        rolling_df = rolling_df.shift(1)
+        rolling_df.loc[df.index[-1].date(), f"_rolling_{self._candle_col}"] = pd.NA
 
+        rolling_df = rolling_df.shift(1)
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(rolling_df, on="date")
 

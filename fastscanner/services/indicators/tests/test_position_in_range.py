@@ -134,9 +134,10 @@ async def test_position_in_range_extend_realtime_first_candle(
     # Highest high = 158, Lowest low = 134
     # For close=140: (140-134)/(158-134) = 0.25
     assert abs(result_row[indicator.column_name()] - 0.25) < 1e-4
-    assert indicator._last_date["AAPL"] == row_time.date()
-    assert len(indicator._high_n_days["AAPL"]) > 0
-    assert len(indicator._low_n_days["AAPL"]) > 0
+    assert indicator._high_n_days._last_date["AAPL"] == row_time.date()
+    assert indicator._low_n_days._last_date["AAPL"] == row_time.date()
+    assert len(indicator._high_n_days._rolling_values["AAPL"]) > 0
+    assert len(indicator._low_n_days._rolling_values["AAPL"]) > 0
 
 
 @pytest.mark.asyncio
@@ -164,7 +165,7 @@ async def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreT
     # Highest high = 158, Lowest low = 134
     # For close=145: (145-134)/(158-134) = 0.4583
     assert abs(result_row[indicator.column_name()] - 0.4583) < 1e-4
-    assert indicator._last_date["AAPL"] == first_time.date()
+    assert indicator._high_n_days._last_date["AAPL"] == first_time.date()
 
 
 @pytest.mark.asyncio
@@ -184,18 +185,18 @@ async def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTe
     day1_row = pd.Series({CandleCol.CLOSE: 140}, name=day1_time)
     await indicator.extend_realtime("AAPL", day1_row)
 
-    high_day1 = indicator._high_n_days["AAPL"].copy()
-    low_day1 = indicator._low_n_days["AAPL"].copy()
+    high_day1 = indicator._high_n_days._rolling_values["AAPL"].copy()
+    low_day1 = indicator._low_n_days._rolling_values["AAPL"].copy()
 
     day2_time = datetime(2023, 1, 12, 9, 30)
     day2_row = pd.Series({CandleCol.CLOSE: 145}, name=day2_time)
     result_row = await indicator.extend_realtime("AAPL", day2_row)
 
-    assert indicator._last_date["AAPL"] == day2_time.date()
+    assert indicator._high_n_days._last_date["AAPL"] == day2_time.date()
 
     # Instead of comparing the lists directly, check that the data was updated
     # by verifying the date changed
-    assert indicator._last_date["AAPL"] != day1_time.date()
+    assert indicator._low_n_days._last_date["AAPL"] != day1_time.date()
 
 
 @pytest.mark.asyncio
@@ -241,12 +242,12 @@ async def test_position_in_range_extend_realtime_multiple_symbols(
     # For close=245: (245-234)/(258-234) = 0.4583
     assert abs(result_row[indicator.column_name()] - 0.4583) < 1e-4
 
-    assert "AAPL" in indicator._high_n_days
-    assert "MSFT" in indicator._high_n_days
-    assert "AAPL" in indicator._low_n_days
-    assert "MSFT" in indicator._low_n_days
-    assert indicator._last_date["AAPL"] == aapl_time.date()
-    assert indicator._last_date["MSFT"] == msft_time.date()
+    assert "AAPL" in indicator._high_n_days._rolling_values
+    assert "MSFT" in indicator._high_n_days._rolling_values
+    assert "AAPL" in indicator._low_n_days._rolling_values
+    assert "MSFT" in indicator._low_n_days._rolling_values
+    assert indicator._high_n_days._last_date["AAPL"] == aapl_time.date()
+    assert indicator._low_n_days._last_date["MSFT"] == msft_time.date()
 
 
 @pytest.mark.asyncio
