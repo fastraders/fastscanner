@@ -10,6 +10,7 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.http import MaxRetryError, async_retry_request
+from fastscanner.pkg.ratelimit import RateLimiter
 from fastscanner.services.exceptions import NotFound
 from fastscanner.services.indicators.ports import FundamentalData
 
@@ -19,10 +20,20 @@ logger = logging.getLogger(__name__)
 class EODHDFundamentalStore:
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "fundamentals")
 
-    def __init__(self, base_url: str, api_key: str, max_concurrent_requests: int = 50):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        max_concurrent_requests: int = 20,
+        max_requests_per_min: int = 900,
+    ):
         self._base_url = base_url
         self._api_key = api_key
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self._rate_limiter = RateLimiter(
+            max_requests=max_requests_per_min,
+            time_window=60,
+        )
 
     async def get(self, symbol: str) -> FundamentalData:
         cached = self._load_cached(symbol)
@@ -30,7 +41,7 @@ class EODHDFundamentalStore:
             return cached
 
         logger.info(f"Fetching fundamentals for {symbol} from EODHD")
-        async with self._semaphore:
+        async with self._semaphore, self._rate_limiter:
             try:
                 fundamentals = await self._fetch_fundamentals(symbol)
                 market_cap = await self._fetch_market_cap(symbol)

@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 async def run_data_collect():
     eodhd = EODHDFundamentalStore(
-        config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY, max_concurrent_requests=5
+        config.EOD_HD_BASE_URL,
+        config.EOD_HD_API_KEY,
+        max_concurrent_requests=20,
+        max_requests_per_min=900,
     )
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 

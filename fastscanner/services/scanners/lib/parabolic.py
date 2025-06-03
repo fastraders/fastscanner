@@ -104,7 +104,7 @@ class ATRParabolicDownScanner:
         df["signal"] = (df[C.OPEN] - df[C.CLOSE]) / df[atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
         df = df[df[cum_volume.column_name()] >= self._min_volume]
-        df = df[(df[cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
+        # df = df[(df[cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
 
         return df
 
@@ -188,7 +188,7 @@ class ATRParabolicUpScanner:
         df["signal"] = (df[C.CLOSE] - df[C.OPEN]) / df[atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
         df = df[df[cum_volume.column_name()] >= self._min_volume]
-        df = df[(df[cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+        # df = df[(df[cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         return df
 

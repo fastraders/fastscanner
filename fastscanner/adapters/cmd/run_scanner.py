@@ -100,6 +100,7 @@ async def _run_async(
     fundamentals = EODHDFundamentalStore(
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,
+        max_concurrent_requests=5,
     )
     indicator_service = IndicatorsService(candles, fundamentals, VoidChannel())
 
