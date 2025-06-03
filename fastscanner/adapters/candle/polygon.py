@@ -130,23 +130,16 @@ class PolygonCandlesProvider:
                 async with httpx.AsyncClient() as client:
                     return await self._fetch(client, symbol, start, end, freq)
 
-    async def all_symbols(self) -> list[str]:
+    async def _all_symbols(self, **filter) -> list[str]:
         symbols: list[str] = []
-        symbols_path = os.path.join(
-            config.DATA_BASE_DIR, "data", "polygon_symbols.json"
-        )
-
-        if os.path.exists(symbols_path):
-            with open(symbols_path, "r") as f:
-                return json.load(f)
 
         async with httpx.AsyncClient() as client:
             url = urljoin(self._base_url, "v3/reference/tickers")
             params = {
                 "apiKey": self._api_key,
                 "type": "CS",
-                "active": True,
                 "limit": 1000,
+                **filter,
             }
             while True:
                 response = await async_retry_request(
@@ -167,6 +160,21 @@ class PolygonCandlesProvider:
                     break
                 url = f'{data["next_url"]}&apiKey={self._api_key}'
                 params = None
+        return symbols
+
+    async def all_symbols(self) -> list[str]:
+        symbols: list[str] = []
+        symbols_path = os.path.join(
+            config.DATA_BASE_DIR, "data", "polygon_symbols.json"
+        )
+
+        if os.path.exists(symbols_path):
+            with open(symbols_path, "r") as f:
+                return json.load(f)
+
+        symbols = await self._all_symbols(active=True)
+        symbols.extend(await self._all_symbols(active=False))
+        symbols = sorted(set(symbols))
 
         os.makedirs(os.path.dirname(symbols_path), exist_ok=True)
         with open(symbols_path, "w") as f:
