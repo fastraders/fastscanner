@@ -55,8 +55,9 @@ class PartitionedCSVCandlesProvider:
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
     async def cache_all_freqs(self, symbol: str, year: int) -> None:
+        yday = datetime.now(zoneinfo.ZoneInfo(self.tz)).date() - timedelta(days=1)
         start = date(year, 1, 1)
-        end = date(year, 12, 31)
+        end = min(date(year, 12, 31), yday)
         minute_range = self._covering_range(start, end, "min")
         hourly_range = self._covering_range(start, end, "h")
         daily_range = self._covering_range(start, end, "d")
@@ -102,7 +103,10 @@ class PartitionedCSVCandlesProvider:
                 self._mark_expiration(symbol, key, unit)
 
     def _is_all_freqs_cached(self, symbol: str, year: int) -> bool:
-        return os.path.exists(self._partition_path(symbol, f"{year}", "1d"))
+        key = f"{year}"
+        return os.path.exists(
+            self._partition_path(symbol, key, "1d")
+        ) and not self._is_expired(symbol, key, "d")
 
     async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
         partition_path = self._partition_path(symbol, key, freq)

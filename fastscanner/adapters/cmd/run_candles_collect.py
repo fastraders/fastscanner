@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
-    for year in range(2010, 2025):
+    for year in range(2010, 2026):
         await candles.cache_all_freqs(symbol, year)
         logger.info(f"Collected data for {symbol} in {year}")
 
