@@ -32,6 +32,7 @@ from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import ATRParabolicDownScanner
+from fastscanner.services.scanners.lib.range_gap import HighRangeGapUpScanner
 from fastscanner.services.scanners.ports import Scanner
 
 load_logging_config()
@@ -162,9 +163,9 @@ def _next_scan_path(name: str, start_date: date, end_date: date, freq: str):
 async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = await polygon.all_symbols()  # [:1000]
-    start_date = date(2014, 1, 1)
-    end_date = date(2014, 1, 3)
+    all_symbols = (await polygon.all_symbols())[:100]  # [:1000]
+    start_date = date(2020, 1, 1)
+    end_date = date(2020, 3, 31)
     freq = "1min"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
@@ -173,13 +174,22 @@ async def run_scanner():
     #     start_time=time(9, 20),
     #     end_time=time(9, 25),
     # )
-    scanner = ATRParabolicDownScanner(
-        min_adv=2_000_000,
-        min_adr=0.005,
-        atr_multiplier=0.5,
-        min_volume=50_000,
-        start_time=time(9, 30),
-        end_time=time(15, 59),
+    # scanner = ATRParabolicDownScanner(
+    #     min_adv=2_000_000,
+    #     min_adr=0.005,
+    #     atr_multiplier=0.5,
+    #     min_volume=50_000,
+    #     start_time=time(9, 30),
+    #     end_time=time(15, 59),
+    #     include_null_market_cap=True,
+    # )
+    scanner = HighRangeGapUpScanner(
+        min_adv=1_000_000,
+        min_adr=0.0005,
+        start_time=time(9, 20),
+        end_time=time(9, 25),
+        min_cumulative_volume=50_000,
+        n_days=5,
         include_null_market_cap=True,
     )
 

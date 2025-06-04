@@ -256,7 +256,6 @@ class PositionInRangeIndicator:
         return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-
         original_columns = set(df.columns)
         df = await self._high_n_days.extend(symbol, df)
         df = await self._low_n_days.extend(symbol, df)
@@ -279,7 +278,6 @@ class PositionInRangeIndicator:
         return df
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-
         original_columns = set(new_row.index)
         new_row = await self._high_n_days.extend_realtime(symbol, new_row)
         new_row = await self._low_n_days.extend_realtime(symbol, new_row)
@@ -296,9 +294,7 @@ class PositionInRangeIndicator:
             new_row[self.column_name()] = (close - low) / (high - low)
 
         columns_to_drop = [
-            col
-            for col in [high_col, low_col]
-            if col in new_row.index and col not in original_columns
+            col for col in [high_col, low_col] if col not in original_columns
         ]
         new_row = new_row.drop(columns_to_drop)
 
@@ -346,6 +342,9 @@ class DailyRollingIndicator:
         return daily_df
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if self.column_name() in df.columns:
+            return df
+
         daily_df = await self._get_data_for_n_days(symbol, df)
         if daily_df.empty:
             df[self.column_name()] = pd.NA
@@ -355,19 +354,17 @@ class DailyRollingIndicator:
             daily_df[[self._candle_col]]
             .rolling(self._n_days, min_periods=1)
             .agg(self._operation)
-            .rename(columns={self._candle_col: f"_rolling_{self._candle_col}"})
+            .rename(columns={self._candle_col: self.column_name()})
             .set_index(daily_df.index.date)  # type: ignore
         )
 
-        rolling_df.loc[df.index[-1].date(), f"_rolling_{self._candle_col}"] = pd.NA
-
+        rolling_df.loc[df.index[-1].date(), self.column_name()] = pd.NA
         rolling_df = rolling_df.shift(1)
+
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(rolling_df, on="date")
 
-        df[self.column_name()] = df[f"_rolling_{self._candle_col}"]
-
-        return df.drop(columns=["date", f"_rolling_{self._candle_col}"])
+        return df.drop(columns=["date"])
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
@@ -382,7 +379,6 @@ class DailyRollingIndicator:
             ]
 
         values = self._rolling_values.get(symbol, [])
-
         if not values:
             new_row[self.column_name()] = pd.NA
             return new_row
