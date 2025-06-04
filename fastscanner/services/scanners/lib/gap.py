@@ -253,7 +253,6 @@ class HighRangeGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        cum_high = PremarketCumulativeIndicator(C.HIGH, CumOp.MAX)
         cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
 
         df = await ApplicationRegistry.indicators.calculate(
@@ -261,7 +260,7 @@ class HighRangeGapUpScanner:
             start,
             end,
             freq,
-            [cum_high, cum_volume],
+            [cum_volume],
         )
 
         if df.empty:
@@ -353,7 +352,6 @@ class LowRangeGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
         cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
 
         df = await ApplicationRegistry.indicators.calculate(
@@ -361,7 +359,7 @@ class LowRangeGapDownScanner:
             start,
             end,
             freq,
-            [cum_low, cum_volume],
+            [cum_volume],
         )
 
         if df.empty:

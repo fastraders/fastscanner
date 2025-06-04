@@ -256,6 +256,8 @@ class PositionInRangeIndicator:
         return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+
+        original_columns = set(df.columns)
         df = await self._high_n_days.extend(symbol, df)
         df = await self._low_n_days.extend(symbol, df)
 
@@ -266,26 +268,39 @@ class PositionInRangeIndicator:
             df[high_col] - df[low_col]
         )
 
-        return df.drop(columns=[high_col, low_col])
+        columns_to_drop = [
+            col
+            for col in [high_col, low_col]
+            if col not in original_columns and col in df.columns
+        ]
+        if columns_to_drop:
+            df = df.drop(columns=columns_to_drop)
+
+        return df
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+
+        original_columns = set(new_row.index)
         new_row = await self._high_n_days.extend_realtime(symbol, new_row)
         new_row = await self._low_n_days.extend_realtime(symbol, new_row)
 
         high_col = self._high_n_days.column_name()
         low_col = self._low_n_days.column_name()
 
-        try:
-            high = new_row[high_col]
-            low = new_row[low_col]
-            close = new_row[CandleCol.CLOSE]
-
-            if pd.isna(high) or pd.isna(low) or high == low:
-                new_row[self.column_name()] = pd.NA
-            else:
-                new_row[self.column_name()] = (close - low) / (high - low)
-        except KeyError:
+        high = new_row[high_col]
+        low = new_row[low_col]
+        close = new_row[CandleCol.CLOSE]
+        if pd.isna(high) or pd.isna(low) or high == low:
             new_row[self.column_name()] = pd.NA
+        else:
+            new_row[self.column_name()] = (close - low) / (high - low)
+
+        columns_to_drop = [
+            col
+            for col in [high_col, low_col]
+            if col in new_row.index and col not in original_columns
+        ]
+        new_row = new_row.drop(columns_to_drop)
 
         return new_row
 
@@ -318,7 +333,7 @@ class DailyRollingIndicator:
     def lookback_days(self) -> int:
         return 0
 
-    async def _get_high_low_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+    async def _get_data_for_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._n_days)
         end_date = df.index[-1].date() - timedelta(days=1)
         daily_df = await ApplicationRegistry.candles.get(
@@ -331,7 +346,7 @@ class DailyRollingIndicator:
         return daily_df
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        daily_df = await self._get_high_low_n_days(symbol, df)
+        daily_df = await self._get_data_for_n_days(symbol, df)
         if daily_df.empty:
             df[self.column_name()] = pd.NA
             return df
@@ -359,7 +374,7 @@ class DailyRollingIndicator:
         last_date = self._last_date.get(symbol)
 
         if last_date is None or last_date != new_row.name.date():
-            daily_df = await self._get_high_low_n_days(symbol, new_row.to_frame().T)
+            daily_df = await self._get_data_for_n_days(symbol, new_row.to_frame().T)
             self._last_date[symbol] = new_row.name.date()
 
             self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
@@ -369,7 +384,6 @@ class DailyRollingIndicator:
         values = self._rolling_values.get(symbol, [])
 
         if not values:
-            logger.debug(f"{symbol}] Insufficient data for {self.column_name()}")
             new_row[self.column_name()] = pd.NA
             return new_row
 
