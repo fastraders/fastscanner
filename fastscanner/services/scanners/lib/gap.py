@@ -74,7 +74,7 @@ class ATRGapDownScanner:
             daily_df[self._adv_indicator.column_name()] >= self._min_adv
         ]
         daily_df = daily_df[
-            daily_df[self._adv_indicator.column_name()] >= self._min_adr
+            daily_df[self._adr_indicator.column_name()] >= self._min_adr
         ]
         daily_df = filter_by_market_cap(
             daily_df,
