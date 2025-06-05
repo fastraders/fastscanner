@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class EODHDFundamentalStore:
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "fundamentals")
+    RAW_CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "fundamentals_raw")
 
     def __init__(
         self,
@@ -40,22 +41,28 @@ class EODHDFundamentalStore:
         if cached:
             return cached
 
+        return await self._fetch(symbol)
+
+    async def _fetch(self, symbol: str) -> FundamentalData:
         logger.info(f"Fetching fundamentals for {symbol} from EODHD")
+        fundamentals = {}
+        market_cap = {}
         async with self._semaphore, self._rate_limiter:
             try:
                 fundamentals = await self._fetch_fundamentals(symbol)
                 market_cap = await self._fetch_market_cap(symbol)
+                fd = self._parse_data(fundamentals, market_cap)
             except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    logger.warning(f"Symbol {symbol} not found in EODHD")
-                    return self._empty_data()
-                logger.error(
-                    f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
-                )
-                raise e
+                if e.response.status_code != 404:
+                    logger.error(
+                        f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
+                    )
+                    raise e
+                logger.warning(f"Symbol {symbol} not found in EODHD")
+                fd = self._empty_data()
 
-        fd = self._parse_data(fundamentals, market_cap)
         self._store(symbol, fd)
+        self._store_raw(symbol, fundamentals, market_cap)
         logger.info(f"Stored fundamental data for {symbol}")
         return fd
 
@@ -83,7 +90,15 @@ class EODHDFundamentalStore:
     def _load_cached(self, symbol: str) -> FundamentalData | None:
         path = self._get_cache_path(symbol)
         if not os.path.exists(path):
-            return None
+            raw_data = self._load_raw_cached(symbol)
+            if raw_data is None:
+                return None
+
+            fundamentals = raw_data.get("fundamentals", {})
+            market_cap = raw_data.get("market_cap", {})
+            fd = self._parse_data(fundamentals, market_cap)
+            self._store(symbol, fd)
+
         try:
             with open(path, "r") as f:
                 data = json.load(f)
@@ -116,20 +131,20 @@ class EODHDFundamentalStore:
             beta=data["beta"],
         )
 
-    async def reload(self, symbol: str) -> FundamentalData:
-        logger.info(f"Forcing reload of fundamentals for: {symbol}")
+    def _load_raw_cached(self, symbol: str) -> dict | None:
+        path = self._get_raw_cache_path(symbol)
+        if not os.path.exists(path):
+            return None
 
-        fundamentals = await self._fetch_fundamentals(symbol)
-        market_cap = await self._fetch_market_cap(symbol)
-
-        fd = self._parse_data(fundamentals, market_cap)
         try:
-            self._store(symbol, fd)
-            logger.info(f"Reloaded and stored fundamental data for {symbol}")
-        except Exception as e:
-            logger.error(f"Failed to reload and store {symbol}: {e}")
-            raise
-        return fd
+            with open(path, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Raw cache for {symbol} is corrupted (JSON error): {e}")
+            return None
+
+    async def reload(self, symbol: str) -> FundamentalData:
+        return await self._fetch(symbol)
 
     def _parse_data(self, fundamentals: dict, market_cap: dict) -> FundamentalData:
         fundamentals = {
@@ -172,7 +187,7 @@ class EODHDFundamentalStore:
         return FundamentalData(
             type=general.get("Type", ""),
             exchange=general.get("Exchange", ""),
-            country=general.get("CountryName", ""),
+            country=address_data.get("Country", ""),
             city=address_data.get("City", ""),
             gic_industry=general.get("GicIndustry", ""),
             gic_sector=general.get("GicSector", ""),
@@ -186,6 +201,9 @@ class EODHDFundamentalStore:
 
     def _get_cache_path(self, symbol: str) -> str:
         return os.path.join(self.CACHE_DIR, f"{symbol}.json")
+
+    def _get_raw_cache_path(self, symbol: str) -> str:
+        return os.path.join(self.RAW_CACHE_DIR, f"{symbol}.json")
 
     def _store(self, symbol: str, data: FundamentalData) -> None:
         os.makedirs(self.CACHE_DIR, exist_ok=True)
@@ -201,6 +219,16 @@ class EODHDFundamentalStore:
 
         with open(path, "w") as f:
             json.dump(data_dict, f, indent=2)
+
+    def _store_raw(self, symbol: str, fundamental: dict, market_cap: dict) -> None:
+        data = {
+            "fundamentals": fundamental,
+            "market_cap": market_cap,
+        }
+        os.makedirs(self.RAW_CACHE_DIR, exist_ok=True)
+        path = self._get_raw_cache_path(symbol)
+        with open(path, "w") as f:
+            json.dump(data, f)
 
     def _store_empty(self, symbol: str) -> None:
         os.makedirs(self.CACHE_DIR, exist_ok=True)

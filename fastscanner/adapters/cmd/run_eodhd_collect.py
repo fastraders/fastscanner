@@ -15,8 +15,8 @@ async def run_data_collect():
     eodhd = EODHDFundamentalStore(
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,
-        max_concurrent_requests=20,
-        max_requests_per_min=900,
+        max_concurrent_requests=10,
+        max_requests_per_min=800,
     )
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
