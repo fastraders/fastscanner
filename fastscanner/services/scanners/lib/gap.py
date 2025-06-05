@@ -48,6 +48,7 @@ class ATRGapDownScanner:
         self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
+        self._atr_cache = {}
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -79,7 +80,8 @@ class ATRGapDownScanner:
         )
         if daily_df.empty:
             return daily_df
-        atr_iday = self._atr.setdefault(freq, ATRIndicator(period=140, freq=freq))  # type: ignore
+        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        self._atr_cache[freq] = atr_iday
         cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
@@ -122,7 +124,8 @@ class ATRGapDownScanner:
         and returns whether it passes the filter criteria.
         """
 
-        atr_iday = self._atr.setdefault(freq, ATRIndicator(period=140, freq=freq))  # type: ignore
+        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        self._atr_cache[freq] = atr_iday
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
@@ -198,6 +201,8 @@ class ATRGapUpScanner:
         self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_high = PremarketCumulativeIndicator(C.HIGH, CumOp.MAX)
+        self._atr_cache = {}
+
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -224,7 +229,7 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr.setdefault(freq, ATRIndicator(period=140, freq=freq))  # type: ignore
+        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -267,7 +272,7 @@ class ATRGapUpScanner:
         and returns whether it passes the filter criteria.
         """
 
-        atr_iday = self._atr.setdefault(freq, ATRIndicator(period=140, freq=freq))  # type: ignore
+        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
