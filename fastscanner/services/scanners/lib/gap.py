@@ -277,6 +277,12 @@ class ATRGapUpScanner:
         Realtime scan implementation that enriches the new_row with indicators
         and returns whether it passes the filter criteria.
         """
+        
+        # Check time filter first
+        assert isinstance(new_row.name, pd.Timestamp)
+        if new_row.name.time() > self._end_time:
+            new_row["signal"] = pd.NA
+            return new_row, False
 
         atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
         new_row = await self._adv.extend_realtime(symbol, new_row)
