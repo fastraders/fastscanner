@@ -48,7 +48,7 @@ class ATRGapDownScanner:
         self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
-        self._atr_cache = {}
+        self._atr_iday: dict[str, ATRIndicator] = {}
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -80,8 +80,7 @@ class ATRGapDownScanner:
         )
         if daily_df.empty:
             return daily_df
-        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
-        self._atr_cache[freq] = atr_iday
+        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
         cum_low = PremarketCumulativeIndicator(C.LOW, CumOp.MIN)
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
@@ -123,9 +122,14 @@ class ATRGapDownScanner:
         Realtime scan implementation that enriches the new_row with indicators
         and returns whether it passes the filter criteria.
         """
+        
+        # Check time filter first
+        assert isinstance(new_row.name, pd.Timestamp)
+        if new_row.name.time() > self._end_time:
+            new_row["signal"] = pd.NA
+            return new_row, False
 
-        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
-        self._atr_cache[freq] = atr_iday
+        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
@@ -139,17 +143,6 @@ class ATRGapDownScanner:
         adr_value = new_row[self._adr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
 
-        if (
-            pd.isna(adv_value)
-            or adv_value < self._min_adv
-            or pd.isna(adr_value)
-            or adr_value < self._min_adr
-            or pd.isna(market_cap_value)
-            or market_cap_value < self._min_market_cap
-            or market_cap_value > self._max_market_cap
-        ):
-            return new_row, False
-
         gap_col = self._cum_low.column_name()
         prev_close_col = self._prev_close.column_name()
         atr_col = self._atr.column_name()
@@ -158,18 +151,32 @@ class ATRGapDownScanner:
         prev_close_value = new_row[prev_close_col]
         atr_value = new_row[atr_col]
 
-        if (
-            pd.isna(gap_value)
-            or pd.isna(prev_close_value)
-            or pd.isna(atr_value)
-            or atr_value == 0
-        ):
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            gap_value,
+            prev_close_value,
+            atr_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
             new_row["signal"] = pd.NA
-            passes_filter = False
-        else:
-            signal = (gap_value - prev_close_value) / atr_value
-            new_row["signal"] = signal
-            passes_filter = signal < self._atr_multiplier
+            return new_row, False
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        signal = (gap_value - prev_close_value) / atr_value
+        new_row["signal"] = signal
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and atr_value > 0
+            and signal < self._atr_multiplier
+        )
 
         return new_row, passes_filter
 
@@ -201,8 +208,7 @@ class ATRGapUpScanner:
         self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_high = PremarketCumulativeIndicator(C.HIGH, CumOp.MAX)
-        self._atr_cache = {}
-
+        self._atr_iday: dict[str, ATRIndicator] = {}
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -229,7 +235,7 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -272,7 +278,7 @@ class ATRGapUpScanner:
         and returns whether it passes the filter criteria.
         """
 
-        atr_iday = self._atr_cache.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
@@ -286,17 +292,6 @@ class ATRGapUpScanner:
         adr_value = new_row[self._adr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
 
-        if (
-            pd.isna(adv_value)
-            or adv_value < self._min_adv
-            or pd.isna(adr_value)
-            or adr_value < self._min_adr
-            or pd.isna(market_cap_value)
-            or market_cap_value < self._min_market_cap
-            or market_cap_value > self._max_market_cap
-        ):
-            return new_row, False
-
         gap_col = self._cum_high.column_name()
         prev_close_col = self._prev_close.column_name()
         atr_col = self._atr.column_name()
@@ -305,17 +300,31 @@ class ATRGapUpScanner:
         prev_close_value = new_row[prev_close_col]
         atr_value = new_row[atr_col]
 
-        if (
-            pd.isna(gap_value)
-            or pd.isna(prev_close_value)
-            or pd.isna(atr_value)
-            or atr_value == 0
-        ):
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            gap_value,
+            prev_close_value,
+            atr_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
             new_row["signal"] = pd.NA
-            passes_filter = False
-        else:
-            signal = (gap_value - prev_close_value) / atr_value
-            new_row["signal"] = signal
-            passes_filter = signal > self._atr_multiplier
+            return new_row, False
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        signal = (gap_value - prev_close_value) / atr_value
+        new_row["signal"] = signal
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and atr_value > 0
+            and signal > self._atr_multiplier
+        )
 
         return new_row, passes_filter
