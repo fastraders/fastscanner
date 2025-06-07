@@ -23,9 +23,17 @@ class CandleStoreTest(CandleStore):
         ]
 
 
+class MockFundamentalData:
+    def __init__(self):
+        date_index = pd.date_range(start="2023-01-01", periods=3, freq="D").date
+        self.historical_market_cap = pd.Series(
+            [1000000000, 1000000000, 1000000000], index=date_index
+        )
+
+
 class MockFundamentalDataStore(FundamentalDataStore):
     async def get(self, symbol):
-        return None
+        return MockFundamentalData()
 
 
 class MockPublicHolidaysStore(PublicHolidaysStore):

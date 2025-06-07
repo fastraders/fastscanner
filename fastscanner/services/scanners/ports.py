@@ -12,3 +12,7 @@ class Scanner(Protocol):
         Scan the symbol with the given parameters.
         """
         ...
+
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]: ...
