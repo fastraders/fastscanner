@@ -113,6 +113,10 @@ class HighRangeGapUpScanner:
 
         return df
 
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]: ...
+
 
 class LowRangeGapDownScanner:
     def __init__(
@@ -210,3 +214,7 @@ class LowRangeGapDownScanner:
         df = df[df[C.LOW] < df[lowest_low_col]]
 
         return df
+
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]: ...

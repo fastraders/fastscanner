@@ -31,7 +31,11 @@ from fastscanner.services.indicators.lib.fundamental import (
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
-from fastscanner.services.scanners.lib.parabolic import ATRParabolicDownScanner
+from fastscanner.services.scanners.lib.parabolic import (
+    ATRParabolicDownScanner,
+    DailyATRParabolicDownScanner,
+    DailyATRParabolicUpScanner,
+)
 from fastscanner.services.scanners.lib.range_gap import HighRangeGapUpScanner
 from fastscanner.services.scanners.ports import Scanner
 
@@ -53,11 +57,7 @@ async def _add_report_indicators(
     df.loc[:, "city"] = fundamental_data.city
     df.loc[:, "industry"] = fundamental_data.gic_industry
     df.loc[:, "sector"] = fundamental_data.gic_sector
-    market_cap = fundamental_data.historical_market_cap.rename("market_cap")
     df.loc[:, "date"] = df.index.date  # type: ignore
-    dates = list(set(df.loc[:, "date"].unique()).union(market_cap.index))  # type: ignore
-    market_cap = market_cap.reindex(dates).sort_index().ffill()
-    df = df.join(market_cap, on="date", how="left")
     df.loc[:, "shares_float"] = fundamental_data.shares_float
     df.loc[:, "beta"] = fundamental_data.beta
     df.loc[:, "percent_insiders"] = fundamental_data.insiders_ownership_perc
@@ -166,7 +166,7 @@ async def run_scanner():
     all_symbols = (await polygon.all_symbols())[:100]  # [:1000]
     start_date = date(2020, 1, 1)
     end_date = date(2020, 3, 31)
-    freq = "1min"
+    freq = "1d"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.1,
@@ -183,15 +183,21 @@ async def run_scanner():
     #     end_time=time(15, 59),
     #     include_null_market_cap=True,
     # )
-    scanner = HighRangeGapUpScanner(
-        min_adv=1_000_000,
-        min_adr=0.0005,
-        start_time=time(9, 20),
-        end_time=time(9, 25),
-        min_cumulative_volume=50_000,
-        n_days=5,
+    scanner = DailyATRParabolicDownScanner(
+        min_adv=2_000_000,
+        min_adr=0.005,
+        atr_multiplier=0.5,
         include_null_market_cap=True,
     )
+    # scanner = HighRangeGapUpScanner(
+    #     min_adv=1_000_000,
+    #     min_adr=0.0005,
+    #     start_time=time(9, 20),
+    #     end_time=time(9, 25),
+    #     min_cumulative_volume=50_000,
+    #     n_days=5,
+    #     include_null_market_cap=True,
+    # )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1
     batch_size = math.ceil(len(all_symbols) / n_workers)

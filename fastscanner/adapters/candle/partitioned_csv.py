@@ -273,4 +273,4 @@ class PartitionedCSVCandlesProvider:
             freqs = unit_to_freqs[unit]
             for freq in freqs:
                 start_date, _ = self._range_from_key(partition_key, unit)
-                df = await self.get(symbol, start_date, yesterday, freq)
+                await self.get(symbol, start_date, yesterday, freq)

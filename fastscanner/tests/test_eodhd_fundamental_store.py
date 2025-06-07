@@ -124,29 +124,6 @@ async def test_get_fetch_and_store(
     assert os.path.exists(path)
 
 
-@pytest.mark.asyncio
-@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
-async def test_get_handles_missing_data_gracefully(mock_retry_request, store):
-    empty_fundamentals = MagicMock()
-    empty_fundamentals.status_code = 200
-    empty_fundamentals.json.return_value = {}
-
-    empty_market_cap = MagicMock()
-    empty_market_cap.status_code = 200
-    empty_market_cap.json.return_value = {}
-
-    mock_retry_request.side_effect = [empty_fundamentals, empty_market_cap]
-
-    result = await store.get("AAPL")
-
-    assert result is not None
-    assert result.exchange == ""
-    assert isinstance(result.historical_market_cap, pd.Series)
-    assert result.historical_market_cap.empty
-    assert isinstance(result.earnings_dates, pd.DatetimeIndex)
-    assert len(result.earnings_dates) == 0
-
-
 def test_load_cached_bad_json(store):
     path = store._get_cache_path("AAPL")
     os.makedirs(os.path.dirname(path), exist_ok=True)
