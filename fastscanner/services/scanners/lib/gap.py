@@ -23,6 +23,8 @@ from .utils import filter_by_market_cap
 
 
 class ATRGapDownScanner:
+    ATR_PERIOD: int = 140
+
     def __init__(
         self,
         min_adv: float,
@@ -83,7 +85,9 @@ class ATRGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(
+            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+        )
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -135,7 +139,9 @@ class ATRGapDownScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(
+            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+        )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
@@ -177,8 +183,21 @@ class ATRGapDownScanner:
 
         return new_row, passes_filter
 
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._atr_gap.lookback_days(),
+            self._gap.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_volume.lookback_days(),
+            self.ATR_PERIOD,  # add this as a class variable atr_period
+        )
+
 
 class ATRGapUpScanner:
+    ATR_PERIOD: int = 140
+
     def __init__(
         self,
         min_adv: float,
@@ -234,7 +253,9 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(
+            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+        )
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -286,7 +307,9 @@ class ATRGapUpScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = self._atr_iday.setdefault(
+            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+        )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
@@ -327,3 +350,14 @@ class ATRGapUpScanner:
         )
 
         return new_row, passes_filter
+
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._atr_gap.lookback_days(),
+            self._gap.lookback_days(),
+            self._adr.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_volume.lookback_days(),
+            self.ATR_PERIOD,
+        )
