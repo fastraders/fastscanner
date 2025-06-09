@@ -3,16 +3,23 @@ import math
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from operator import add
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
 
 from fastscanner.pkg.datetime import split_freq
+from fastscanner.services.indicators.lib.daily import (
+    DailyATRIndicator,
+    PrevDayIndicator,
+)
 
 from ...registry import ApplicationRegistry
 from ..ports import CandleCol
 from ..utils import lookback_days
+
+if TYPE_CHECKING:
+    from fastscanner.services.indicators.lib import Indicator
 
 logger = logging.getLogger(__name__)
 
@@ -394,3 +401,101 @@ class DailyRollingIndicator:
 
         new_row[self.column_name()] = agg_val
         return new_row
+
+
+class GapIndicator:
+    def __init__(self, candle_col: str):
+        self._candle_col = candle_col
+        self._prev_day = PrevDayIndicator(CandleCol.CLOSE)
+
+    def lookback_days(self) -> int:
+        return 0
+
+    @classmethod
+    def type(cls):
+        return "gap"
+
+    def column_name(self) -> str:
+        return "gap"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        cols_to_drop: list[str] = []
+        if self._prev_day.column_name() not in df.columns:
+            cols_to_drop.append(self._prev_day.column_name())
+            df = await self._prev_day.extend(symbol, df)
+
+        prev_col = self._prev_day.column_name()
+        df.loc[:, self.column_name()] = (df[self._candle_col] - df[prev_col]) / df[
+            prev_col
+        ]
+
+        return df.drop(columns=cols_to_drop)
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        cols_to_drop: list[str] = []
+        if self._prev_day.column_name() not in new_row.index:
+            new_row = await self._prev_day.extend_realtime(symbol, new_row)
+            cols_to_drop.append(self._prev_day.column_name())
+
+        prev_col = self._prev_day.column_name()
+        new_row.at[self.column_name()] = (
+            new_row[self._candle_col] - new_row[prev_col]
+        ) / new_row[prev_col]
+
+        return new_row.drop(cols_to_drop)
+
+
+class ATRGapIndicator:
+    def __init__(self, period: int, candle_col: str):
+        self._period = period
+        self._candle_col = candle_col
+        self._atr = DailyATRIndicator(period)
+        self._gap = GapIndicator(candle_col)
+        self._prev_day = PrevDayIndicator(CandleCol.CLOSE)
+
+    def lookback_days(self) -> int:
+        return 0
+
+    @classmethod
+    def type(cls):
+        return "atr_gap"
+
+    def column_name(self) -> str:
+        return "atr_gap"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        aux_indicators = [self._atr, self._gap, self._prev_day]
+        cols_to_drop: list[str] = []
+        for ind in aux_indicators:
+            if ind.column_name() in df.columns:
+                continue
+            df = await ind.extend(symbol, df)
+            cols_to_drop.append(ind.column_name())
+
+        df.loc[:, self.column_name()] = (
+            df[self._gap.column_name()]
+            * df[self._prev_day.column_name()]
+            / df[self._atr.column_name()]
+        )
+        return df.drop(columns=cols_to_drop)
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        aux_indicators: "list[Indicator]" = [self._atr, self._gap, self._prev_day]
+        cols_to_drop: list[str] = []
+        for ind in aux_indicators:
+            if ind.column_name() not in new_row.index:
+                new_row = await ind.extend_realtime(symbol, new_row)
+                cols_to_drop.append(ind.column_name())
+
+        if new_row[self._atr.column_name()] > 0:
+            new_row.at[self.column_name()] = (
+                new_row[self._gap.column_name()]
+                * new_row[self._prev_day.column_name()]
+                / new_row[self._atr.column_name()]
+            )
+        else:
+            new_row.at[self.column_name()] = pd.NA
+
+        return new_row.drop(cols_to_drop)

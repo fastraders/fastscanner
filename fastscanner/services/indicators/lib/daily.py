@@ -88,7 +88,9 @@ class DailyGapIndicator:
         ) / daily_df[CandleCol.CLOSE]
 
         df = df.join(daily_df[self.column_name()], on="date")
-        df.loc[df.index.time < time(9, 30), self.column_name()] = pd.NA  # type: ignore
+        # We use this to account for cases where the freq is daily.
+        if not df.index.empty and df.index[0].time() > time(0, 0):
+            df.loc[df.index.time < time(9, 30), self.column_name()] = pd.NA  # type: ignore
 
         return df.drop(columns=["date"])
 

@@ -23,7 +23,7 @@ class HighRangeGapUpScanner:
         min_adr: float,
         start_time: time,
         end_time: time,
-        min_cumulative_volume: float,
+        min_volume: float,
         n_days: int,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -33,7 +33,7 @@ class HighRangeGapUpScanner:
         self._min_adr = min_adr
         self._start_time = start_time
         self._end_time = end_time
-        self._min_cumulative_volume = min_cumulative_volume
+        self._min_volume = min_volume
         self._n_days = n_days
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
@@ -108,7 +108,7 @@ class HighRangeGapUpScanner:
         cum_volume_col = cum_volume.column_name()
         highest_high_col = highest_high.column_name()
 
-        df = df[df[cum_volume_col] >= self._min_cumulative_volume]
+        df = df[df[cum_volume_col] >= self._min_volume]
         df = df[df[C.HIGH] > df[highest_high_col]]
 
         return df
@@ -125,7 +125,7 @@ class LowRangeGapDownScanner:
         min_adr: float,
         start_time: time,
         end_time: time,
-        min_cumulative_volume: float,
+        min_volume: float,
         n_days: int,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -135,7 +135,7 @@ class LowRangeGapDownScanner:
         self._min_adr = min_adr
         self._start_time = start_time
         self._end_time = end_time
-        self._min_cumulative_volume = min_cumulative_volume
+        self._min_volume = min_volume
         self._n_days = n_days
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
@@ -210,7 +210,7 @@ class LowRangeGapDownScanner:
         cum_volume_col = cum_volume.column_name()
         lowest_low_col = lowest_low.column_name()
 
-        df = df[df[cum_volume_col] >= self._min_cumulative_volume]
+        df = df[df[cum_volume_col] >= self._min_volume]
         df = df[df[C.LOW] < df[lowest_low_col]]
 
         return df

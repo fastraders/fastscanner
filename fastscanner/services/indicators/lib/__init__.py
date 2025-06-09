@@ -5,9 +5,11 @@ from typing import Any, Hashable, Protocol
 import pandas as pd
 
 from .candle import (
+    ATRGapIndicator,
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
     DailyRollingIndicator,
+    GapIndicator,
     PositionInRangeIndicator,
     PremarketCumulativeIndicator,
 )
@@ -36,6 +38,8 @@ _indicators: list[type["Indicator"]] = [
     DailyATRIndicator,
     DailyATRGapIndicator,
     MarketCapIndicator,
+    GapIndicator,
+    ATRGapIndicator,
 ]
 
 

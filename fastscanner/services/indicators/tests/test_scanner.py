@@ -1,8 +1,10 @@
+from datetime import date, datetime, time
 from typing import Any
-import pytest
+
 import pandas as pd
-from datetime import date, time, datetime
-from fastscanner.services.indicators.ports import CandleStore, ChannelHandler, CandleCol
+import pytest
+
+from fastscanner.services.indicators.ports import CandleCol, CandleStore, ChannelHandler
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.indicators.tests.fixtures import (
     CandleStoreTest,
@@ -11,6 +13,7 @@ from fastscanner.services.indicators.tests.fixtures import (
 )
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
+from fastscanner.services.scanners.ports import Scanner
 
 
 class MockChannel:
@@ -85,11 +88,12 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
     complete_data = pd.concat([daily_data, intraday_data])
     candles.set_data(symbol, complete_data)
 
-    scanners = [
+    scanners: list[Scanner] = [
         ATRGapDownScanner(
             min_adv=500_000,
             min_adr=0.05,
             atr_multiplier=-1.0,
+            min_volume=0,
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
@@ -98,6 +102,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             min_adv=500_000,
             min_adr=0.05,
             atr_multiplier=1.0,
+            min_volume=0,
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,

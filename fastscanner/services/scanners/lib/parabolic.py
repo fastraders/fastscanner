@@ -213,6 +213,9 @@ class DailyATRParabolicUpScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
+        if freq != "1d":
+            raise ValueError("DailyATRParabolicUpScanner only supports '1d' frequency")
+
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         daily_atr = DailyATRIndicator(period=14)
@@ -272,6 +275,9 @@ class DailyATRParabolicDownScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
+        if freq != "1d":
+            raise ValueError("DailyATRParabolicUpScanner only supports '1d' frequency")
+
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         daily_atr = DailyATRIndicator(period=14)
