@@ -3,9 +3,11 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.services.indicators.lib.candle import ATRGapIndicator
 from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
 from fastscanner.services.indicators.lib.candle import (
     DailyRollingIndicator,
+    GapIndicator,
     PremarketCumulativeIndicator,
 )
 from fastscanner.services.indicators.lib.daily import ADRIndicator, ADVIndicator
@@ -73,13 +75,18 @@ class HighRangeGapUpScanner:
             return daily_df
 
         cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
+        gap = GapIndicator(C.HIGH)
+        atr_gap = ATRGapIndicator(
+            period=14,
+            candle_col=C.HIGH,
+        )
 
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [cum_volume],
+            [cum_volume, gap, atr_gap],
         )
 
         if df.empty:
@@ -175,13 +182,18 @@ class LowRangeGapDownScanner:
             return daily_df
 
         cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
+        gap = GapIndicator(C.LOW)
+        atr_gap = ATRGapIndicator(
+            period=14,
+            candle_col=C.LOW,
+        )
 
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [cum_volume],
+            [cum_volume, gap, atr_gap],
         )
 
         if df.empty:
