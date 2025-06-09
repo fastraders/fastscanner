@@ -49,8 +49,9 @@ async def _add_report_indicators(
     df: pd.DataFrame, symbol: str, freq: str
 ) -> pd.DataFrame:
     fundamental_data = await ApplicationRegistry.fundamentals.get(symbol)
+    df.index
     df.loc[:, "symbol"] = symbol
-    df.loc[:, "scan_time"] = df.index + pd.Timedelta(freq)  # type: ignore
+    df.loc[:, "scan_time"] = (df.index + pd.Timedelta(freq)).time  # type: ignore
     df.loc[:, "type"] = fundamental_data.type
     df.loc[:, "exchange"] = fundamental_data.exchange
     df.loc[:, "country"] = fundamental_data.country
@@ -167,14 +168,14 @@ async def run_scanner():
     start_date = date(2020, 1, 1)
     end_date = date(2020, 3, 31)
     freq = "1min"
-    # scanner = ATRGapDownScanner(
-    #     min_adv=1_000_000,
-    #     min_adr=0.005,
-    #     min_volume=50_000,
-    #     atr_multiplier=0.5,
-    #     start_time=time(9, 20),
-    #     end_time=time(9, 25),
-    # )
+    scanner = ATRGapDownScanner(
+        min_adv=1_000_000,
+        min_adr=0.005,
+        min_volume=50_000,
+        atr_multiplier=0.5,
+        start_time=time(9, 20),
+        end_time=time(9, 25),
+    )
     # scanner = ATRParabolicDownScanner(
     #     min_adv=2_000_000,
     #     min_adr=0.005,
@@ -190,15 +191,15 @@ async def run_scanner():
     #     atr_multiplier=0.5,
     #     include_null_market_cap=True,
     # )
-    scanner = HighRangeGapUpScanner(
-        min_adv=1_000_000,
-        min_adr=0.0005,
-        start_time=time(9, 20),
-        end_time=time(9, 25),
-        min_volume=50_000,
-        n_days=5,
-        include_null_market_cap=True,
-    )
+    # scanner = HighRangeGapUpScanner(
+    #     min_adv=1_000_000,
+    #     min_adr=0.0005,
+    #     start_time=time(9, 20),
+    #     end_time=time(9, 25),
+    #     min_volume=50_000,
+    #     n_days=5,
+    #     include_null_market_cap=True,
+    # )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1
     batch_size = math.ceil(len(all_symbols) / n_workers)

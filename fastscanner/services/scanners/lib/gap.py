@@ -104,6 +104,7 @@ class ATRGapDownScanner:
                 self._adr.column_name(),
                 self._gap.column_name(),
                 self._atr_gap.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
@@ -253,6 +254,7 @@ class ATRGapUpScanner:
                 self._adr.column_name(),
                 self._gap.column_name(),
                 self._atr_gap.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
 

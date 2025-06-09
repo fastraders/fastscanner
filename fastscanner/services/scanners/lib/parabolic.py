@@ -96,7 +96,14 @@ class ATRParabolicDownScanner:
         df = await cum_volume.extend(symbol, df)
 
         df.loc[:, "date"] = df.index.date  # type: ignore
-        daily_df = daily_df.set_index(daily_df.index.date)[[adv.column_name(), adr.column_name(), atr.column_name()]]  # type: ignore
+        daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
+            [
+                adv.column_name(),
+                adr.column_name(),
+                atr.column_name(),
+                market_cap.column_name(),
+            ]
+        ]
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
 
@@ -179,7 +186,12 @@ class ATRParabolicUpScanner:
         df = await cum_volume.extend(symbol, df)
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
-            [adv.column_name(), adr.column_name(), atr.column_name()]
+            [
+                adv.column_name(),
+                adr.column_name(),
+                atr.column_name(),
+                market_cap.column_name(),
+            ]
         ]
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])

@@ -104,6 +104,7 @@ class HighRangeGapUpScanner:
                 adv.column_name(),
                 adr.column_name(),
                 highest_high.column_name(),
+                market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
@@ -211,6 +212,7 @@ class LowRangeGapDownScanner:
                 adv.column_name(),
                 adr.column_name(),
                 lowest_low.column_name(),
+                market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
