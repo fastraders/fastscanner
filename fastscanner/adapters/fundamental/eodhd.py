@@ -166,8 +166,9 @@ class EODHDFundamentalStore:
             dtype=float,
         ).sort_index()
 
+        earnings_dates = [e["reportDate"] for e in earnings.get("History", {}).values()]
         earnings_dates = pd.DatetimeIndex(
-            pd.to_datetime(list(earnings.get("History", {}).keys())), name="report_date"
+            pd.to_datetime(earnings_dates), name="report_date"
         ).sort_values()
 
         address_data = general.get("AddressData", {}) or {}

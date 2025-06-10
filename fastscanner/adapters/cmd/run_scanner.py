@@ -49,7 +49,6 @@ async def _add_report_indicators(
     df: pd.DataFrame, symbol: str, freq: str
 ) -> pd.DataFrame:
     fundamental_data = await ApplicationRegistry.fundamentals.get(symbol)
-    df.index
     df.loc[:, "symbol"] = symbol
     df.loc[:, "scan_time"] = (df.index + pd.Timedelta(freq)).time  # type: ignore
     df.loc[:, "type"] = fundamental_data.type
@@ -58,7 +57,6 @@ async def _add_report_indicators(
     df.loc[:, "city"] = fundamental_data.city
     df.loc[:, "industry"] = fundamental_data.gic_industry
     df.loc[:, "sector"] = fundamental_data.gic_sector
-    df.loc[:, "date"] = df.index.date  # type: ignore
     df.loc[:, "shares_float"] = fundamental_data.shares_float
     df.loc[:, "beta"] = fundamental_data.beta
     df.loc[:, "percent_insiders"] = fundamental_data.insiders_ownership_perc
@@ -129,7 +127,11 @@ async def _run_async(
         if df.empty:
             continue
 
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        idx_name = df.index.name
+        df = df.reset_index().groupby("date").first().set_index(idx_name)
         df = await _add_report_indicators(df, symbol, freq)
+
         if result is None:
             result = df
         else:
