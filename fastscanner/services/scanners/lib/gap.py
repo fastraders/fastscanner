@@ -23,8 +23,6 @@ from .utils import filter_by_market_cap
 
 
 class ATRGapDownScanner:
-    ATR_PERIOD: int = 140
-
     def __init__(
         self,
         min_adv: float,
@@ -48,6 +46,7 @@ class ATRGapDownScanner:
         self._include_null_market_cap = include_null_market_cap
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
+        self._atr_iday_period = 140
         # self._atr = DailyATRIndicator(period=14)
         # self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
@@ -86,7 +85,7 @@ class ATRGapDownScanner:
             return daily_df
 
         atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
         )
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
@@ -140,7 +139,7 @@ class ATRGapDownScanner:
             return new_row, False
 
         atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
         )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
@@ -191,7 +190,7 @@ class ATRGapDownScanner:
             self._gap.lookback_days(),
             self._market_cap.lookback_days(),
             self._cum_volume.lookback_days(),
-            self.ATR_PERIOD,  # add this as a class variable atr_period
+            self._atr_iday_period,  # add this as a class variable atr_period
         )
 
 

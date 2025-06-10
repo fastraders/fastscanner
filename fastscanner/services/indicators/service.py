@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from fastscanner.pkg.candle import CandleBuffer
 from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
 from fastscanner.services.indicators.clock import ClockRegistry
 
@@ -132,22 +133,9 @@ class CandleChannelHandler(ChannelHandler):
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
-        self._buffer: dict[pd.Timestamp, pd.Series] = {}
-        self._expected_count = self._calculate_expected_count()
-        self._timeout_task: asyncio.Task | None = None
-        self._candle_timeout: float = candle_timeout
+        self._buffer = CandleBuffer(symbol, freq, candle_timeout)
+        self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
-
-    def _calculate_expected_count(self) -> int:
-        n, unit = split_freq(self._freq)
-        if unit == "min":
-            return n
-        elif unit == "h":
-            return n * 60
-        else:
-            raise ValueError(
-                f"Unsupported frequency unit: '{unit}'. Only 'min' and 'h' are supported."
-            )
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
@@ -175,77 +163,18 @@ class CandleChannelHandler(ChannelHandler):
                     new_row = await ind.extend_realtime(self._symbol, new_row)
                 self._handler.handle(self._symbol, new_row)
             else:
-                async with self._buffer_lock:
-                    await self._add_to_buffer(new_row)
+                agg = await self._buffer.add(new_row)
+                if agg is not None:
+                    for ind in self._indicators:
+                        try:
+                            agg = await ind.extend_realtime(self._symbol, agg)
+                        except Exception as e:
+                            logger.exception(
+                                f"[{self._symbol}] Indicator error during aggregation: {e}"
+                            )
+                    self._handler.handle(self._symbol, agg)
 
         except Exception as e:
             logger.exception(
                 f"[Handler Error] Failed processing message from {channel_id}: {e}"
             )
-
-    async def _add_to_buffer(self, new_row: pd.Series):
-        assert isinstance(new_row.name, pd.Timestamp)
-        ts: pd.Timestamp = new_row.name
-        candle_start = ts.floor(self._freq)
-        self._buffer[ts] = new_row
-
-        last_candle_ts = candle_start + pd.Timedelta(self._freq) - pd.Timedelta("1min")
-
-        if ts == last_candle_ts:
-            await self._flush()
-        elif self._timeout_task is None or self._timeout_task.done():
-            self._timeout_task = asyncio.create_task(
-                self._flush_after_timeout(candle_start)
-            )
-
-    async def _flush_after_timeout(self, candle_start: pd.Timestamp):
-        now = ClockRegistry.clock.now()
-        candle_end = candle_start + pd.Timedelta(self._freq)
-        timeout_time = candle_end + pd.Timedelta(seconds=self._candle_timeout)
-        sleep_duration = (timeout_time - now).total_seconds()
-
-        if sleep_duration > 0:
-            await asyncio.sleep(sleep_duration)
-
-        async with self._buffer_lock:
-            await self._flush()
-
-    async def _flush(self):
-        if not self._buffer:
-            return
-
-        if self._timeout_task is not None and not self._timeout_task.done():
-            self._timeout_task.cancel()
-            try:
-                await self._timeout_task
-            except asyncio.CancelledError:
-                pass
-            self._timeout_task = None
-
-        df = pd.DataFrame(self._buffer.values())
-        if df.empty:
-            return
-
-        candle_start = df.index[0].floor(self._freq)
-
-        agg = pd.Series(
-            {
-                CandleCol.OPEN: df[CandleCol.OPEN].iloc[0],
-                CandleCol.HIGH: df[CandleCol.HIGH].max(),
-                CandleCol.LOW: df[CandleCol.LOW].min(),
-                CandleCol.CLOSE: df[CandleCol.CLOSE].iloc[-1],
-                CandleCol.VOLUME: df[CandleCol.VOLUME].sum(),
-            },
-            name=candle_start,
-        )
-
-        for ind in self._indicators:
-            try:
-                agg = await ind.extend_realtime(self._symbol, agg)
-            except Exception as e:
-                logger.exception(
-                    f"[{self._symbol}] Indicator error during aggregation: {e}"
-                )
-
-        self._handler.handle(self._symbol, agg)
-        self._buffer.clear()
