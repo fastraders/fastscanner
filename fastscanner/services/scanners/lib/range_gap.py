@@ -40,30 +40,33 @@ class HighRangeGapUpScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+        
+        self._adv = ADVIndicator(period=14)
+        self._adr = ADRIndicator(period=14)
+        self._market_cap = MarketCapIndicator()
+        self._highest_high = DailyRollingIndicator(
+            n_days=self._n_days, operation="max", candle_col=C.HIGH
+        )
+        self._cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
+        self._gap = GapIndicator(C.HIGH)
+        self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        adv = ADVIndicator(period=14)
-        adr = ADRIndicator(period=14)
-        market_cap = MarketCapIndicator()
-        highest_high = DailyRollingIndicator(
-            n_days=self._n_days, operation="max", candle_col=C.HIGH
-        )
-
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, market_cap, highest_high],
+            [self._adv, self._adr, self._market_cap, self._highest_high],
         )
 
         if daily_df.empty:
             return daily_df
 
-        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
-        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -74,19 +77,12 @@ class HighRangeGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
-        gap = GapIndicator(C.HIGH)
-        atr_gap = ATRGapIndicator(
-            period=14,
-            candle_col=C.HIGH,
-        )
-
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [cum_volume, gap, atr_gap],
+            [self._cum_volume, self._gap, self._atr_gap],
         )
 
         if df.empty:
@@ -101,10 +97,10 @@ class HighRangeGapUpScanner:
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
-                adv.column_name(),
-                adr.column_name(),
-                highest_high.column_name(),
-                market_cap.column_name(),
+                self._adv.column_name(),
+                self._adr.column_name(),
+                self._highest_high.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
@@ -113,8 +109,8 @@ class HighRangeGapUpScanner:
         if df.empty:
             return df
 
-        cum_volume_col = cum_volume.column_name()
-        highest_high_col = highest_high.column_name()
+        cum_volume_col = self._cum_volume.column_name()
+        highest_high_col = self._highest_high.column_name()
 
         df = df[df[cum_volume_col] >= self._min_volume]
         df = df[df[C.HIGH] > df[highest_high_col]]
@@ -123,7 +119,54 @@ class HighRangeGapUpScanner:
 
     async def scan_realtime(
         self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
+    ) -> tuple[pd.Series, bool]:
+
+        assert isinstance(new_row.name, pd.Timestamp)
+        if (
+            new_row.name.time() > self._end_time
+            or new_row.name.time() < self._start_time
+        ):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        new_row = await self._adv.extend_realtime(symbol, new_row)
+        new_row = await self._adr.extend_realtime(symbol, new_row)
+        new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._highest_high.extend_realtime(symbol, new_row)
+        new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._gap.extend_realtime(symbol, new_row)
+        new_row = await self._atr_gap.extend_realtime(symbol, new_row)
+
+        adv_value = new_row[self._adv.column_name()]
+        adr_value = new_row[self._adr.column_name()]
+        market_cap_value = new_row[self._market_cap.column_name()]
+        highest_high_value = new_row[self._highest_high.column_name()]
+        cum_volume_value = new_row[self._cum_volume.column_name()]
+
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            highest_high_value,
+            cum_volume_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and cum_volume_value >= self._min_volume
+            and new_row[C.HIGH] > highest_high_value
+        )
+
+        return new_row, passes_filter
 
 
 class LowRangeGapDownScanner:
@@ -148,30 +191,33 @@ class LowRangeGapDownScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+        
+        self._adv = ADVIndicator(period=14)
+        self._adr = ADRIndicator(period=14)
+        self._market_cap = MarketCapIndicator()
+        self._lowest_low = DailyRollingIndicator(
+            n_days=self._n_days, operation="min", candle_col=C.LOW
+        )
+        self._cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
+        self._gap = GapIndicator(C.LOW)
+        self._atr_gap = ATRGapIndicator(period=14, candle_col=C.LOW)
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        adv = ADVIndicator(period=14)
-        adr = ADRIndicator(period=14)
-        market_cap = MarketCapIndicator()
-        lowest_low = DailyRollingIndicator(
-            n_days=self._n_days, operation="min", candle_col=C.LOW
-        )
-
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, market_cap, lowest_low],
+            [self._adv, self._adr, self._market_cap, self._lowest_low],
         )
 
         if daily_df.empty:
             return daily_df
 
-        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
-        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -182,19 +228,12 @@ class LowRangeGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
-        gap = GapIndicator(C.LOW)
-        atr_gap = ATRGapIndicator(
-            period=14,
-            candle_col=C.LOW,
-        )
-
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             freq,
-            [cum_volume, gap, atr_gap],
+            [self._cum_volume, self._gap, self._atr_gap],
         )
 
         if df.empty:
@@ -209,10 +248,10 @@ class LowRangeGapDownScanner:
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
-                adv.column_name(),
-                adr.column_name(),
-                lowest_low.column_name(),
-                market_cap.column_name(),
+                self._adv.column_name(),
+                self._adr.column_name(),
+                self._lowest_low.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
@@ -221,8 +260,8 @@ class LowRangeGapDownScanner:
         if df.empty:
             return df
 
-        cum_volume_col = cum_volume.column_name()
-        lowest_low_col = lowest_low.column_name()
+        cum_volume_col = self._cum_volume.column_name()
+        lowest_low_col = self._lowest_low.column_name()
 
         df = df[df[cum_volume_col] >= self._min_volume]
         df = df[df[C.LOW] < df[lowest_low_col]]
@@ -231,4 +270,51 @@ class LowRangeGapDownScanner:
 
     async def scan_realtime(
         self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
+    ) -> tuple[pd.Series, bool]:
+
+        assert isinstance(new_row.name, pd.Timestamp)
+        if (
+            new_row.name.time() > self._end_time
+            or new_row.name.time() < self._start_time
+        ):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        new_row = await self._adv.extend_realtime(symbol, new_row)
+        new_row = await self._adr.extend_realtime(symbol, new_row)
+        new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._lowest_low.extend_realtime(symbol, new_row)
+        new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._gap.extend_realtime(symbol, new_row)
+        new_row = await self._atr_gap.extend_realtime(symbol, new_row)
+
+        adv_value = new_row[self._adv.column_name()]
+        adr_value = new_row[self._adr.column_name()]
+        market_cap_value = new_row[self._market_cap.column_name()]
+        lowest_low_value = new_row[self._lowest_low.column_name()]
+        cum_volume_value = new_row[self._cum_volume.column_name()]
+
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            lowest_low_value,
+            cum_volume_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and cum_volume_value >= self._min_volume
+            and new_row[C.LOW] < lowest_low_value
+        )
+
+        return new_row, passes_filter
