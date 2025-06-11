@@ -46,12 +46,10 @@ class ATRGapDownScanner:
         self._include_null_market_cap = include_null_market_cap
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
-        self._atr_iday_period = 140
         # self._atr = DailyATRIndicator(period=14)
         # self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
-        self._atr_iday: dict[str, ATRIndicator] = {}
         self._gap = GapIndicator(C.LOW)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.LOW)
 
@@ -84,9 +82,7 @@ class ATRGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
-        )
+        atr_iday = ATRIndicator(period=140, freq=freq)
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -138,16 +134,11 @@ class ATRGapDownScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
-        )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
         new_row = await self._atr_gap.extend_realtime(symbol, new_row)
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
-
-        new_row = await atr_iday.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
@@ -190,7 +181,6 @@ class ATRGapDownScanner:
             self._gap.lookback_days(),
             self._market_cap.lookback_days(),
             self._cum_volume.lookback_days(),
-            self._atr_iday_period,  # add this as a class variable atr_period
         )
 
 
@@ -216,12 +206,10 @@ class ATRGapUpScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
-        self._atr_iday_period = 140
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
-        self._atr_iday: dict[str, ATRIndicator] = {}
         self._gap = GapIndicator(C.HIGH)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
 
@@ -250,9 +238,7 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
-        )
+        atr_iday = ATRIndicator(period=140, freq=freq)
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -304,16 +290,11 @@ class ATRGapUpScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
-        )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
         new_row = await self._atr_gap.extend_realtime(symbol, new_row)
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
-
-        new_row = await atr_iday.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
@@ -351,10 +332,9 @@ class ATRGapUpScanner:
     def lookback_days(self) -> int:
         return max(
             self._adv.lookback_days(),
+            self._adr.lookback_days(),
             self._atr_gap.lookback_days(),
             self._gap.lookback_days(),
-            self._adr.lookback_days(),
             self._market_cap.lookback_days(),
             self._cum_volume.lookback_days(),
-            self._atr_iday_period,
         )

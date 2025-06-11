@@ -20,7 +20,6 @@ from fastscanner.services.indicators.clock import ClockRegistry, LocalClock
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
-from fastscanner.services.indicators.ports import CandleCol
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -45,9 +44,10 @@ class BenchmarkScannerHandler(SubscriptionHandler):
 
         log_ts = datetime.now().strftime("%H:%M:%S")
         candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
-        logger.info(
-            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {new_row.to_dict()}"
-        )
+        if passed:
+            logger.info(
+                f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {new_row.to_dict()}"
+            )
         if batch_start_time is None:
             batch_start_time = now
         last_received_time = now
