@@ -195,8 +195,6 @@ class ATRGapDownScanner:
 
 
 class ATRGapUpScanner:
-    ATR_PERIOD: int = 140
-
     def __init__(
         self,
         min_adv: float,
@@ -218,7 +216,7 @@ class ATRGapUpScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
-
+        self._atr_iday_period = 140
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
@@ -253,7 +251,7 @@ class ATRGapUpScanner:
             return daily_df
 
         atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
         )
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
@@ -307,7 +305,7 @@ class ATRGapUpScanner:
             return new_row, False
 
         atr_iday = self._atr_iday.setdefault(
-            freq, ATRIndicator(period=self.ATR_PERIOD, freq=freq)
+            freq, ATRIndicator(period=self._atr_iday_period, freq=freq)
         )
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
@@ -358,5 +356,5 @@ class ATRGapUpScanner:
             self._adr.lookback_days(),
             self._market_cap.lookback_days(),
             self._cum_volume.lookback_days(),
-            self.ATR_PERIOD,
+            self._atr_iday_period,
         )

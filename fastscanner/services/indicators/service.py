@@ -120,7 +120,7 @@ class SubscriptionHandler:
     def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
-class CandleChannelHandler(ChannelHandler):
+class CandleChannelHandler:
     def __init__(
         self,
         symbol: str,
@@ -162,17 +162,14 @@ class CandleChannelHandler(ChannelHandler):
                 for ind in self._indicators:
                     new_row = await ind.extend_realtime(self._symbol, new_row)
                 self._handler.handle(self._symbol, new_row)
-            else:
-                agg = await self._buffer.add(new_row)
-                if agg is not None:
-                    for ind in self._indicators:
-                        try:
-                            agg = await ind.extend_realtime(self._symbol, agg)
-                        except Exception as e:
-                            logger.exception(
-                                f"[{self._symbol}] Indicator error during aggregation: {e}"
-                            )
-                    self._handler.handle(self._symbol, agg)
+                return
+            agg = await self._buffer.add(new_row)
+            if agg is None:
+                 return
+            for ind in self._indicators:
+                agg = await ind.extend_realtime(self._symbol, agg)
+ 
+            self._handler.handle(self._symbol, agg)
 
         except Exception as e:
             logger.exception(

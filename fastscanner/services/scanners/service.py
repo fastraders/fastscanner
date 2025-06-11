@@ -17,7 +17,7 @@ class SubscriptionHandler:
     def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series: ...
 
 
-class ScannerChannelHandler(ChannelHandler):
+class ScannerChannelHandler:
     def __init__(
         self,
         symbol: str,
@@ -31,7 +31,7 @@ class ScannerChannelHandler(ChannelHandler):
         self._freq = freq
         self._buffer = CandleBuffer(symbol, freq)
 
-    async def handle(self, channel_id: str, data: dict[Any, Any]):
+    async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         for field in (C.OPEN, C.HIGH, C.LOW, C.CLOSE, C.VOLUME):
             if field in data:
                 data[field] = float(data[field])
@@ -44,7 +44,8 @@ class ScannerChannelHandler(ChannelHandler):
             new_row, passed = await self._scanner.scan_realtime(
                 self._symbol, row, self._freq
             )
-            return self._handler.handle(self._symbol, new_row, passed)
+            self._handler.handle(self._symbol, new_row, passed)
+            return
         agg = await self._buffer.add(row)
         if agg is None:
             return

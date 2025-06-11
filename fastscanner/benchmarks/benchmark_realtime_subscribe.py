@@ -71,15 +71,6 @@ class BenchmarkHandler(SubscriptionHandler):
         total_messages += 1
 
 
-def get_symbols_from_file() -> list[str]:
-    if os.path.exists(SYMBOLS_FILE):
-        with open(SYMBOLS_FILE, "r") as f:
-            symbols = json.load(f)
-            logger.info(f"Loaded {len(symbols)} symbols from file.")
-            return symbols
-    return []
-
-
 async def monitor_batch_timeout():
     global batch_start_time, last_received_time, total_messages
 
@@ -126,7 +117,7 @@ async def main():
         candles=candles, fundamentals=fundamentals, channel=redis_channel
     )
 
-    symbols = get_symbols_from_file()
+    symbols = await polygon.all_symbols()
     symbols = symbols[:100]
     indicators = [
         IndicatorParams(
