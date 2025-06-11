@@ -66,8 +66,6 @@ class ATRGapDownScanner:
             [
                 self._adv,
                 self._adr,
-                self._gap,
-                self._atr_gap,
                 self._market_cap,
             ],
         )
@@ -102,8 +100,6 @@ class ATRGapDownScanner:
             [
                 self._adv.column_name(),
                 self._adr.column_name(),
-                self._gap.column_name(),
-                self._atr_gap.column_name(),
                 self._market_cap.column_name(),
             ]
         ]
@@ -111,6 +107,9 @@ class ATRGapDownScanner:
         df = df.drop(columns=["date"])
         if df.empty:
             return df
+
+        df = await self._gap.extend(symbol, df)
+        df = await self._atr_gap.extend(symbol, df)
 
         atr_gap_col = self._atr_gap.column_name()
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
@@ -219,7 +218,7 @@ class ATRGapUpScanner:
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._gap, self._atr_gap, self._market_cap],
+            [self._adv, self._adr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
@@ -241,7 +240,7 @@ class ATRGapUpScanner:
             start,
             end,
             freq,
-            [atr_iday, self._cum_volume],
+            [atr_iday, self._cum_volume, self._gap, self._atr_gap],
         )
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
@@ -252,8 +251,6 @@ class ATRGapUpScanner:
             [
                 self._adv.column_name(),
                 self._adr.column_name(),
-                self._gap.column_name(),
-                self._atr_gap.column_name(),
                 self._market_cap.column_name(),
             ]
         ]
