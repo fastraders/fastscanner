@@ -51,7 +51,6 @@ class ATRParabolicDownScanner:
         self._market_cap = MarketCapIndicator()
         self._cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
         self._cum_volume = CumulativeDailyVolumeIndicator()
-        self._atr_iday: dict[str, ATRIndicator] = {}
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -78,7 +77,7 @@ class ATRParabolicDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = ATRIndicator(period=140, freq=freq)
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
@@ -127,15 +126,12 @@ class ATRParabolicDownScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
-
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_low.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
-        new_row = await atr_iday.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
@@ -201,7 +197,6 @@ class ATRParabolicUpScanner:
         self._market_cap = MarketCapIndicator()
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         self._cum_volume = CumulativeDailyVolumeIndicator()
-        self._atr_iday: dict[str, ATRIndicator] = {}
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -227,7 +222,7 @@ class ATRParabolicUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
+        atr_iday = ATRIndicator(period=140, freq=freq)
 
         df = await ApplicationRegistry.indicators.calculate(
             symbol,
@@ -274,15 +269,12 @@ class ATRParabolicUpScanner:
             new_row["signal"] = pd.NA
             return new_row, False
 
-        atr_iday = self._atr_iday.setdefault(freq, ATRIndicator(period=140, freq=freq))
-
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._atr.extend_realtime(symbol, new_row)
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_high.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
-        new_row = await atr_iday.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]

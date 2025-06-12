@@ -40,7 +40,7 @@ class HighRangeGapUpScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
-        
+
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
@@ -191,7 +191,7 @@ class LowRangeGapDownScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
-        
+
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
