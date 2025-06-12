@@ -32,8 +32,6 @@ batch_start_time = None
 last_received_time = None
 total_messages = 0
 
-ClockRegistry.set(LocalClock())
-
 
 class BenchmarkScannerHandler(SubscriptionHandler):
     def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
@@ -55,43 +53,36 @@ class BenchmarkScannerHandler(SubscriptionHandler):
         return new_row
 
 
-def get_symbols_from_file() -> list[str]:
-    if os.path.exists(SYMBOLS_FILE):
-        with open(SYMBOLS_FILE, "r") as f:
-            symbols = json.load(f)
-            logger.info(f"Loaded {len(symbols)} symbols from file.")
-            return symbols
-    return []
-
-
 async def monitor_batch_timeout():
     global batch_start_time, last_received_time, total_messages
 
     while True:
         await asyncio.sleep(1)
         now = time.time()
-
         if (
-            batch_start_time
-            and last_received_time
-            and (now - last_received_time) > NO_DATA_TIMEOUT
+            batch_start_time is None
+            or last_received_time is None
+            or (now - last_received_time) < NO_DATA_TIMEOUT
         ):
-            batch_duration = last_received_time - batch_start_time
-            logger.info(f"\nBatch Summary:")
-            logger.info(
-                f"First message timestamp: {datetime.fromtimestamp(batch_start_time).strftime('%H:%M:%S.%f')[:-3]}"
-            )
-            logger.info(
-                f"Last message timestamp:  {datetime.fromtimestamp(last_received_time).strftime('%H:%M:%S.%f')[:-3]}"
-            )
-            logger.info(f"Total messages read: {total_messages}")
-            logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
-            batch_start_time = None
-            last_received_time = None
-            total_messages = 0
+            continue
+
+        batch_duration = last_received_time - batch_start_time
+        logger.info(f"\nBatch Summary:")
+        logger.info(
+            f"First message timestamp: {datetime.fromtimestamp(batch_start_time).strftime('%H:%M:%S.%f')[:-3]}"
+        )
+        logger.info(
+            f"Last message timestamp:  {datetime.fromtimestamp(last_received_time).strftime('%H:%M:%S.%f')[:-3]}"
+        )
+        logger.info(f"Total messages read: {total_messages}")
+        logger.info(f"Batch duration: {batch_duration:.6f} seconds\n")
+        batch_start_time = None
+        last_received_time = None
+        total_messages = 0
 
 
 async def main():
+    ClockRegistry.set(LocalClock())
     redis_channel = RedisChannel(
         host=config.REDIS_DB_HOST,
         port=config.REDIS_DB_PORT,
@@ -108,7 +99,7 @@ async def main():
 
     service = ScannerService(candles=candles, channel=redis_channel)
 
-    symbols = get_symbols_from_file()
+    symbols = await polygon.all_symbols()
     symbols = symbols[:1000]
 
     scanner = ATRGapDownScanner(

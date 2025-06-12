@@ -165,10 +165,10 @@ class CandleChannelHandler:
                 return
             agg = await self._buffer.add(new_row)
             if agg is None:
-                 return
+                return
             for ind in self._indicators:
                 agg = await ind.extend_realtime(self._symbol, agg)
- 
+
             self._handler.handle(self._symbol, agg)
 
         except Exception as e:
