@@ -45,27 +45,28 @@ class ATRParabolicDownScanner:
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
 
+        self._adv = ADVIndicator(period=14)
+        self._adr = ADRIndicator(period=14)
+        self._atr = DailyATRIndicator(period=14)
+        self._market_cap = MarketCapIndicator()
+        self._cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
+        self._cum_volume = CumulativeDailyVolumeIndicator()
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        adv = ADVIndicator(period=14)
-        adr = ADRIndicator(period=14)
-        atr = DailyATRIndicator(period=14)
-        market_cap = MarketCapIndicator()
-
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr, market_cap],
+            [self._adv, self._adr, self._atr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
 
-        # High level filtering
-        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
-        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -90,30 +91,91 @@ class ATRParabolicDownScanner:
         if df.empty:
             return df
 
-        cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
-        cum_volume = CumulativeDailyVolumeIndicator()
-        df = await cum_low.extend(symbol, df)
-        df = await cum_volume.extend(symbol, df)
+        df = await self._cum_low.extend(symbol, df)
+        df = await self._cum_volume.extend(symbol, df)
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
-                adv.column_name(),
-                adr.column_name(),
-                atr.column_name(),
-                market_cap.column_name(),
+                self._adv.column_name(),
+                self._adr.column_name(),
+                self._atr.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
 
         # Logic: parabolic down condition
-        df["signal"] = (df[C.OPEN] - df[C.CLOSE]) / df[atr.column_name()]
+        df["signal"] = (df[C.OPEN] - df[C.CLOSE]) / df[self._atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
-        df = df[df[cum_volume.column_name()] >= self._min_volume]
-        # df = df[(df[cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
+        df = df[df[self._cum_volume.column_name()] >= self._min_volume]
+        # df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
 
         return df
+
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]:
+
+        assert isinstance(new_row.name, pd.Timestamp)
+        if (
+            new_row.name.time() > self._end_time
+            or new_row.name.time() < self._start_time
+        ):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        new_row = await self._adv.extend_realtime(symbol, new_row)
+        new_row = await self._adr.extend_realtime(symbol, new_row)
+        new_row = await self._atr.extend_realtime(symbol, new_row)
+        new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._cum_low.extend_realtime(symbol, new_row)
+        new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+
+        adv_value = new_row[self._adv.column_name()]
+        adr_value = new_row[self._adr.column_name()]
+        atr_value = new_row[self._atr.column_name()]
+        market_cap_value = new_row[self._market_cap.column_name()]
+        cum_volume_value = new_row[self._cum_volume.column_name()]
+
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            atr_value,
+            cum_volume_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        signal_value = (new_row[C.OPEN] - new_row[C.CLOSE]) / atr_value
+        new_row["signal"] = signal_value
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and signal_value > self._atr_multiplier
+            and cum_volume_value >= self._min_volume
+        )
+
+        return new_row, passes_filter
+
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._atr.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_low.lookback_days(),
+            self._cum_volume.lookback_days(),
+        )
 
 
 class ATRParabolicUpScanner:
@@ -139,26 +201,28 @@ class ATRParabolicUpScanner:
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
 
+        self._adv = ADVIndicator(period=14)
+        self._adr = ADRIndicator(period=14)
+        self._atr = DailyATRIndicator(period=14)
+        self._market_cap = MarketCapIndicator()
+        self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
+        self._cum_volume = CumulativeDailyVolumeIndicator()
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        adv = ADVIndicator(period=14)
-        adr = ADRIndicator(period=14)
-        atr = DailyATRIndicator(period=14)
-        market_cap = MarketCapIndicator()
-
         daily_df = await ApplicationRegistry.indicators.calculate(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, atr, market_cap],
+            [self._adv, self._adr, self._atr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
 
-        daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
-        daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
+        daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -180,29 +244,91 @@ class ATRParabolicUpScanner:
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
-        cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
-        cum_volume = CumulativeDailyVolumeIndicator()
-        df = await cum_high.extend(symbol, df)
-        df = await cum_volume.extend(symbol, df)
+
+        df = await self._cum_high.extend(symbol, df)
+        df = await self._cum_volume.extend(symbol, df)
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
-                adv.column_name(),
-                adr.column_name(),
-                atr.column_name(),
-                market_cap.column_name(),
+                self._adv.column_name(),
+                self._adr.column_name(),
+                self._atr.column_name(),
+                self._market_cap.column_name(),
             ]
         ]
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
 
         # Logic: parabolic up condition
-        df["signal"] = (df[C.CLOSE] - df[C.OPEN]) / df[atr.column_name()]
+        df["signal"] = (df[C.CLOSE] - df[C.OPEN]) / df[self._atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
-        df = df[df[cum_volume.column_name()] >= self._min_volume]
-        # df = df[(df[cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+        df = df[df[self._cum_volume.column_name()] >= self._min_volume]
+        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         return df
+
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]:
+
+        assert isinstance(new_row.name, pd.Timestamp)
+        if (
+            new_row.name.time() > self._end_time
+            or new_row.name.time() < self._start_time
+        ):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        new_row = await self._adv.extend_realtime(symbol, new_row)
+        new_row = await self._adr.extend_realtime(symbol, new_row)
+        new_row = await self._atr.extend_realtime(symbol, new_row)
+        new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._cum_high.extend_realtime(symbol, new_row)
+        new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+
+        adv_value = new_row[self._adv.column_name()]
+        adr_value = new_row[self._adr.column_name()]
+        atr_value = new_row[self._atr.column_name()]
+        market_cap_value = new_row[self._market_cap.column_name()]
+        cum_volume_value = new_row[self._cum_volume.column_name()]
+
+        mandatory_values = [
+            adv_value,
+            adr_value,
+            atr_value,
+            cum_volume_value,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
+            new_row["signal"] = pd.NA
+            return new_row, False
+
+        signal_value = (new_row[C.CLOSE] - new_row[C.OPEN]) / atr_value
+        new_row["signal"] = signal_value
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        passes_filter = (
+            adv_value >= self._min_adv
+            and adr_value >= self._min_adr
+            and market_cap_passes
+            and signal_value > self._atr_multiplier
+            and cum_volume_value >= self._min_volume
+        )
+
+        return new_row, passes_filter
+
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._atr.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_high.lookback_days(),
+            self._cum_volume.lookback_days(),
+        )
 
 
 class DailyATRParabolicUpScanner:
