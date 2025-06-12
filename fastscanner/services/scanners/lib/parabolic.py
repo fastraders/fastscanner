@@ -167,6 +167,16 @@ class ATRParabolicDownScanner:
 
         return new_row, passes_filter
 
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._atr.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_low.lookback_days(),
+            self._cum_volume.lookback_days(),
+        )
+
 
 class ATRParabolicUpScanner:
     def __init__(
@@ -309,6 +319,16 @@ class ATRParabolicUpScanner:
         )
 
         return new_row, passes_filter
+
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._atr.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._cum_high.lookback_days(),
+            self._cum_volume.lookback_days(),
+        )
 
 
 class DailyATRParabolicUpScanner:

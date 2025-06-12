@@ -168,6 +168,17 @@ class HighRangeGapUpScanner:
 
         return new_row, passes_filter
 
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._highest_high.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._gap.lookback_days(),
+            self._cum_volume.lookback_days(),
+            self._atr_gap.lookback_days(),
+        )
+
 
 class LowRangeGapDownScanner:
     def __init__(
@@ -318,3 +329,14 @@ class LowRangeGapDownScanner:
         )
 
         return new_row, passes_filter
+
+    def lookback_days(self) -> int:
+        return max(
+            self._adv.lookback_days(),
+            self._adr.lookback_days(),
+            self._lowest_low.lookback_days(),
+            self._market_cap.lookback_days(),
+            self._gap.lookback_days(),
+            self._cum_volume.lookback_days(),
+            self._atr_gap.lookback_days(),
+        )
