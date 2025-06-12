@@ -18,9 +18,6 @@ class DaysToEarningsIndicator:
     def column_name(self):
         return self.type()
 
-    def lookback_days(self) -> int:
-        return 0
-
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
@@ -70,9 +67,6 @@ class DaysFromEarningsIndicator:
     def column_name(self):
         return self.type()
 
-    def lookback_days(self) -> int:
-        return 0
-
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
@@ -120,9 +114,6 @@ class MarketCapIndicator:
 
     def column_name(self):
         return self.type()
-
-    def lookback_days(self) -> int:
-        return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)

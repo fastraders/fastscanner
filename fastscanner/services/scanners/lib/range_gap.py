@@ -54,16 +54,20 @@ class HighRangeGapUpScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._market_cap, self._highest_high],
         )
 
         if daily_df.empty:
             return daily_df
+
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
+        daily_df = await self._highest_high.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
@@ -77,16 +81,19 @@ class HighRangeGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [self._cum_volume, self._gap, self._atr_gap],
         )
 
         if df.empty:
             return df
+
+        df = await self._cum_volume.extend(symbol, df)
+        df = await self._gap.extend(symbol, df)
+        df = await self._atr_gap.extend(symbol, df)
 
         df = df.loc[df.index.time >= self._start_time]  # type: ignore
         df = df.loc[df.index.time <= self._end_time]  # type: ignore
@@ -168,17 +175,6 @@ class HighRangeGapUpScanner:
 
         return new_row, passes_filter
 
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._highest_high.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._gap.lookback_days(),
-            self._cum_volume.lookback_days(),
-            self._atr_gap.lookback_days(),
-        )
-
 
 class LowRangeGapDownScanner:
     def __init__(
@@ -216,16 +212,20 @@ class LowRangeGapDownScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._market_cap, self._lowest_low],
         )
 
         if daily_df.empty:
             return daily_df
+
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
+        daily_df = await self._lowest_low.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
@@ -239,16 +239,19 @@ class LowRangeGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [self._cum_volume, self._gap, self._atr_gap],
         )
 
         if df.empty:
             return df
+
+        df = await self._cum_volume.extend(symbol, df)
+        df = await self._gap.extend(symbol, df)
+        df = await self._atr_gap.extend(symbol, df)
 
         df = df.loc[df.index.time >= self._start_time]  # type: ignore
         df = df.loc[df.index.time <= self._end_time]  # type: ignore
@@ -329,14 +332,3 @@ class LowRangeGapDownScanner:
         )
 
         return new_row, passes_filter
-
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._lowest_low.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._gap.lookback_days(),
-            self._cum_volume.lookback_days(),
-            self._atr_gap.lookback_days(),
-        )

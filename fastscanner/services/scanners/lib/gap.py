@@ -46,8 +46,6 @@ class ATRGapDownScanner:
         self._include_null_market_cap = include_null_market_cap
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
-        # self._atr = DailyATRIndicator(period=14)
-        # self._prev_close = PrevDayIndicator(candle_col=C.CLOSE)
         self._market_cap = MarketCapIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.LOW)
@@ -56,21 +54,18 @@ class ATRGapDownScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [
-                self._adv,
-                self._adr,
-                self._market_cap,
-            ],
         )
         if daily_df.empty:
             return daily_df
 
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
@@ -82,14 +77,13 @@ class ATRGapDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [atr_iday, self._cum_volume],
         )
+        df = await self._cum_volume.extend(symbol, df)
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
@@ -173,16 +167,6 @@ class ATRGapDownScanner:
 
         return new_row, passes_filter
 
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._atr_gap.lookback_days(),
-            self._gap.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._cum_volume.lookback_days(),
-        )
-
 
 class ATRGapUpScanner:
     def __init__(
@@ -216,17 +200,18 @@ class ATRGapUpScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
 
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
@@ -238,14 +223,13 @@ class ATRGapUpScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [atr_iday, self._cum_volume, self._gap, self._atr_gap],
         )
+        df = await self._cum_volume.extend(symbol, df)
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
             return df
@@ -258,11 +242,13 @@ class ATRGapUpScanner:
                 self._market_cap.column_name(),
             ]
         ]
-
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
         if df.empty:
             return df
+
+        df = await self._gap.extend(symbol, df)
+        df = await self._atr_gap.extend(symbol, df)
 
         atr_gap_col = self._atr_gap.column_name()
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
@@ -328,13 +314,3 @@ class ATRGapUpScanner:
         )
 
         return new_row, passes_filter
-
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._atr_gap.lookback_days(),
-            self._gap.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._cum_volume.lookback_days(),
-        )

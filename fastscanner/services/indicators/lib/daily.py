@@ -24,9 +24,6 @@ class PrevDayIndicator:
     def column_name(self):
         return f"prev_day_{self._candle_col}"
 
-    def lookback_days(self) -> int:
-        return 0
-
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), 1)
         end_date = df.index[-1].date() - timedelta(days=1)
@@ -65,9 +62,6 @@ class DailyGapIndicator:
     @classmethod
     def type(cls):
         return "daily_gap"
-
-    def lookback_days(self) -> int:
-        return 0
 
     def column_name(self):
         return "daily_gap"
@@ -132,9 +126,6 @@ class DailyATRIndicator:
     def column_name(self):
         return f"daily_atr_{self._period}"
 
-    def lookback_days(self) -> int:
-        return 0
-
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._period + 1)
         end_date = df.index[-1].date() - timedelta(days=1)
@@ -190,9 +181,6 @@ class DailyATRGapIndicator:
 
     def column_name(self):
         return f"daily_atr_gap_{self._period}"
-
-    def lookback_days(self) -> int:
-        return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         # Gets the ratio (day_open - prev_day_close) / atr
@@ -259,9 +247,6 @@ class ADRIndicator:
     def column_name(self):
         return f"adr_{self._period}"
 
-    def lookback_days(self) -> int:
-        return 0
-
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         assert isinstance(df.index, pd.DatetimeIndex)
         start = lookback_days(df.index[0].date(), self._period + 1)
@@ -311,9 +296,6 @@ class ADVIndicator:
 
     def column_name(self):
         return f"adv_{self._period}"
-
-    def lookback_days(self) -> int:
-        return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         assert isinstance(df.index, pd.DatetimeIndex)

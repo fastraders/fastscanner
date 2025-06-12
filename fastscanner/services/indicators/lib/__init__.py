@@ -55,12 +55,6 @@ class Indicator(Protocol):
 
     def column_name(self) -> str: ...
 
-    def lookback_days(self) -> int:
-        """
-        Returns the number of days that the indicator needs to look back in order to calculate its value.
-        """
-        ...
-
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 

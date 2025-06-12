@@ -14,27 +14,11 @@ def test_atr_type():
 
 
 def test_atr_column_name():
-    indicator = ATRIndicator(period=14, freq="1m")
+    indicator = ATRIndicator(period=14, freq="1min")
     assert indicator.column_name() == "atr_14"
 
-    indicator = ATRIndicator(period=20, freq="1m")
+    indicator = ATRIndicator(period=20, freq="1min")
     assert indicator.column_name() == "atr_20"
-
-
-def test_atr_lookback_days():
-    # Test with minute frequency
-    indicator = ATRIndicator(period=14, freq="1m")
-    assert indicator.lookback_days() == 1  # 14 minutes is less than a day
-
-    # Test with hour frequency
-    indicator = ATRIndicator(period=14, freq="1h")
-    assert (
-        indicator.lookback_days() == 5
-    )  # 14 hours is about 2.15 days, with security factor of 2
-
-    # Test with day frequency
-    indicator = ATRIndicator(period=14, freq="1d")
-    assert indicator.lookback_days() == 28  # Actual implementation returns 28 days
 
 
 @pytest.mark.asyncio
@@ -137,8 +121,8 @@ async def test_atr_extend(candles: "CandleStoreTest"):
 
 
 @pytest.mark.asyncio
-async def test_atr_extend_realtime_first_candle():
-    indicator = ATRIndicator(period=5, freq="1m")
+async def test_atr_extend_realtime_first_candle(candles: "CandleStoreTest"):
+    indicator = ATRIndicator(period=5, freq="1min")
 
     # First candle
     row_time = datetime(2023, 1, 1, 9, 30)
@@ -149,13 +133,13 @@ async def test_atr_extend_realtime_first_candle():
     result_row = await indicator.extend_realtime("AAPL", row)
 
     # First candle should have NA for ATR since we don't have previous close
-    assert pd.isna(result_row[indicator.column_name()])
+    assert abs(result_row[indicator.column_name()] - 5) < 1e-5
     assert indicator._last_close["AAPL"] == 102
 
 
 @pytest.mark.asyncio
-async def test_atr_extend_realtime_second_candle():
-    indicator = ATRIndicator(period=5, freq="1m")
+async def test_atr_extend_realtime_second_candle(candles: "CandleStoreTest"):
+    indicator = ATRIndicator(period=5, freq="1min")
 
     # First candle
     first_time = datetime(2023, 1, 1, 9, 30)
@@ -182,8 +166,8 @@ async def test_atr_extend_realtime_second_candle():
 
 
 @pytest.mark.asyncio
-async def test_atr_extend_realtime_multiple_candles():
-    indicator = ATRIndicator(period=5, freq="1m")
+async def test_atr_extend_realtime_multiple_candles(candles: "CandleStoreTest"):
+    indicator = ATRIndicator(period=5, freq="1min")
 
     # First candle
     first_time = datetime(2023, 1, 1, 9, 30)
@@ -218,8 +202,8 @@ async def test_atr_extend_realtime_multiple_candles():
 
 
 @pytest.mark.asyncio
-async def test_atr_extend_realtime_multiple_symbols():
-    indicator = ATRIndicator(period=5, freq="1m")
+async def test_atr_extend_realtime_multiple_symbols(candles: "CandleStoreTest"):
+    indicator = ATRIndicator(period=5, freq="1min")
 
     # AAPL first candle
     aapl_time = datetime(2023, 1, 1, 9, 30)
@@ -264,8 +248,8 @@ async def test_atr_extend_realtime_multiple_symbols():
 
 
 @pytest.mark.asyncio
-async def test_atr_rounding():
-    indicator = ATRIndicator(period=5, freq="1m")
+async def test_atr_rounding(candles: "CandleStoreTest"):
+    indicator = ATRIndicator(period=5, freq="1min")
 
     # First candle
     first_time = datetime(2023, 1, 1, 9, 30)

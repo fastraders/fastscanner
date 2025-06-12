@@ -7,19 +7,10 @@ from typing import Any
 import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
-from fastscanner.services.indicators.clock import ClockRegistry
+from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
 
 from .lib import Indicator, IndicatorsLibrary
-from .ports import (
-    CandleCol,
-    CandleStore,
-    Channel,
-    ChannelHandler,
-    FundamentalDataStore,
-    PublicHolidaysStore,
-)
-from .utils import lookback_days
+from .ports import CandleCol, CandleStore, Channel, FundamentalDataStore
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -63,13 +54,6 @@ class IndicatorsService:
         freq: str,
         indicators: list[Indicator],
     ) -> pd.DataFrame:
-        days = max(ind.lookback_days() for ind in indicators)
-        lagged_start = lookback_days(start, days)
-
-        df = await self.candles.get(symbol, lagged_start, end, freq)
-        if df.empty:
-            return df
-
         for indicator in indicators:
             df = await indicator.extend(symbol, df)
         return df.loc[df.index.date >= start]  # type: ignore
@@ -92,23 +76,6 @@ class IndicatorsService:
         indicator_instances = [
             IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
         ]
-
-        max_days = max(ind.lookback_days() for ind in indicator_instances)
-        today = datetime.now().date()
-        if max_days > 0:
-            lookback_start = lookback_days(today, max_days)
-            end_date = today - timedelta(days=1)
-
-            df = await self.candles.get(symbol, lookback_start, end_date, freq)
-            if df.empty:
-                logger.warning(
-                    f"No historical data found for {symbol} from {lookback_start} to {end_date}"
-                )
-                return
-
-            for _, row in df.iterrows():
-                for ind in indicator_instances:
-                    row = await ind.extend_realtime(symbol, row)
 
         stream_key = f"candles_min_{symbol}"
         await self.channel.subscribe(
@@ -133,9 +100,15 @@ class CandleChannelHandler:
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
-        self._buffer = CandleBuffer(symbol, freq, candle_timeout)
+        self._buffer = CandleBuffer(symbol, freq, self._handle, candle_timeout)
         self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
+
+    async def _handle(self, row: pd.Series) -> None:
+        for ind in self._indicators:
+            row = await ind.extend_realtime(self._symbol, row)
+
+        self._handler.handle(self._symbol, row)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
@@ -157,7 +130,6 @@ class CandleChannelHandler:
                 LOCAL_TIMEZONE_STR
             )
             new_row = pd.Series(data, name=ts)
-
             if self._freq == "1min":
                 for ind in self._indicators:
                     new_row = await ind.extend_realtime(self._symbol, new_row)
@@ -166,10 +138,7 @@ class CandleChannelHandler:
             agg = await self._buffer.add(new_row)
             if agg is None:
                 return
-            for ind in self._indicators:
-                agg = await ind.extend_realtime(self._symbol, agg)
-
-            self._handler.handle(self._symbol, agg)
+            await self._handle(agg)
 
         except Exception as e:
             logger.exception(

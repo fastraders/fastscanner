@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from fastscanner.services.indicators.ports import (
+    CandleCol,
     CandleStore,
     FundamentalDataStore,
     PublicHolidaysStore,
@@ -17,6 +18,8 @@ class CandleStoreTest(CandleStore):
         self._data[symbol] = data
 
     async def get(self, symbol, start_date, end_date, freq="1m"):
+        if symbol not in self._data:
+            return pd.DataFrame(index=pd.DatetimeIndex([]), columns=[CandleCol.COLUMNS])
         df = self._data[symbol]
         return df[
             (df.index.date >= start_date) & (df.index.date <= end_date)  # type: ignore

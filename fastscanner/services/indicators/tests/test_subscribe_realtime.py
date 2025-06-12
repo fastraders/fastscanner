@@ -511,7 +511,7 @@ async def test_flush_on_timeout_with_partial_buffer(setup):
         await channel_handler.handle(f"candles_min_{symbol}", msg1)
         await channel_handler.handle(f"candles_min_{symbol}", msg2)
 
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.4)
 
         assert len(handler.received) == 1
         _, row = handler.received[0]

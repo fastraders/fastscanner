@@ -55,15 +55,19 @@ class ATRParabolicDownScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._atr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
+
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._atr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
@@ -77,15 +81,12 @@ class ATRParabolicDownScanner:
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [atr_iday],
         )
-
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
 
         if df.empty:
@@ -167,16 +168,6 @@ class ATRParabolicDownScanner:
 
         return new_row, passes_filter
 
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._atr.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._cum_low.lookback_days(),
-            self._cum_volume.lookback_days(),
-        )
-
 
 class ATRParabolicUpScanner:
     def __init__(
@@ -211,15 +202,19 @@ class ATRParabolicUpScanner:
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [self._adv, self._adr, self._atr, self._market_cap],
         )
         if daily_df.empty:
             return daily_df
+
+        daily_df = await self._adv.extend(symbol, daily_df)
+        daily_df = await self._adr.extend(symbol, daily_df)
+        daily_df = await self._atr.extend(symbol, daily_df)
+        daily_df = await self._market_cap.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
@@ -229,17 +224,15 @@ class ATRParabolicUpScanner:
             self._max_market_cap,
             self._include_null_market_cap,
         )
+
         if daily_df.empty:
             return daily_df
 
-        atr_iday = ATRIndicator(period=140, freq=freq)
-
-        df = await ApplicationRegistry.indicators.calculate(
+        df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             freq,
-            [atr_iday],
         )
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
         if df.empty:
@@ -320,16 +313,6 @@ class ATRParabolicUpScanner:
 
         return new_row, passes_filter
 
-    def lookback_days(self) -> int:
-        return max(
-            self._adv.lookback_days(),
-            self._adr.lookback_days(),
-            self._atr.lookback_days(),
-            self._market_cap.lookback_days(),
-            self._cum_high.lookback_days(),
-            self._cum_volume.lookback_days(),
-        )
-
 
 class DailyATRParabolicUpScanner:
     def __init__(
@@ -361,15 +344,21 @@ class DailyATRParabolicUpScanner:
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
 
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, daily_atr, prev_close, prev_open, market_cap],
         )
         if daily_df.empty:
             return daily_df
+
+        daily_df = await adv.extend(symbol, daily_df)
+        daily_df = await adr.extend(symbol, daily_df)
+        daily_df = await daily_atr.extend(symbol, daily_df)
+        daily_df = await prev_close.extend(symbol, daily_df)
+        daily_df = await prev_open.extend(symbol, daily_df)
+        daily_df = await market_cap.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
@@ -423,15 +412,21 @@ class DailyATRParabolicDownScanner:
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
 
-        daily_df = await ApplicationRegistry.indicators.calculate(
+        daily_df = await ApplicationRegistry.candles.get(
             symbol,
             start,
             end,
             "1d",
-            [adv, adr, daily_atr, prev_close, prev_open, market_cap],
         )
         if daily_df.empty:
             return daily_df
+
+        daily_df = await adv.extend(symbol, daily_df)
+        daily_df = await adr.extend(symbol, daily_df)
+        daily_df = await daily_atr.extend(symbol, daily_df)
+        daily_df = await prev_close.extend(symbol, daily_df)
+        daily_df = await prev_open.extend(symbol, daily_df)
+        daily_df = await market_cap.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]

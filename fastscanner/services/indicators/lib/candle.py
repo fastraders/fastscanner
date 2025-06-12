@@ -29,9 +29,6 @@ class CumulativeDailyVolumeIndicator:
         self._last_date: dict[str, date] = {}
         self._last_volume: dict[str, float] = {}
 
-    def lookback_days(self) -> int:
-        return 0
-
     @classmethod
     def type(cls):
         return "cumulative_daily_volume"
@@ -99,9 +96,6 @@ class PremarketCumulativeIndicator:
         self._last_date: dict[str, date] = {}
         self._last_value: dict[str, float] = {}
 
-    def lookback_days(self) -> int:
-        return 0
-
     @classmethod
     def type(cls):
         return "premarket_cumulative"
@@ -145,9 +139,6 @@ class CumulativeIndicator:
         self._op = CumulativeOperation(op)
         self._last_value: dict[str, float] = {}
 
-    def lookback_days(self) -> int:
-        return 0
-
     @classmethod
     def type(cls):
         return "cumulative"
@@ -182,7 +173,7 @@ class ATRIndicator:
         self._last_close: dict[str, float] = {}
         self._freq = freq
 
-    def lookback_days(self) -> int:
+    def _lookback_days(self) -> int:
         n, unit = split_freq(self._freq)
         if unit == "d":
             n *= 390
@@ -200,11 +191,23 @@ class ATRIndicator:
         return f"atr_{self._period}"
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        col_name = self.column_name()
+        if df.empty:
+            return df
+
+        end_date = df.index[0].date() - timedelta(days=1)
+        start_date = end_date - timedelta(days=self._lookback_days())
+        prev_df = await ApplicationRegistry.candles.get(
+            symbol, start_date, end_date, self._freq
+        )
+
+        if not prev_df.empty:
+            df = pd.concat([prev_df, df])
+
         assert isinstance(df.index, pd.DatetimeIndex)
         tr0 = (df[CandleCol.HIGH] - df[CandleCol.LOW]).abs()
         tr1 = (df[CandleCol.HIGH] - df[CandleCol.CLOSE].shift(1)).abs()
         tr2 = (df[CandleCol.LOW] - df[CandleCol.CLOSE].shift(1)).abs()
-        col_name = self.column_name()
         df[col_name] = (
             pd.concat([tr0, tr1, tr2], axis=1)
             .max(axis=1)
@@ -217,7 +220,8 @@ class ATRIndicator:
         assert isinstance(new_row.name, datetime)
         last_close = self._last_close.get(symbol)
         if last_close is None:
-            new_row[self.column_name()] = pd.NA
+            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            self._last_atr[symbol] = new_row[self.column_name()]
             self._last_close[symbol] = new_row[CandleCol.CLOSE]
             return new_row
 
@@ -258,9 +262,6 @@ class PositionInRangeIndicator:
 
     def column_name(self):
         return f"position_in_range_{self._n_days}"
-
-    def lookback_days(self) -> int:
-        return 0
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         original_columns = set(df.columns)
@@ -332,9 +333,6 @@ class DailyRollingIndicator:
 
     def column_name(self) -> str:
         return f"{self._operation}_{self._candle_col}_{self._n_days}d"
-
-    def lookback_days(self) -> int:
-        return 0
 
     async def _get_data_for_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._n_days)
@@ -408,9 +406,6 @@ class GapIndicator:
         self._candle_col = candle_col
         self._prev_day = PrevDayIndicator(CandleCol.CLOSE)
 
-    def lookback_days(self) -> int:
-        return 0
-
     @classmethod
     def type(cls):
         return "gap"
@@ -453,9 +448,6 @@ class ATRGapIndicator:
         self._atr = DailyATRIndicator(period)
         self._gap = GapIndicator(candle_col)
         self._prev_day = PrevDayIndicator(CandleCol.CLOSE)
-
-    def lookback_days(self) -> int:
-        return 0
 
     @classmethod
     def type(cls):

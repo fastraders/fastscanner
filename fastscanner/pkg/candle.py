@@ -1,19 +1,29 @@
 import asyncio
+from typing import Awaitable, Callable
 
 import pandas as pd
 
 from fastscanner.services.indicators.clock import ClockRegistry
 from fastscanner.services.indicators.ports import CandleCol as C
 
+_TimeoutHandler = Callable[[pd.Series], Awaitable[None]]
+
 
 class CandleBuffer:
-    def __init__(self, symbol: str, freq: str, timeout: float = 20):
+    def __init__(
+        self,
+        symbol: str,
+        freq: str,
+        timeout_handler: _TimeoutHandler,
+        timeout: float = 20,
+    ):
         self._symbol = symbol
         self._freq = freq
         self._timeout = timeout
         self._buffer: dict[pd.Timestamp, pd.Series] = {}
         self._lock = asyncio.Lock()
         self._timeout_task: asyncio.Task | None = None
+        self._timeout_handler = timeout_handler
 
     def _expected_ts(self, ts: pd.Timestamp) -> pd.Timestamp:
         return ts.floor(self._freq)
@@ -40,7 +50,10 @@ class CandleBuffer:
         )
         await asyncio.sleep((flush_at - now).total_seconds())
         async with self._lock:
-            return await self.flush()
+            row = await self.flush()
+            if row is None:
+                return
+            await self._timeout_handler(row)
 
     async def flush(self):
         if not self._buffer:

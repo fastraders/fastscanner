@@ -21,7 +21,12 @@ def sample_fundamental_data():
             "GicIndustry": "Tech Hardware",
             "GicSector": "Information Technology",
         },
-        "Earnings": {"History": {"2023-12-31": {}, "2023-09-30": {}}},
+        "Earnings": {
+            "History": {
+                "2023-12-31": {"reportDate": "2023-12-31"},
+                "2023-09-30": {"reportDate": "2023-09-30"},
+            }
+        },
         "SharesStats": {
             "PercentInsiders": 1.23,
             "PercentInstitutions": 65.4,

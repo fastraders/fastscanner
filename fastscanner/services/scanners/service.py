@@ -29,7 +29,13 @@ class ScannerChannelHandler:
         self._scanner = scanner
         self._handler = handler
         self._freq = freq
-        self._buffer = CandleBuffer(symbol, freq)
+        self._buffer = CandleBuffer(symbol, freq, self._handle)
+
+    async def _handle(self, row: pd.Series) -> None:
+        new_row, passed = await self._scanner.scan_realtime(
+            self._symbol, row, self._freq
+        )
+        self._handler.handle(self._symbol, new_row, passed)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         for field in (C.OPEN, C.HIGH, C.LOW, C.CLOSE, C.VOLUME):
@@ -49,10 +55,7 @@ class ScannerChannelHandler:
         agg = await self._buffer.add(row)
         if agg is None:
             return
-        new_row, passed = await self._scanner.scan_realtime(
-            self._symbol, agg, self._freq
-        )
-        self._handler.handle(self._symbol, new_row, passed)
+        await self._handle(agg)
 
 
 class ScannerService:
@@ -67,16 +70,6 @@ class ScannerService:
         scanner: Scanner,
         handler: SubscriptionHandler,
     ):
-        max_days = scanner.lookback_days()
-        today = datetime.now().date()
-
-        if max_days > 0:
-            lookback_start = lookback_days(today, max_days)
-            end_date = today - timedelta(days=1)
-            df = await self._candles.get(symbol, lookback_start, end_date, freq)
-            for _, row in df.iterrows():
-                await scanner.scan_realtime(symbol, row, freq)  # warm up
-
         stream_key = f"candles_min_{symbol}"
         await self._channel.subscribe(
             stream_key, ScannerChannelHandler(symbol, scanner, handler, freq)
