@@ -28,6 +28,9 @@ class MockChannel:
     async def flush(self) -> None:
         pass
 
+    async def unsubscribe(self, channel_id: str, handler: "ChannelHandler"):
+        pass
+
 
 @pytest.fixture
 def candles():
