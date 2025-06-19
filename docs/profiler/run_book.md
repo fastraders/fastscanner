@@ -1,136 +1,67 @@
-# FastScanner Austin Profiling Run Book
+# FastScanner Profiling Runbook (Austin Web)
 
-## Overview
+## How do I profile a module in my code that could be creating performance issues?
 
-FastScanner uses Austin profiler for performance analysis.
+If you suspect a specific module or function in your code is causing performance issues, follow these steps:
+
+1. **Identify the entry point** (script, function, or module) you want to profile.
+2. **Run Austin Web** with your entry point:
+   ```bash
+   austin-web -S python -m <your.module> [args...]
+   ```
+   or
+   ```bash
+   austin-web -S python path/to/your_script.py [args...]
+   ```
+3. **Open the Austin Web interface** (URL will be shown in the terminal).
+4. **Analyze the flame graph:**
+   - Focus on wide blocks under your own code (not system/runner functions).
+   - Identify which functions or lines are taking the most time.
+5. **Optimize the slowest parts** and re-profile to measure improvements.
+
+*Tip: If your module is only used as part of a larger workflow, create a minimal script that exercises just the part you want to profile.*
+
+## Purpose
+This runbook provides a clear, step-by-step guide for profiling FastScanner's batch and realtime scanners using the Austin Web profiler. It is focused on actionable steps and best practices for future performance analysis.
 
 ## Prerequisites
-
 - Austin profiler installed and available in PATH
 
+## Step-by-Step Profiling Guide
 
-## Quick Start
+### 1. Batch Scanner Profiling (benchmark_scanner)
+1. **Start profiling with Austin Web:**
+   ```bash
+   make austin-web-scanner
+   ```
+2. **Open the Austin Web interface:**
+   - The URL will be shown in the terminal (usually http://localhost:5000).
+3. **Run the scanner as usual.**
+4. **Analyze the flame graph:**
+   - Focus on wide blocks under your own code (e.g., `read_csv`, indicator functions).
+   - Ignore top-level system/runner functions (e.g., `run`, event loop).
+   - Look for bottlenecks in file I/O and indicator calculations.
 
-### 1. View Available Commands
-```bash
-make austin-help
-```
+### 2. Realtime Scanner Profiling (benchmark_scanner_realtime)
+1. **Start profiling with Austin Web:**
+   ```bash
+   make austin-web-scanner-realtime
+   ```
+2. **Open the Austin Web interface:**
+   - The URL will be shown in the terminal.
+3. **Run the realtime scanner as usual.**
+4. **Analyze the flame graph:**
+   - Focus on wide blocks under your own code (e.g., Redis stream reading, event handlers, indicator functions).
+   - Ignore system/runner functions.
+   - Look for bottlenecks in Redis I/O, event processing, and indicator calculations.
 
-### 2. Basic Profiling
-```bash
-# Profile benchmark scanner with web interface
-make austin-web-scanner
+## Best Practices
+- **Re-profile after making optimizations to measure impact.**
 
-# Profile realtime scanner with terminal interface
-make austin-tui-scanner-realtime
-```
+## Troubleshooting
+- If Austin Web does not start, ensure Austin is installed and available in your PATH.
+- If the flame graph is dominated by system functions, zoom in on your own code blocks for actionable insights.
 
-## Makefile Commands
+---
 
-### Direct Commands (Recommended)
-
-#### Austin Web (Browser-based visualization)
-```bash
-# Profile benchmark scanner - opens web interface automatically
-make austin-web-scanner
-
-# Profile realtime benchmark scanner - opens web interface automatically  
-make austin-web-scanner-realtime
-```
-
-#### Austin TUI (Terminal-based visualization)
-```bash
-# Profile benchmark scanner - real-time terminal visualization
-make austin-tui-scanner
-
-# Profile realtime benchmark scanner - real-time terminal visualization
-make austin-tui-scanner-realtime
-```
-
-## Direct Austin Commands
-
-If you prefer to run Austin directly without Make:
-
-### Austin Web
-```bash
-# Basic web profiling
-austin-web -S python -m fastscanner.benchmarks.benchmark_scanner
-
-# Web profiling with time limit (60 seconds)
-austin-web -S -x 60 python -m fastscanner.benchmarks.benchmark_scanner_realtime
-
-# Web profiling with memory tracking
-austin-web -S -m python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-### Austin TUI
-```bash
-# Basic TUI profiling
-austin-tui python -m fastscanner.benchmarks.benchmark_scanner
-
-# TUI profiling with memory tracking
-austin-tui -m python -m fastscanner.benchmarks.benchmark_scanner_realtime
-
-# TUI profiling with high-resolution sampling
-austin-tui -i 1ms python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-### Austin CLI (Save to files)
-```bash
-# Save profile to file
-austin -o output/profiling/profile.austin -x 30 python -m fastscanner.benchmarks.benchmark_scanner
-
-# Save with memory profiling
-austin -m -o output/profiling/profile_memory.austin -x 30 python -m fastscanner.benchmarks.benchmark_scanner
-
-# Save with full metrics (time + memory)
-austin -f -o output/profiling/profile_full.austin -x 30 python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-## Austin Options Explained
-
-### Common Flags
-- **`-S`** - Start web server (required for austin-web)
-- **`-x 60`** - Profile for 60 seconds only
-- **`-m`** - Enable memory profiling
-- **`-f`** - Full metrics (time + memory)
-- **`-i 1ms`** - Sampling interval (default: 100μs)
-- **`-o file.austin`** - Save output to file
-
-### Profile Types
-
-#### 1. Time Profiling (Default)
-Shows CPU time spent in each function
-```bash
-austin-web -S python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-#### 2. Memory Profiling
-Shows memory allocations and deallocations
-```bash
-austin-web -S -m python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-#### 3. Full Profiling
-Shows both time and memory metrics
-```bash
-austin-web -S -f python -m fastscanner.benchmarks.benchmark_scanner
-```
-
-## Useful Commands Reference
-
-### Quick Commands
-| Command | Description |
-|---------|-------------|
-| `make austin-help` | Show all available commands |
-| `make austin-web-scanner` | Quick web profiling of benchmark scanner |
-| `make austin-tui-scanner-realtime` | Quick TUI profiling of realtime scanner |
-| `make austin-web-benchmarks` | Interactive benchmark selection |
-
-### Direct Austin Commands
-| Command | Description |
-|---------|-------------|
-| `austin-web -S <script>` | Web interface profiling |
-| `austin-tui <script>` | Terminal interface profiling |
-| `austin -o file.austin <script>` | Save profile to file |
-| `austin --help` | Show all austin options |
+*For detailed analysis and conclusions, see the profiling analysis report.*
