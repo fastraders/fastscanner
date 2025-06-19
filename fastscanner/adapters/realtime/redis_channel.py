@@ -87,12 +87,12 @@ class RedisChannel:
         handlers = self._handlers.get(channel_id, [])
         if handler not in handlers:
             return
-        
+
         handlers.remove(handler)
         if not handlers:
             del self._handlers[channel_id]
             self._last_ids.pop(channel_id, None)
-            
+
             if not self._handlers and self._xread_task is not None:
                 self._xread_task.cancel()
                 self._xread_task = None

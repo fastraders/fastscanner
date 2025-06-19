@@ -144,3 +144,6 @@ class CandleChannelHandler:
             logger.exception(
                 f"[Handler Error] Failed processing message from {channel_id}: {e}"
             )
+
+    def id(self) -> str:
+        return f"{self._symbol}_{self._freq}"
