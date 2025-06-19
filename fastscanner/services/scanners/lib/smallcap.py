@@ -40,6 +40,7 @@ class SmallCapUpScanner:
         self._id = str(uuid.uuid4())
         self._min_volume = min_volume
         self._min_gap = min_gap
+        self._id = str(uuid.uuid4())
         self._start_time = start_time
         self._end_time = end_time
         self._min_market_cap = min_market_cap
