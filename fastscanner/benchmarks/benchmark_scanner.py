@@ -50,7 +50,7 @@ async def run():
     end_date = date(2023, 3, 31)
     freq = "1d"
     symbols = await polygon.all_symbols()
-    symbols = symbols[:1000]
+    #symbols = symbols[:1000]
     result: pd.DataFrame | None = None
     scanner = DailyATRParabolicDownScanner(
         min_adv=1_000_000,
