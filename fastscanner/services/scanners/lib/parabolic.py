@@ -353,6 +353,7 @@ class DailyATRParabolicUpScanner:
         if daily_df.empty:
             return daily_df
 
+        daily_df = daily_df.shift(1)
         daily_df = await adv.extend(symbol, daily_df)
         daily_df = await adr.extend(symbol, daily_df)
         daily_df = await daily_atr.extend(symbol, daily_df)
@@ -421,6 +422,7 @@ class DailyATRParabolicDownScanner:
         if daily_df.empty:
             return daily_df
 
+        daily_df = daily_df.shift(1)
         daily_df = await adv.extend(symbol, daily_df)
         daily_df = await adr.extend(symbol, daily_df)
         daily_df = await daily_atr.extend(symbol, daily_df)

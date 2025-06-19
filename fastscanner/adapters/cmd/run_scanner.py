@@ -16,6 +16,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.lib import Indicator
 from fastscanner.services.indicators.lib.candle import PositionInRangeIndicator
@@ -89,6 +90,7 @@ async def _run_async(
     end_date: date,
     freq: str,
 ):
+    ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
@@ -169,15 +171,15 @@ async def run_scanner():
     all_symbols = (await polygon.all_symbols())[:1000]  # [:1000]
     start_date = date(2020, 1, 1)
     end_date = date(2020, 3, 31)
-    freq = "1min"
-    scanner = ATRGapDownScanner(
-        min_adv=1_000_000,
-        min_adr=0.005,
-        min_volume=50_000,
-        atr_multiplier=0.5,
-        start_time=time(9, 20),
-        end_time=time(9, 25),
-    )
+    freq = "1d"
+    # scanner = ATRGapDownScanner(
+    #     min_adv=1_000_000,
+    #     min_adr=0.005,
+    #     min_volume=50_000,
+    #     atr_multiplier=0.5,
+    #     start_time=time(9, 20),
+    #     end_time=time(9, 25),
+    # )
     # scanner = ATRParabolicDownScanner(
     #     min_adv=2_000_000,
     #     min_adr=0.005,
@@ -187,12 +189,12 @@ async def run_scanner():
     #     end_time=time(15, 59),
     #     include_null_market_cap=True,
     # )
-    # scanner = DailyATRParabolicDownScanner(
-    #     min_adv=2_000_000,
-    #     min_adr=0.005,
-    #     atr_multiplier=0.5,
-    #     include_null_market_cap=True,
-    # )
+    scanner = DailyATRParabolicDownScanner(
+        min_adv=2_000_000,
+        min_adr=0.005,
+        atr_multiplier=0.5,
+        include_null_market_cap=True,
+    )
     # scanner = HighRangeGapUpScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.0005,

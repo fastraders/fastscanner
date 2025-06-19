@@ -15,8 +15,8 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
-from fastscanner.services.indicators.clock import ClockRegistry, LocalClock
 from fastscanner.services.indicators.lib import IndicatorsLibrary
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,

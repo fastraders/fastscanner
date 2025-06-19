@@ -2,17 +2,14 @@ import asyncio
 import logging
 import math
 import multiprocessing
-import multiprocessing.pool
-import os
 import time
-from datetime import date, timedelta
 
 import pandas as pd
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
@@ -20,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
-    for year in range(2010, 2026):
+    for year in range(2010, ClockRegistry.clock.today().year + 1):
         await candles.cache_all_freqs(symbol, year)
         logger.info(f"Collected data for {symbol} in {year}")
 
@@ -28,6 +25,7 @@ async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
 
 
 async def _collect_batch(symbols: list[str]) -> None:
+    ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
@@ -79,7 +77,7 @@ def _run_batch(batch: list[str]) -> None:
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = await polygon.all_symbols()
+    all_symbols = (await polygon.all_symbols())[:100]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [

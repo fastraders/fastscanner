@@ -10,7 +10,7 @@ import httpx
 import pandas as pd
 
 from fastscanner.pkg import config
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
 from fastscanner.pkg.http import MaxRetryError, async_retry_request
 from fastscanner.pkg.ratelimit import RateLimiter
 from fastscanner.services.indicators.ports import CandleCol
@@ -56,6 +56,12 @@ class PolygonCandlesProvider:
             "d": 50000,
         }
         max_days = max_days_per_unit[unit]
+        max_end = ClockRegistry.clock.today() - timedelta(days=1)
+        if end > max_end:
+            raise ValueError(
+                f"End date {end} is in the future. Please provide a valid end date."
+            )
+
         curr_start = start
         curr_end = min(end, start + timedelta(days=max_days))
         dfs: list[pd.DataFrame] = []
@@ -70,7 +76,11 @@ class PolygonCandlesProvider:
                     client,
                     "GET",
                     url,
-                    params={"apiKey": self._api_key, "limit": 50000},
+                    params={
+                        "apiKey": self._api_key,
+                        "limit": 50000,
+                        # "adjusted": "true",
+                    },
                     headers={"Accept": "text/csv"},
                 )
                 if response.status_code == 404:
@@ -134,6 +144,41 @@ class PolygonCandlesProvider:
             async with self._rate_limit:
                 async with httpx.AsyncClient() as client:
                     return await self._fetch(client, symbol, start, end, freq)
+
+    async def splits(self, start: date, end: date) -> dict[str, date]:
+        async with httpx.AsyncClient() as client:
+            url = urljoin(self._base_url, "v3/reference/splits")
+            params = {
+                "apiKey": self._api_key,
+                "limit": 1000,
+                "order": "asc",
+                "sort": "execution_date",
+                "execution_date.gte": start.isoformat(),
+                "execution_date.lte": end.isoformat(),
+            }
+            splits: dict[str, date] = {}
+            while True:
+                response = await async_retry_request(
+                    client,
+                    "GET",
+                    url,
+                    params=params,
+                )
+                response.raise_for_status()
+                data = response.json()
+                if len(data.get("results", [])) == 0:
+                    break
+                for item in data["results"]:
+                    ticker = item["ticker"]
+                    execution_date = date.fromisoformat(item["execution_date"])
+                    splits[ticker] = execution_date
+
+                if data.get("next_url") is None:
+                    break
+                url = f'{data["next_url"]}&apiKey={self._api_key}'
+                params = None
+
+        return splits
 
     async def _all_symbols(self, **filter) -> list[str]:
         symbols: list[str] = []

@@ -5,8 +5,7 @@ from typing import Any
 import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
-from fastscanner.services.indicators.clock import ClockRegistry
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.ports import CandleStore, Channel, ChannelHandler
 from fastscanner.services.indicators.utils import lookback_days
@@ -38,7 +37,13 @@ class ScannerChannelHandler:
         self._handler.handle(self._symbol, new_row, passed)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        for field in (C.OPEN, C.HIGH, C.LOW, C.CLOSE, C.VOLUME):
+        for field in (
+            C.OPEN,
+            C.HIGH,
+            C.LOW,
+            C.CLOSE,
+            C.VOLUME,
+        ):
             if field in data:
                 data[field] = float(data[field])
         ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(

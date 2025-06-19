@@ -3,7 +3,7 @@ from typing import Awaitable, Callable
 
 import pandas as pd
 
-from fastscanner.services.indicators.clock import ClockRegistry
+from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.services.indicators.ports import CandleCol as C
 
 _TimeoutHandler = Callable[[pd.Series], Awaitable[None]]

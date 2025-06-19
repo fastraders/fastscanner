@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import FundamentalData, FundamentalDataStore
 from fastscanner.services.registry import ApplicationRegistry

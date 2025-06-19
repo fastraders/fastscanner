@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 
 from .lib import Indicator, IndicatorsLibrary
 from .ports import CandleCol, CandleStore, Channel, FundamentalDataStore

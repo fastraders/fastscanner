@@ -9,8 +9,7 @@ from datetime import date, datetime, time, timedelta
 import pandas as pd
 
 from fastscanner.pkg import config
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR, split_freq
-from fastscanner.services.indicators.clock import ClockRegistry
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 logger = logging.getLogger(__name__)
@@ -24,6 +23,12 @@ class PartitionedCSVCandlesProvider:
         self._store = store
 
     async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+        max_date = ClockRegistry.clock.today() - timedelta(days=1)
+        if end > max_date:
+            raise ValueError(
+                f"End date {end} cannot be in the future. Max date is {max_date}."
+            )
+
         _, unit = split_freq(freq)
         keys = self._partition_keys_in_range(start, end, unit)
 
@@ -67,14 +72,13 @@ class PartitionedCSVCandlesProvider:
             )
             return
 
-        minute_df = await self._store.get(
-            symbol,
-            min(minute_range[0], hourly_range[0]),
-            max(minute_range[1], hourly_range[1]),
-            "1min",
-        )
-        # Caches daily data
-        daily_df = await self._store.get(symbol, daily_range[0], daily_range[1], "1d")
+        minute_start = min(minute_range[0], hourly_range[0])
+        minute_end = min(max(minute_range[1], hourly_range[1]), yday)
+        day_start = daily_range[0]
+        day_end = min(daily_range[1], yday)
+
+        minute_df = await self._store.get(symbol, minute_start, minute_end, "1min")
+        daily_df = await self._store.get(symbol, day_start, day_end, "1d")
 
         for freq in self._cache_freqs:
             if freq == "1min":
@@ -135,6 +139,8 @@ class PartitionedCSVCandlesProvider:
                 )
 
         start, end = self._range_from_key(key, unit)
+        yday = ClockRegistry.clock.today() - timedelta(days=1)
+        end = min(end, yday)
         df = (await self._store.get(symbol, start, end, freq)).dropna()
         self._save_cache(symbol, key, freq, df)
         self._mark_expiration(symbol, key, unit)
@@ -206,16 +212,14 @@ class PartitionedCSVCandlesProvider:
         if expiration_key not in expirations:
             return False
 
-        today = datetime.now(zoneinfo.ZoneInfo(self.tz)).date()
+        today = ClockRegistry.clock.today()
         return expirations[expiration_key] <= today
 
     def _mark_expiration(self, symbol: str, key: str, unit: str) -> None:
         self._load_expirations(symbol)
 
         _, end = self._range_from_key(key, unit)
-        today = datetime.now(
-            zoneinfo.ZoneInfo(self.tz)
-        ).date()  # Need to Do clock registry here
+        today = ClockRegistry.clock.today()
         expiration_key = self._expiration_key(key, unit)
         expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:

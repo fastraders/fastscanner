@@ -7,8 +7,7 @@ import pytest
 import pytz
 from httpx import patch
 
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
-from fastscanner.services.indicators.clock import ClockRegistry
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,

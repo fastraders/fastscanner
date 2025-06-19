@@ -12,7 +12,7 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
 from fastscanner.pkg import config
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
 from .polygon import PolygonCandlesProvider

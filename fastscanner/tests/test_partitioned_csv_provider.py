@@ -7,19 +7,20 @@ import pandas as pd
 import pytest
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
-from fastscanner.pkg.datetime import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, LocalClock
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 SYMBOL = "AAPL"
 FREQ = "1min"
 FAILFREQ = "0.3xyz"
 UNIT = "min"
-TEST_KEY = datetime.now().date().isoformat()
+TEST_KEY = date(2023, 1, 1).strftime("%Y-%m-%d")
 
 
 @pytest.fixture
 def provider(tmp_path):
     mock_store = MagicMock()
+    ClockRegistry.set(LocalClock())
     provider = PartitionedCSVCandlesProvider(mock_store)
     provider.CACHE_DIR = tmp_path / "candles"
     return provider
@@ -234,6 +235,7 @@ def test_range_from_key_hour(provider):
 async def test_collect_expired_data_basic(mock_clock_registry, provider):
     today = datetime(2023, 5, 30, 12, 0, 0)
     mock_clock_registry.clock.now.return_value = today
+    mock_clock_registry.clock.today.return_value = today.date()
 
     symbol = "AAPL"
 

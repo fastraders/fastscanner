@@ -1364,7 +1364,8 @@ async def test_adr_indicator_extend(candles: "CandleStoreTest"):
     for i in range(6, 20):  # Last 14 days (from day 6 to day 19)
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        expected_adr += (high - low) / close
     expected_adr /= 14
 
     actual_adr = result_df[indicator.column_name()].iloc[0]
@@ -1449,6 +1450,28 @@ async def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
                 113,
                 111,
             ],
+            CandleCol.CLOSE: [
+                95,
+                97,
+                100,
+                98,
+                96,
+                99,
+                101,
+                103,
+                102,
+                100,
+                105,
+                107,
+                109,
+                108,
+                106,
+                110,
+                112,
+                114,
+                113,
+                111,
+            ],
         },
         index=daily_dates,
     )
@@ -1482,14 +1505,16 @@ async def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
     for i in range(5, 19):  # Last 14 days (from day 6 to day 19)
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        jan21_expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        jan21_expected_adr += (high - low) / close
     jan21_expected_adr /= 14
 
     jan22_expected_adr = 0
     for i in range(6, 20):  # Last 14 days (from day 7 to day 20)
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        jan22_expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        jan22_expected_adr += (high - low) / close
     jan22_expected_adr /= 14
 
     # Jan 21 rows should have the same ADR
@@ -1581,7 +1606,8 @@ async def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
     for i in range(0, 14):  # All 14 days in our data
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        expected_adr += (high - low) / close
     expected_adr /= 14
 
     actual_adr = result_row[indicator.column_name()]
@@ -1682,7 +1708,8 @@ async def test_adr_indicator_extend_realtime_multiple_calls_same_day(
     for i in range(0, 14):  # All 14 days in our data
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        expected_adr += (high - low) / close
     expected_adr /= 14
 
     assert abs(result1[indicator.column_name()] - expected_adr) < 0.001
@@ -1795,7 +1822,8 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
     for i in range(0, 14):  # First 14 days
         high = daily_data[CandleCol.HIGH].iloc[i]
         low = daily_data[CandleCol.LOW].iloc[i]
-        jan15_expected_adr += (high - low) / low
+        close = daily_data[CandleCol.CLOSE].iloc[i]
+        jan15_expected_adr += (high - low) / close
     jan15_expected_adr /= 14
 
     # Calculate expected ADR for Jan 16 (should include Jan 15 and exclude Jan 1)
@@ -1803,7 +1831,8 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
     for i in range(1, 15):  # Days 2-15
         high = updated_daily_data[CandleCol.HIGH].iloc[i]
         low = updated_daily_data[CandleCol.LOW].iloc[i]
-        jan16_expected_adr += (high - low) / low
+        close = updated_daily_data[CandleCol.CLOSE].iloc[i]
+        jan16_expected_adr += (high - low) / close
     jan16_expected_adr /= 14
 
     # Verify the ADR values
