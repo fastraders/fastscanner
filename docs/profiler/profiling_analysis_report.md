@@ -43,6 +43,17 @@ This report summarizes the key performance bottlenecks and optimization opportun
 - **Indicator Calculations:**
   - 15-25% of time spent in real-time indicator computations.
 
+#### 3.1.1 Detailed Note: `Series.__setitem__` Hotspot in Indicator Calculations
+- The profiler highlights that a significant portion of indicator calculation time is spent in `Series.__setitem__` (seen as `Series.setitem` in the flame graph).
+- **Where does this happen?**
+  - In each indicator's `extend_realtime` method (e.g., `PrevDayIndicator`, `DailyATRIndicator`, etc.), new indicator values are written to the current row using code like:
+    ```python
+    new_row[self.column_name()] = ...
+    ```
+    This triggers the pandas `Series.__setitem__` method.
+- **Why is this a hotspot?**
+  - This assignment occurs for every indicator and every incoming candle in real time.
+  - With many indicators and high-frequency data, these assignments accumulate, making `Series.__setitem__` a visible hotspot.
 
 **Batch Summary Statistics:**
 ![Realtime Scanner Logs][realtime-logs]
