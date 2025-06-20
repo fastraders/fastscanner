@@ -83,16 +83,17 @@ class RedisChannel:
                 logger.error("Redis xread error: %s", e, exc_info=True)
                 await asyncio.sleep(1)
 
-    async def unsubscribe(self, channel_id: str, handler: ChannelHandler) -> None:
+    async def unsubscribe(self, channel_id: str, handler_id: str) -> None:
         handlers = self._handlers.get(channel_id, [])
-        if handler not in handlers:
+        for h in handlers:
+            if h.id() == handler_id:
+                handlers.remove(h)
+                break
+        else:
             return
-
-        handlers.remove(handler)
         if not handlers:
             del self._handlers[channel_id]
             self._last_ids.pop(channel_id, None)
-
             if not self._handlers and self._xread_task is not None:
                 self._xread_task.cancel()
                 self._xread_task = None
