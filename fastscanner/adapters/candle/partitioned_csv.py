@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import zoneinfo
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
+from typing import Protocol
 
 import pandas as pd
 
@@ -15,12 +17,53 @@ from fastscanner.services.indicators.ports import CandleCol, CandleStore
 logger = logging.getLogger(__name__)
 
 
+class CandleStoreWithSplits(CandleStore, Protocol):
+    async def splits(self, start: date, end: date) -> dict[str, date]: ...
+
+
 class PartitionedCSVCandlesProvider:
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "candles")
     tz: str = LOCAL_TIMEZONE_STR
 
-    def __init__(self, store: CandleStore):
+    def __init__(self, store: CandleStoreWithSplits):
         self._store = store
+        self._splits_last_checked: date | None = None
+        self._splits_check_lock = asyncio.Lock()
+
+    async def _check_splits(self) -> None:
+        async with self._splits_check_lock:
+            if self._splits_last_checked is None:
+                last_checked_splits_path = os.path.join(
+                    self.CACHE_DIR, "last_checked_splits.txt"
+                )
+                if not os.path.exists(last_checked_splits_path):
+                    os.makedirs(self.CACHE_DIR, exist_ok=True)
+                    with open(last_checked_splits_path, "w") as f:
+                        f.write(date(2025, 4, 30).isoformat())
+
+                with open(last_checked_splits_path, "r") as f:
+                    last_checked_str = f.read().strip()
+                    self._splits_last_checked = date.fromisoformat(last_checked_str)
+
+            if self._splits_last_checked >= ClockRegistry.clock.today():
+                return
+
+            last_checked = self._splits_last_checked
+            today = ClockRegistry.clock.today()
+            splits = await self._store.splits(last_checked + timedelta(days=1), today)
+
+            for symbol, _ in splits.items():
+                logger.info(
+                    f"Found splits for {symbol} since {last_checked}. Expiring cache."
+                )
+                path = os.path.join(self.CACHE_DIR, symbol)
+                shutil.rmtree(path, ignore_errors=True)
+
+            self._splits_last_checked = today
+            with open(
+                os.path.join(self.CACHE_DIR, "last_checked_splits.txt"), "w"
+            ) as f:
+                f.write(today.isoformat())
 
     async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
         max_date = ClockRegistry.clock.today() - timedelta(days=1)
@@ -28,6 +71,8 @@ class PartitionedCSVCandlesProvider:
             raise ValueError(
                 f"End date {end} cannot be in the future. Max date is {max_date}."
             )
+
+        await self._check_splits()
 
         _, unit = split_freq(freq)
         keys = self._partition_keys_in_range(start, end, unit)
@@ -60,6 +105,8 @@ class PartitionedCSVCandlesProvider:
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
     async def cache_all_freqs(self, symbol: str, year: int) -> None:
+        await self._check_splits()
+
         yday = datetime.now(zoneinfo.ZoneInfo(self.tz)).date() - timedelta(days=1)
         start = date(year, 1, 1)
         end = min(date(year, 12, 31), yday)
@@ -253,6 +300,8 @@ class PartitionedCSVCandlesProvider:
             self._expirations[symbol] = {}
 
     async def collect_expired_data(self, symbol: str) -> None:
+        await self._check_splits()
+
         yesterday = ClockRegistry.clock.now().date() - timedelta(days=1)
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})

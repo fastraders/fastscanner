@@ -77,7 +77,7 @@ def _run_batch(batch: list[str]) -> None:
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = (await polygon.all_symbols())[:100]
+    all_symbols = await polygon.all_symbols()
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [
