@@ -70,7 +70,7 @@ class ScannerService:
     def __init__(self, candles: CandleStore, channel: Channel):
         self._candles = candles
         self._channel = channel
-        self._handlers: dict[str, ScannerChannelHandler] = {}
+        # self._handlers: dict[str, ScannerChannelHandler] = {}  # Remove if not needed
 
     async def subscribe_realtime(
         self,
@@ -83,7 +83,7 @@ class ScannerService:
         scanner_id = scanner.id()
         handler_id = f"{scanner_id}_{symbol}"
         sch = ScannerChannelHandler(symbol, scanner, handler, freq)
-        self._handlers[handler_id] = sch
+        # self._handlers[handler_id] = sch  # Remove if not needed
         await self._channel.subscribe(stream_key, sch)
 
     async def unsubscribe_realtime(
@@ -93,6 +93,4 @@ class ScannerService:
         symbol: str,
     ):
         handler_id = f"{scanner_id}_{symbol}"
-        sch = self._handlers.pop(handler_id, None)
-        if sch is not None:
-            await self._channel.unsubscribe(channel_id, sch.id())
+        await self._channel.unsubscribe(channel_id, handler_id)
