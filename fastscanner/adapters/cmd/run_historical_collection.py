@@ -76,8 +76,11 @@ def _run_batch(batch: list[str]) -> None:
 
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
+    candles = PartitionedCSVCandlesProvider(polygon)
+    ClockRegistry.set(LocalClock())
 
     all_symbols = await polygon.all_symbols()
+    # all_symbols = all_symbols[:20]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [
@@ -86,6 +89,8 @@ async def run_data_collect():
 
     with multiprocessing.Pool(n_workers) as pool:
         pool.map(_run_batch, batches)
+
+    candles.mark_splits_checked()
 
 
 if __name__ == "__main__":

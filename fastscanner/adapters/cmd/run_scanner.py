@@ -168,7 +168,7 @@ def _next_scan_path(name: str, start_date: date, end_date: date, freq: str):
 async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = (await polygon.all_symbols())[:1000]  # [:1000]
+    all_symbols = await polygon.all_symbols()  # [:1000]
     start_date = date(2020, 1, 1)
     end_date = date(2020, 3, 31)
     freq = "1d"
