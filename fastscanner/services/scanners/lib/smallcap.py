@@ -1,4 +1,5 @@
 import math
+import uuid
 from datetime import date, time
 
 import pandas as pd
@@ -31,11 +32,15 @@ class SmallCapScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._start_time = start_time
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str

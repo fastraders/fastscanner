@@ -1,4 +1,5 @@
 import math
+import uuid
 from datetime import date, time
 
 import pandas as pd
@@ -35,6 +36,7 @@ class ATRParabolicDownScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
@@ -51,6 +53,9 @@ class ATRParabolicDownScanner:
         self._market_cap = MarketCapIndicator()
         self._cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
         self._cum_volume = CumulativeDailyVolumeIndicator()
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -182,6 +187,7 @@ class ATRParabolicUpScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
@@ -198,6 +204,9 @@ class ATRParabolicUpScanner:
         self._market_cap = MarketCapIndicator()
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         self._cum_volume = CumulativeDailyVolumeIndicator()
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -324,12 +333,16 @@ class DailyATRParabolicUpScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -393,12 +406,16 @@ class DailyATRParabolicDownScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
