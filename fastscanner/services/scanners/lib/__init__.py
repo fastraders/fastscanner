@@ -12,7 +12,7 @@ from .parabolic import (
     DailyATRParabolicUpScanner,
 )
 from .range_gap import HighRangeGapUpScanner, LowRangeGapDownScanner
-from .smallcap import SmallCapScanner
+from .smallcap import SmallCapUpScanner
 
 _scanners: list[type["Scanner"]] = [
     ATRGapDownScanner,
@@ -23,7 +23,7 @@ _scanners: list[type["Scanner"]] = [
     DailyATRParabolicUpScanner,
     HighRangeGapUpScanner,
     LowRangeGapDownScanner,
-    SmallCapScanner,
+    SmallCapUpScanner,
 ]
 
 
