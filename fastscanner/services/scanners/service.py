@@ -68,7 +68,9 @@ class ScannerChannelHandler:
 
 
 class ScannerService:
-    def __init__(self, candles: CandleStore, channel: Channel, symbols_provider: SymbolsProvider):
+    def __init__(
+        self, candles: CandleStore, channel: Channel, symbols_provider: SymbolsProvider
+    ):
         self._candles = candles
         self._channel = channel
         self._symbols_provider = symbols_provider
@@ -82,32 +84,32 @@ class ScannerService:
     ) -> str:
         scanner = ScannersLibrary.instance().get(params.type_, params.params)
         scanner_id = scanner.id()
-        
+
         symbols = await self._symbols_provider.active_symbols()
         symbols = symbols[:1000]
-        
+
         async def subscribe_symbol(symbol: str) -> ScannerChannelHandler:
             stream_key = f"candles_min_{symbol}"
             sch = ScannerChannelHandler(symbol, scanner, handler, freq)
             await self._channel.subscribe(stream_key, sch)
             return sch
-        
+
         tasks = [asyncio.create_task(subscribe_symbol(symbol)) for symbol in symbols]
         handlers = await asyncio.gather(*tasks)
-        
+
         self._handlers[scanner_id] = handlers
-        
+
         return scanner_id
 
     async def unsubscribe_realtime(self, scanner_id: str):
 
         if scanner_id not in self._handlers:
             return
-        
+
         handlers = self._handlers[scanner_id]
-        
+
         for handler in handlers:
             stream_key = f"candles_min_{handler._symbol}"
             await self._channel.unsubscribe(stream_key, handler.id())
-        
+
         del self._handlers[scanner_id]
