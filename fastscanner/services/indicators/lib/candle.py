@@ -491,3 +491,42 @@ class ATRGapIndicator:
             new_row.at[self.column_name()] = pd.NA
 
         return new_row.drop(cols_to_drop)
+
+
+class ShiftIndicator:
+    def __init__(self, candle_col: str, shift: int):
+        self._candle_col = candle_col
+        self._shift = shift
+        self._last_date: dict[str, date] = {}
+        self._last_values: dict[str, list[float]] = {}
+
+    @classmethod
+    def type(cls):
+        return "shift"
+
+    def column_name(self) -> str:
+        return f"{self._candle_col}_shift_{self._shift}"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+        df[self.column_name()] = df[self._candle_col].groupby(df.index.date).shift(self._shift)  # type: ignore
+        return df
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        last_date = self._last_date.get(symbol)
+
+        if last_date is None or last_date != new_row.name.date():
+            self._last_date[symbol] = new_row.name.date()
+            self._last_values[symbol] = []
+
+        values = self._last_values.setdefault(symbol, [])
+        values.append(new_row[self._candle_col])
+        if len(values) < self._shift + 1:
+            new_row[self.column_name()] = pd.NA
+            return new_row
+
+        new_row[self.column_name()] = values.pop(0)
+        return new_row

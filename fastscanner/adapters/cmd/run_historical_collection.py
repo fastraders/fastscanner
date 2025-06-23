@@ -80,7 +80,7 @@ async def run_data_collect():
     ClockRegistry.set(LocalClock())
 
     all_symbols = await polygon.all_symbols()
-    # all_symbols = all_symbols[:20]
+    # all_symbols = all_symbols[:100]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [

@@ -69,6 +69,7 @@ async def collect_daily_data() -> None:
 
     await partitioned_provider.collect_splits()
     all_symbols = await provider.all_symbols()
+    # all_symbols = all_symbols[:100]
 
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)

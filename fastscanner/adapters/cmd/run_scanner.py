@@ -38,6 +38,7 @@ from fastscanner.services.scanners.lib.parabolic import (
     DailyATRParabolicUpScanner,
 )
 from fastscanner.services.scanners.lib.range_gap import HighRangeGapUpScanner
+from fastscanner.services.scanners.lib.smallcap import SmallCapUpScanner
 from fastscanner.services.scanners.ports import Scanner
 
 load_logging_config()
@@ -131,7 +132,7 @@ async def _run_async(
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         idx_name = df.index.name
-        df = df.reset_index().groupby("date").first().set_index(idx_name)
+        df = df.reset_index().groupby("date").first(skipna=False).set_index(idx_name)  # type: ignore
         df = await _add_report_indicators(df, symbol, freq)
 
         if result is None:
@@ -168,10 +169,11 @@ def _next_scan_path(name: str, start_date: date, end_date: date, freq: str):
 async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
-    all_symbols = await polygon.all_symbols()  # [:1000]
+    all_symbols = await polygon.all_symbols()
+    # all_symbols = ["AADI"]
     start_date = date(2020, 1, 1)
-    end_date = date(2020, 3, 31)
-    freq = "1d"
+    end_date = date(2024, 12, 31)
+    freq = "1min"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.005,
@@ -189,12 +191,12 @@ async def run_scanner():
     #     end_time=time(15, 59),
     #     include_null_market_cap=True,
     # )
-    scanner = DailyATRParabolicDownScanner(
-        min_adv=2_000_000,
-        min_adr=0.005,
-        atr_multiplier=0.5,
-        include_null_market_cap=True,
-    )
+    # scanner = DailyATRParabolicDownScanner(
+    #     min_adv=2_000_000,
+    #     min_adr=0.005,
+    #     atr_multiplier=0.5,
+    #     include_null_market_cap=True,
+    # )
     # scanner = HighRangeGapUpScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.0005,
@@ -204,6 +206,16 @@ async def run_scanner():
     #     n_days=5,
     #     include_null_market_cap=True,
     # )
+    scanner = SmallCapUpScanner(
+        min_volume=10_000,
+        min_gap=0.10,
+        min_price=0.3,
+        min_market_cap=100_000,
+        max_market_cap=100_000_000,
+        include_null_market_cap=True,
+        start_time=time(4, 00),
+        end_time=time(12, 00),
+    )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1
     batch_size = math.ceil(len(all_symbols) / n_workers)
