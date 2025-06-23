@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, time as dt_time
 
 import pandas as pd
 
@@ -20,6 +20,7 @@ from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
+from fastscanner.services.scanners.ports import ScannerParams
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -97,34 +98,39 @@ async def main():
 
     ApplicationRegistry.init(candles, fundamentals, holidays)
 
-    service = ScannerService(candles=candles, channel=redis_channel)
-
-    symbols = await polygon.all_symbols()
-    symbols = symbols[:1000]
-
-    scanner = ATRGapDownScanner(
-        min_adv=1_000_000,
-        min_adr=1.0,
-        atr_multiplier=1.5,
-        min_volume=500_000,
-        start_time=datetime.strptime("09:30", "%H:%M").time(),
-        end_time=datetime.strptime("16:00", "%H:%M").time(),
+    service = ScannerService(
+        candles=candles, channel=redis_channel, symbols_provider=polygon
     )
 
-    tasks = []
-    for symbol in symbols:
-        tasks.append(
-            asyncio.create_task(
-                service.subscribe_realtime(
-                    symbol=symbol,
-                    freq="3min",
-                    scanner=scanner,
-                    handler=BenchmarkScannerHandler(),
-                )
-            )
-        )
+    scanner_params = ScannerParams(
+        type_="atr_gap_down",
+        params={
+            "min_adv": 1_000_000.0,
+            "min_adr": 1.0,
+            "atr_multiplier": 1.5,
+            "min_volume": 500_000.0,
+            "start_time": dt_time(9, 30),
+            "end_time": dt_time(16, 0),
+            "min_market_cap": 0.0,
+        },
+    )
 
-    await asyncio.gather(*tasks, monitor_batch_timeout())
+    scanner_id = await service.subscribe_realtime(
+        params=scanner_params,
+        handler=BenchmarkScannerHandler(),
+        freq="1min",
+    )
+
+    logger.info(f"Started scanner with ID: {scanner_id}")
+
+    monitor_task = asyncio.create_task(monitor_batch_timeout())
+
+    try:
+        await monitor_task
+    except KeyboardInterrupt:
+        logger.info("Shutting down scanner...")
+        await service.unsubscribe_realtime(scanner_id)
+        monitor_task.cancel()
 
 
 if __name__ == "__main__":

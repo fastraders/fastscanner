@@ -62,6 +62,10 @@ class SmallCapUpScanner:
     def id(self) -> str:
         return self._id
 
+    @classmethod
+    def type(cls) -> str:
+        return "small_cap"
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:

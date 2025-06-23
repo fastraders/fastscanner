@@ -9,7 +9,8 @@ from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.ports import CandleStore, Channel, ChannelHandler
 from fastscanner.services.indicators.utils import lookback_days
-from fastscanner.services.scanners.ports import Scanner
+from fastscanner.services.scanners.lib import ScannersLibrary
+from fastscanner.services.scanners.ports import Scanner, ScannerParams, SymbolsProvider
 
 
 class SubscriptionHandler:
@@ -67,30 +68,46 @@ class ScannerChannelHandler:
 
 
 class ScannerService:
-    def __init__(self, candles: CandleStore, channel: Channel):
+    def __init__(self, candles: CandleStore, channel: Channel, symbols_provider: SymbolsProvider):
         self._candles = candles
         self._channel = channel
-        # self._handlers: dict[str, ScannerChannelHandler] = {}  # Remove if not needed
+        self._symbols_provider = symbols_provider
+        self._handlers: dict[str, list[ScannerChannelHandler]] = {}
 
     async def subscribe_realtime(
         self,
-        symbol: str,
-        freq: str,
-        scanner: Scanner,
+        params: ScannerParams,
         handler: SubscriptionHandler,
-    ):
-        stream_key = f"candles_min_{symbol}"
+        freq: str,
+    ) -> str:
+        scanner = ScannersLibrary.instance().get(params.type_, params.params)
         scanner_id = scanner.id()
-        handler_id = f"{scanner_id}_{symbol}"
-        sch = ScannerChannelHandler(symbol, scanner, handler, freq)
-        # self._handlers[handler_id] = sch  # Remove if not needed
-        await self._channel.subscribe(stream_key, sch)
+        
+        symbols = await self._symbols_provider.active_symbols()
+        symbols = symbols[:1000]
+        
+        async def subscribe_symbol(symbol: str) -> ScannerChannelHandler:
+            stream_key = f"candles_min_{symbol}"
+            sch = ScannerChannelHandler(symbol, scanner, handler, freq)
+            await self._channel.subscribe(stream_key, sch)
+            return sch
+        
+        tasks = [asyncio.create_task(subscribe_symbol(symbol)) for symbol in symbols]
+        handlers = await asyncio.gather(*tasks)
+        
+        self._handlers[scanner_id] = handlers
+        
+        return scanner_id
 
-    async def unsubscribe_realtime(
-        self,
-        channel_id: str,
-        scanner_id: str,
-        symbol: str,
-    ):
-        handler_id = f"{scanner_id}_{symbol}"
-        await self._channel.unsubscribe(channel_id, handler_id)
+    async def unsubscribe_realtime(self, scanner_id: str):
+
+        if scanner_id not in self._handlers:
+            return
+        
+        handlers = self._handlers[scanner_id]
+        
+        for handler in handlers:
+            stream_key = f"candles_min_{handler._symbol}"
+            await self._channel.unsubscribe(stream_key, handler.id())
+        
+        del self._handlers[scanner_id]

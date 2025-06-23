@@ -230,3 +230,18 @@ class PolygonCandlesProvider:
         with open(symbols_path, "w") as f:
             json.dump(list(symbols), f)
         return symbols
+
+    async def active_symbols(self) -> list[str]:
+        exchanges = ["XNAS", "XNYS", "XASE"]
+
+        all_symbols: list[str] = []
+
+        for exchange in exchanges:
+            try:
+                symbols = await self._all_symbols(active=True, exchange=exchange)
+                all_symbols.extend(symbols)
+            except Exception as e:
+                logger.warning(f"Failed to fetch symbols from exchange {exchange}: {e}")
+                continue
+
+        return sorted(list(set(all_symbols)))

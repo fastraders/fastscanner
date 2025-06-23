@@ -57,6 +57,10 @@ class ATRParabolicDownScanner:
     def id(self) -> str:
         return self._id
 
+    @classmethod
+    def type(cls) -> str:
+        return "atr_parabolic_down"
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -208,6 +212,10 @@ class ATRParabolicUpScanner:
     def id(self) -> str:
         return self._id
 
+    @classmethod
+    def type(cls) -> str:
+        return "atr_parabolic_up"
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -344,6 +352,10 @@ class DailyATRParabolicUpScanner:
     def id(self) -> str:
         return self._id
 
+    @classmethod
+    def type(cls) -> str:
+        return "daily_atr_parabolic_up"
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -416,6 +428,10 @@ class DailyATRParabolicDownScanner:
 
     def id(self) -> str:
         return self._id
+
+    @classmethod
+    def type(cls) -> str:
+        return "daily_atr_parabolic_down"
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
