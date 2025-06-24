@@ -38,6 +38,8 @@ class SmallCapUpScanner:
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
+        self._min_volume = min_volume
+        self._min_gap = min_gap
         self._start_time = start_time
         self._end_time = end_time
         self._min_market_cap = min_market_cap
@@ -45,6 +47,15 @@ class SmallCapUpScanner:
         self._min_price = min_price
         self._max_price = max_price
         self._include_null_market_cap = include_null_market_cap
+        self._market_cap = MarketCapIndicator()
+        self._cum_volume = CumulativeDailyVolumeIndicator()
+        self._gap = GapIndicator(C.HIGH)
+        self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
+        self._shift_periods = [2, 10, 15]
+        self._shift_min_change = [0.12, 0.14, 0.16]
+        self._shift_indicators = [
+            ShiftIndicator(C.LOW, period) for period in self._shift_periods
+        ]
 
     def id(self) -> str:
         return self._id
