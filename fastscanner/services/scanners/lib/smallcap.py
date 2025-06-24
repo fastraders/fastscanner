@@ -51,8 +51,9 @@ class SmallCapUpScanner:
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.HIGH)
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
-        self._shift_periods = [2, 10, 15]
-        self._shift_min_change = [0.12, 0.14, 0.16]
+        # The order of the periods defines the priority of the alerts.
+        self._shift_periods = [15, 10, 2]
+        self._shift_min_change = [0.16, 0.14, 0.12]
         self._shift_indicators = [
             ShiftIndicator(C.LOW, period) for period in self._shift_periods
         ]
