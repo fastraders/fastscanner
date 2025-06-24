@@ -30,6 +30,9 @@ class ScannerChannelHandler:
         self._freq = freq
         self._buffer = CandleBuffer(symbol, freq, self._handle)
 
+    def id(self) -> str:
+        return f"{self._scanner.id()}_{self._symbol}"
+
     async def _handle(self, row: pd.Series) -> None:
         new_row, passed = await self._scanner.scan_realtime(
             self._symbol, row, self._freq
@@ -67,6 +70,7 @@ class ScannerService:
     def __init__(self, candles: CandleStore, channel: Channel):
         self._candles = candles
         self._channel = channel
+        # self._handlers: dict[str, ScannerChannelHandler] = {}  # Remove if not needed
 
     async def subscribe_realtime(
         self,
@@ -76,6 +80,17 @@ class ScannerService:
         handler: SubscriptionHandler,
     ):
         stream_key = f"candles_min_{symbol}"
-        await self._channel.subscribe(
-            stream_key, ScannerChannelHandler(symbol, scanner, handler, freq)
-        )
+        scanner_id = scanner.id()
+        handler_id = f"{scanner_id}_{symbol}"
+        sch = ScannerChannelHandler(symbol, scanner, handler, freq)
+        # self._handlers[handler_id] = sch  # Remove if not needed
+        await self._channel.subscribe(stream_key, sch)
+
+    async def unsubscribe_realtime(
+        self,
+        channel_id: str,
+        scanner_id: str,
+        symbol: str,
+    ):
+        handler_id = f"{scanner_id}_{symbol}"
+        await self._channel.unsubscribe(channel_id, handler_id)

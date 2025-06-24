@@ -36,6 +36,8 @@ class BenchmarkHandler(ChannelHandler):
         last_received_time = now
         total_messages += 1
 
+    def id(self) -> str: ...
+
 
 async def monitor_batch_timeout():
     global batch_start_time, last_received_time, total_messages

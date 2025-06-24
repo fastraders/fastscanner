@@ -1,4 +1,5 @@
 import math
+import uuid
 from datetime import date, time
 
 import pandas as pd
@@ -35,6 +36,7 @@ class ATRGapDownScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
@@ -50,6 +52,9 @@ class ATRGapDownScanner:
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.LOW)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.LOW)
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -181,6 +186,7 @@ class ATRGapUpScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._atr_multiplier = atr_multiplier
@@ -196,6 +202,9 @@ class ATRGapUpScanner:
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.HIGH)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str

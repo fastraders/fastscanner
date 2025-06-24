@@ -1,4 +1,5 @@
 import math
+import uuid
 from datetime import date, time
 
 import pandas as pd
@@ -31,6 +32,7 @@ class HighRangeGapUpScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._start_time = start_time
@@ -50,6 +52,9 @@ class HighRangeGapUpScanner:
         self._cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
         self._gap = GapIndicator(C.HIGH)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
@@ -189,6 +194,7 @@ class LowRangeGapDownScanner:
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
     ) -> None:
+        self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._start_time = start_time
@@ -208,6 +214,9 @@ class LowRangeGapDownScanner:
         self._cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
         self._gap = GapIndicator(C.LOW)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.LOW)
+
+    def id(self) -> str:
+        return self._id
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
