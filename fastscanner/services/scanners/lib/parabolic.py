@@ -92,14 +92,21 @@ class ATRParabolicDownScanner:
             end,
             freq,
         )
+
+        # Comment out for lowest low from 4am logic
+        # df = await self._cum_low.extend(symbol, df)
+        # df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
+
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
+
+        # Comment out for lowest lowe from start_time logic
+        # df = await self._cum_low.extend(symbol, df)
+        # df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
 
         if df.empty:
             return df
 
-        df = await self._cum_low.extend(symbol, df)
         df = await self._cum_volume.extend(symbol, df)
-
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
             [
@@ -116,7 +123,6 @@ class ATRParabolicDownScanner:
         df["signal"] = (df[C.OPEN] - df[C.CLOSE]) / df[self._atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
-        # df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
 
         return df
 
@@ -243,11 +249,18 @@ class ATRParabolicUpScanner:
             end,
             freq,
         )
+        # Comment out for highest high from 4am logic
+        # df = await self._cum_high.extend(symbol, df)
+        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
+
+        # Comment out for highest high from start_time logic
+        # df = await self._cum_high.extend(symbol, df)
+        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
         if df.empty:
             return df
 
-        df = await self._cum_high.extend(symbol, df)
         df = await self._cum_volume.extend(symbol, df)
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
@@ -265,7 +278,6 @@ class ATRParabolicUpScanner:
         df["signal"] = (df[C.CLOSE] - df[C.OPEN]) / df[self._atr.column_name()]
         df = df[df["signal"] > self._atr_multiplier]
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
-        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         return df
 
