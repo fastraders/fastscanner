@@ -231,8 +231,9 @@ class PolygonCandlesProvider:
             json.dump(list(symbols), f)
         return symbols
 
-    async def active_symbols(self) -> list[str]:
-        exchanges = ["XNAS", "XNYS", "XASE"]
+    async def active_symbols(self, exchanges: list[str] | None = None) -> list[str]:
+        if exchanges is None:
+            exchanges = ["XNAS", "XNYS", "XASE"]
 
         all_symbols: list[str] = []
 
