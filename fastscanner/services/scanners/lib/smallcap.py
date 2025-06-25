@@ -64,7 +64,7 @@ class SmallCapUpScanner:
 
     @classmethod
     def type(cls) -> str:
-        return "small_cap"
+        return "small_cap_up"
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str

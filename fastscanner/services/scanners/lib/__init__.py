@@ -1,9 +1,7 @@
 from contextvars import ContextVar
-from datetime import date
-from typing import Any, Hashable, Protocol
+from typing import Any, Hashable
 
-import pandas as pd
-
+from ..ports import Scanner
 from .gap import ATRGapDownScanner, ATRGapUpScanner
 from .parabolic import (
     ATRParabolicDownScanner,
@@ -14,7 +12,7 @@ from .parabolic import (
 from .range_gap import HighRangeGapUpScanner, LowRangeGapDownScanner
 from .smallcap import SmallCapUpScanner
 
-_scanners: list[type["Scanner"]] = [
+_scanners: list[type[Scanner]] = [
     ATRGapDownScanner,
     ATRGapUpScanner,
     ATRParabolicDownScanner,
@@ -25,25 +23,6 @@ _scanners: list[type["Scanner"]] = [
     LowRangeGapDownScanner,
     SmallCapUpScanner,
 ]
-
-
-class Scanner(Protocol):
-    async def scan(
-        self, symbol: str, start: date, end: date, freq: str
-    ) -> pd.DataFrame:
-        """
-        Scan the symbol with the given parameters.
-        """
-        ...
-
-    async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
-
-    def id(self) -> str: ...
-
-    @classmethod
-    def type(cls) -> str: ...
 
 
 class ScannersLibrary:

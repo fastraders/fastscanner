@@ -3,7 +3,8 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, time as dt_time
+from datetime import datetime
+from datetime import time as dt_time
 
 import pandas as pd
 
@@ -19,8 +20,8 @@ from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner
-from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
 from fastscanner.services.scanners.ports import ScannerParams
+from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -34,8 +35,8 @@ last_received_time = None
 total_messages = 0
 
 
-class BenchmarkScannerHandler(SubscriptionHandler):
-    def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+class BenchmarkScannerHandler:
+    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
@@ -52,6 +53,9 @@ class BenchmarkScannerHandler(SubscriptionHandler):
         last_received_time = now
         total_messages += 1
         return new_row
+
+    def set_scanner_id(self, scanner_id: str):
+        pass
 
 
 async def monitor_batch_timeout():

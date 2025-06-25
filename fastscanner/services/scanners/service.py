@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 import pandas as pd
 
@@ -13,8 +13,12 @@ from fastscanner.services.scanners.lib import ScannersLibrary
 from fastscanner.services.scanners.ports import Scanner, ScannerParams, SymbolsProvider
 
 
-class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series: ...
+class SubscriptionHandler(Protocol):
+    async def handle(
+        self, symbol: str, new_row: pd.Series, passed: bool
+    ) -> pd.Series: ...
+
+    def set_scanner_id(self, scanner_id: str): ...
 
 
 class ScannerChannelHandler:
@@ -38,7 +42,7 @@ class ScannerChannelHandler:
         new_row, passed = await self._scanner.scan_realtime(
             self._symbol, row, self._freq
         )
-        self._handler.handle(self._symbol, new_row, passed)
+        await self._handler.handle(self._symbol, new_row, passed)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         for field in (
@@ -59,7 +63,7 @@ class ScannerChannelHandler:
             new_row, passed = await self._scanner.scan_realtime(
                 self._symbol, row, self._freq
             )
-            self._handler.handle(self._symbol, new_row, passed)
+            await self._handler.handle(self._symbol, new_row, passed)
             return
         agg = await self._buffer.add(row)
         if agg is None:
@@ -76,6 +80,14 @@ class ScannerService:
         self._symbols_provider = symbols_provider
         self._handlers: dict[str, list[ScannerChannelHandler]] = {}
 
+    async def _subscribe_symbol(
+        self, symbol: str, scanner: Scanner, handler: SubscriptionHandler, freq: str
+    ) -> ScannerChannelHandler:
+        stream_key = f"candles_min_{symbol}"
+        sch = ScannerChannelHandler(symbol, scanner, handler, freq)
+        await self._channel.subscribe(stream_key, sch)
+        return sch
+
     async def subscribe_realtime(
         self,
         params: ScannerParams,
@@ -84,17 +96,13 @@ class ScannerService:
     ) -> str:
         scanner = ScannersLibrary.instance().get(params.type_, params.params)
         scanner_id = scanner.id()
-
+        handler.set_scanner_id(scanner_id)
         symbols = await self._symbols_provider.active_symbols()
-        symbols = symbols[:1000]
 
-        async def subscribe_symbol(symbol: str) -> ScannerChannelHandler:
-            stream_key = f"candles_min_{symbol}"
-            sch = ScannerChannelHandler(symbol, scanner, handler, freq)
-            await self._channel.subscribe(stream_key, sch)
-            return sch
-
-        tasks = [asyncio.create_task(subscribe_symbol(symbol)) for symbol in symbols]
+        tasks = [
+            asyncio.create_task(self._subscribe_symbol(symbol, scanner, handler, freq))
+            for symbol in symbols
+        ]
         handlers = await asyncio.gather(*tasks)
 
         self._handlers[scanner_id] = handlers
