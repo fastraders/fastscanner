@@ -139,4 +139,5 @@ class SmallCapUpScanner:
 
     async def scan_realtime(
         self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
+    ) -> tuple[pd.Series, bool]:
+        return pd.Series(), False

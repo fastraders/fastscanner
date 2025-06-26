@@ -13,6 +13,15 @@ from fastscanner.services.indicators.tests.fixtures import (
 )
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
+from fastscanner.services.scanners.lib.parabolic import (
+    ATRParabolicDownScanner,
+    ATRParabolicUpScanner,
+)
+from fastscanner.services.scanners.lib.range_gap import (
+    HighRangeGapUpScanner,
+    LowRangeGapDownScanner,
+)
+from fastscanner.services.scanners.lib.smallcap import SmallCapUpScanner
 from fastscanner.services.scanners.ports import Scanner
 
 
@@ -106,6 +115,42 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             min_adr=0.05,
             atr_multiplier=1.0,
             min_volume=0,
+            start_time=time(9, 20),
+            end_time=time(12, 0),
+            min_market_cap=0,
+        ),
+        ATRParabolicDownScanner(
+            min_adv=500_000,
+            min_adr=0.05,
+            atr_multiplier=-1.0,
+            min_volume=0,
+            start_time=time(9, 20),
+            end_time=time(12, 0),
+            min_market_cap=0,
+        ),
+        ATRParabolicUpScanner(
+            min_adv=500_000,
+            min_adr=0.05,
+            atr_multiplier=1.0,
+            min_volume=0,
+            start_time=time(9, 20),
+            end_time=time(12, 0),
+            min_market_cap=0,
+        ),
+        HighRangeGapUpScanner(
+            min_adv=500_000,
+            min_adr=0.05,
+            min_volume=0,
+            n_days=5,
+            start_time=time(9, 20),
+            end_time=time(12, 0),
+            min_market_cap=0,
+        ),
+        LowRangeGapDownScanner(
+            min_adv=500_000,
+            min_adr=0.05,
+            min_volume=0,
+            n_days=5,
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
