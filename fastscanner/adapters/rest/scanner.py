@@ -44,7 +44,7 @@ class WebSocketScannerHandler:
     async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
         if not passed:
             return new_row
-            
+
         scan_time = datetime.now().strftime("%H:%M")
         candle = new_row.to_dict()
 
@@ -75,13 +75,15 @@ class WebSocketScannerHandler:
 def _parse_known_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
     """Parse known parameters and convert them to appropriate types."""
     processed_params = params.copy()
-    
+
     if "start_time" in processed_params:
-        processed_params["start_time"] = time.fromisoformat(processed_params["start_time"])
-    
+        processed_params["start_time"] = time.fromisoformat(
+            processed_params["start_time"]
+        )
+
     if "end_time" in processed_params:
         processed_params["end_time"] = time.fromisoformat(processed_params["end_time"])
-    
+
     return processed_params
 
 
@@ -108,14 +110,14 @@ async def websocket_realtime_scanner(websocket: WebSocket):
     scanner_request = ScannerRequest(**request_data)
     processed_params = _parse_known_parameters(scanner_request.params)
 
-    scanner_params = ScannerParams(
-        type_=scanner_request.type, params=processed_params
-    )
+    scanner_params = ScannerParams(type_=scanner_request.type, params=processed_params)
 
     handler = WebSocketScannerHandler(websocket, "")
 
+    freq = processed_params["freq"]
+
     scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
+        params=scanner_params, handler=handler, freq=freq
     )
 
     handler.set_scanner_id(scanner_id)
@@ -132,4 +134,3 @@ async def websocket_realtime_scanner(websocket: WebSocket):
     if scanner_id and service:
         await service.unsubscribe_realtime(scanner_id)
         logger.info(f"Unsubscribed scanner {scanner_id}")
-
