@@ -1,7 +1,14 @@
+from dataclasses import dataclass
 from datetime import date
-from typing import Protocol
+from typing import Any, Protocol
 
 import pandas as pd
+
+
+@dataclass
+class ScannerParams:
+    type_: str
+    params: dict[str, Any]
 
 
 class Scanner(Protocol):
@@ -18,3 +25,10 @@ class Scanner(Protocol):
     ) -> tuple[pd.Series, bool]: ...
 
     def id(self) -> str: ...
+
+    @classmethod
+    def type(cls) -> str: ...
+
+
+class SymbolsProvider(Protocol):
+    async def active_symbols(self, exchanges: list[str] | None = None) -> list[str]: ...

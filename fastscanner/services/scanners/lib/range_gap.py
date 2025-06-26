@@ -56,6 +56,10 @@ class HighRangeGapUpScanner:
     def id(self) -> str:
         return self._id
 
+    @classmethod
+    def type(cls) -> str:
+        return "high_range_gap_up"
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -217,6 +221,10 @@ class LowRangeGapDownScanner:
 
     def id(self) -> str:
         return self._id
+
+    @classmethod
+    def type(cls) -> str:
+        return "low_range_gap_down"
 
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
