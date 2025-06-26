@@ -114,6 +114,38 @@ class SmallCapUpScanner:
         # Comment out for highest high from start time logic
         # df = await self._cum_high.extend(symbol, df)
         # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+        # filtered_df['High_Change'] = filtered_df['high'].pct_change()
+        # filtered_df['Low_Change'] = filtered_df['low'].pct_change()
+
+        # Comment out for anomaly filtering logic
+        # df.loc[:, "_body"] = (df[C.CLOSE] - df[C.OPEN]).abs().replace(0, 0.0001)
+        # df.loc[:, "_range"] = (df[C.HIGH] - df[C.LOW]).replace(0, 0.0001)
+        # df.loc[:, "_body_change"] = df["_body"].pct_change()
+        # df.loc[:, "_range_change"] = df["_range"].pct_change()
+        # df.loc[:, "_high_change"] = df[C.HIGH].pct_change()
+        # df.loc[:, "_low_change"] = df[C.LOW].pct_change()
+        # df.loc[:, "_close_change"] = df[C.CLOSE].pct_change()
+        # df.loc[:, "_is_anomaly"] = (
+        #     (df["_body"] * 3 < df["_range"])
+        #     & (df["_range_change"] * 3 > df["_body_change"])
+        #     & (
+        #         (df["_high_change"] > 3 * df["_close_change"])
+        #         | (df["_low_change"] > 3 * df["_close_change"])
+        #     )
+        # )
+        # n_anomalies = df["_is_anomaly"].sum()
+        # df = df[~df["_is_anomaly"]].drop(
+        #     columns=[
+        #         "_body",
+        #         "_range",
+        #         "_body_change",
+        #         "_range_change",
+        #         "_high_change",
+        #         "_low_change",
+        #         "_close_change",
+        #         "_is_anomaly",
+        #     ]
+        # )
 
         df = df[df[C.CLOSE] >= self._min_price]
         df = df[df[C.CLOSE] <= self._max_price]
