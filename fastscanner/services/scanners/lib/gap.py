@@ -132,7 +132,6 @@ class ATRGapDownScanner:
         Realtime scan implementation that enriches the new_row with indicators
         and returns whether it passes the filter criteria.
         """
-        logger.info(f"new row in subscribe_Realtime is {new_row}")
         # Check time filter first
         timestamp = new_row.get("datetime")
         assert isinstance(timestamp, datetime)
