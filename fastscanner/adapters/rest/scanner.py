@@ -5,7 +5,7 @@ from datetime import datetime, time
 from typing import Any, Dict
 
 import pandas as pd
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
@@ -37,9 +37,9 @@ class ScannerMessage(BaseModel):
 
 
 class WebSocketScannerHandler:
-    def __init__(self, websocket: WebSocket, scanner_id: str):
+    def __init__(self, websocket: WebSocket):
         self._websocket = websocket
-        self._scanner_id = scanner_id
+        self._scanner_id = ""
 
     async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
         if not passed:
@@ -91,7 +91,6 @@ def _parse_known_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
 async def websocket_realtime_scanner(websocket: WebSocket):
     await websocket.accept()
     scanner_id = None
-    service = None
 
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     candles = PartitionedCSVCandlesProvider(polygon)
@@ -112,7 +111,7 @@ async def websocket_realtime_scanner(websocket: WebSocket):
 
     scanner_params = ScannerParams(type_=scanner_request.type, params=processed_params)
 
-    handler = WebSocketScannerHandler(websocket, "")
+    handler = WebSocketScannerHandler(websocket)
 
     freq = processed_params["freq"]
 
@@ -120,17 +119,15 @@ async def websocket_realtime_scanner(websocket: WebSocket):
         params=scanner_params, handler=handler, freq=freq
     )
 
-    handler.set_scanner_id(scanner_id)
-
     response = ScannerResponse(scanner_id=scanner_id)
     logger.info(f"response is as follows: {response}")
     await websocket.send_text(response.model_dump_json())
 
     logger.info(f"Started scanner with ID: {scanner_id}")
 
-    while True:
-        await websocket.receive_text()
-
-    if scanner_id and service:
+    try:
+        while True:
+            await websocket.receive_text()
+    finally:
         await service.unsubscribe_realtime(scanner_id)
         logger.info(f"Unsubscribed scanner {scanner_id}")
