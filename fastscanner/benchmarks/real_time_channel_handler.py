@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 import pandas as pd
 
@@ -38,9 +39,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 class PrintHandler(SubscriptionHandler):
-    def handle(self, symbol: str, new_row: pd.Series) -> None:
+    def handle(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
         logger.info(f"\n[PrintHandler] Enriched row for {symbol}:")
-        logger.info(new_row.to_frame().T)
+        logger.info(new_row)
+        return new_row
 
 
 async def main():

@@ -84,7 +84,7 @@ class IndicatorsService:
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    def handle(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class CandleChannelHandler:
@@ -100,15 +100,15 @@ class CandleChannelHandler:
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
-        self._buffer = CandleBuffer(symbol, freq, self._handle, candle_timeout)
+        self._buffer = CandleBuffer(symbol, freq, self._handle_dict, candle_timeout)
         self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
 
-    async def _handle(self, row: pd.Series) -> None:
+    async def _handle_dict(self, row_dict: dict[str, Any]) -> None:
         for ind in self._indicators:
-            row = await ind.extend_realtime(self._symbol, row)
+            row_dict = await ind.extend_realtime(self._symbol, row_dict)
 
-        self._handler.handle(self._symbol, row)
+        self._handler.handle(self._symbol, row_dict)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
@@ -129,16 +129,20 @@ class CandleChannelHandler:
             ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
                 LOCAL_TIMEZONE_STR
             )
-            new_row = pd.Series(data, name=ts)
+
             if self._freq == "1min":
-                for ind in self._indicators:
-                    new_row = await ind.extend_realtime(self._symbol, new_row)
-                self._handler.handle(self._symbol, new_row)
+                row_dict = {
+                    "datetime": ts,
+                    **{k: v for k, v in data.items() if k != "timestamp"},
+                }
+                await self._handle_dict(row_dict)
                 return
-            agg = await self._buffer.add(new_row)
-            if agg is None:
-                return
-            await self._handle(agg)
+
+            row_dict = {
+                "datetime": ts,
+                **{k: v for k, v in data.items() if k != "timestamp"},
+            }
+            await self._buffer.add(row_dict)
 
         except Exception as e:
             logger.exception(

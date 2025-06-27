@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from typing import Any
 
 import pandas as pd
 
@@ -54,21 +55,22 @@ ClockRegistry.set(LocalClock())
 
 
 class BenchmarkHandler(SubscriptionHandler):
-    def handle(self, symbol: str, new_row: pd.Series) -> None:
+    def handle(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = new_row.name
+        ts = new_row["datetime"]
 
         log_ts = datetime.now().strftime("%H:%M:%S")
         candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
         logger.info(
-            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
+            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row}"
         )
         if batch_start_time is None:
             batch_start_time = now
         last_received_time = now
         total_messages += 1
+        return new_row
 
 
 async def monitor_batch_timeout():

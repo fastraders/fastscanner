@@ -1,6 +1,7 @@
 import math
 import uuid
-from datetime import date, time
+from datetime import date, datetime, time
+from typing import Any
 
 import pandas as pd
 
@@ -134,14 +135,12 @@ class HighRangeGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]:
 
-        assert isinstance(new_row.name, pd.Timestamp)
-        if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
-        ):
+        timestamp = new_row.get("datetime")
+        assert isinstance(timestamp, datetime)
+        if timestamp.time() > self._end_time or timestamp.time() < self._start_time:
             new_row["signal"] = pd.NA
             return new_row, False
 
@@ -300,14 +299,12 @@ class LowRangeGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]:
 
-        assert isinstance(new_row.name, pd.Timestamp)
-        if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
-        ):
+        timestamp = new_row.get("datetime")
+        assert isinstance(timestamp, datetime)
+        if timestamp.time() > self._end_time or timestamp.time() < self._start_time:
             new_row["signal"] = pd.NA
             return new_row, False
 

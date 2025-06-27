@@ -1,6 +1,8 @@
+import logging
 import math
 import uuid
-from datetime import date, time
+from datetime import date, datetime, time
+from typing import Any
 
 import pandas as pd
 
@@ -21,6 +23,9 @@ from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
 from .utils import filter_by_market_cap
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class ATRGapDownScanner:
@@ -121,19 +126,17 @@ class ATRGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]:
         """
         Realtime scan implementation that enriches the new_row with indicators
         and returns whether it passes the filter criteria.
         """
-
+        logger.info(f"new row in subscribe_Realtime is {new_row}")
         # Check time filter first
-        assert isinstance(new_row.name, pd.Timestamp)
-        if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
-        ):
+        timestamp = new_row.get("datetime")
+        assert isinstance(timestamp, datetime)
+        if timestamp.time() > self._end_time or timestamp.time() < self._start_time:
             new_row["signal"] = pd.NA
             return new_row, False
 
@@ -277,19 +280,16 @@ class ATRGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]:
         """
         Realtime scan implementation that enriches the new_row with indicators
         and returns whether it passes the filter criteria.
         """
-
         # Check time filter first
-        assert isinstance(new_row.name, pd.Timestamp)
-        if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
-        ):
+        timestamp = new_row.get("datetime")
+        assert isinstance(timestamp, datetime)
+        if timestamp.time() > self._end_time or timestamp.time() < self._start_time:
             new_row["signal"] = pd.NA
             return new_row, False
 

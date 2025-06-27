@@ -1,5 +1,6 @@
 import asyncio
 from datetime import date, datetime, time, timedelta
+from typing import Any
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -49,7 +50,7 @@ class HandlerTest(SubscriptionHandler):
     def __init__(self):
         self.received = []
 
-    def handle(self, symbol: str, new_row: pd.Series):
+    def handle(self, symbol: str, new_row: dict[str, Any]):
         self.received.append((symbol, new_row))
 
 
@@ -293,13 +294,14 @@ async def test_atr_indicator(setup):
     ]
 
     for msg in historical_rows:
-        row = pd.Series(
-            {k: float(v) for k, v in msg.items() if k != "timestamp"},
-            name=pd.to_datetime(int(msg["timestamp"]), unit="ms", utc=True).tz_convert(
-                LOCAL_TIMEZONE_STR
-            ),
-        )
-        await indicator.extend_realtime(symbol, row)
+        timestamp = pd.to_datetime(
+            int(msg["timestamp"]), unit="ms", utc=True
+        ).tz_convert(LOCAL_TIMEZONE_STR)
+        row_dict = {
+            "datetime": timestamp,
+            **{k: float(v) for k, v in msg.items() if k != "timestamp"},
+        }
+        await indicator.extend_realtime(symbol, row_dict)
 
     ts = index[3]
     channel_handler = CandleChannelHandler(
@@ -422,11 +424,11 @@ async def test_multiple_ticks_aggregation():
     # Should have one aggregated candle
     assert len(handler.received) == 1
     _, candle = handler.received[0]
-    assert candle["open"] == 100.0  # first tick's open
-    assert candle["close"] == 102.5  # last tick's close
-    assert candle["high"] == 103.0  # max high
-    assert candle["low"] == 97.0  # min low
-    assert candle["volume"] == 6000  # sum of volumes (1000+2000+3000)
+    assert candle[CandleCol.OPEN] == 100.0  # first tick's open
+    assert candle[CandleCol.CLOSE] == 102.5  # last tick's close
+    assert candle[CandleCol.HIGH] == 103.0  # max high
+    assert candle[CandleCol.LOW] == 97.0  # min low
+    assert candle[CandleCol.VOLUME] == 6000  # sum of volumes (1000+2000+3000)
 
 
 @pytest.mark.asyncio
@@ -474,7 +476,7 @@ async def test_candle_aggregation(setup):
 
         assert row[CandleCol.VOLUME] == 1500
 
-        assert row.name == ts_start
+        assert row["datetime"] == ts_start
     finally:
         ClockRegistry.unset()
 

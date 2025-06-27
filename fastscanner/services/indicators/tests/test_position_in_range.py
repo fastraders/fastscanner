@@ -126,7 +126,7 @@ async def test_position_in_range_extend_realtime_first_candle(
     indicator = PositionInRangeIndicator(n_days=5)
 
     row_time = datetime(2023, 1, 11, 9, 30)
-    row = pd.Series({CandleCol.CLOSE: 140}, name=row_time)
+    row = {"datetime": row_time, CandleCol.CLOSE: 140}
 
     result_row = await indicator.extend_realtime("AAPL", row)
 
@@ -154,11 +154,11 @@ async def test_position_in_range_extend_realtime_same_day(candles: "CandleStoreT
     indicator = PositionInRangeIndicator(n_days=5)
 
     first_time = datetime(2023, 1, 11, 9, 30)
-    first_row = pd.Series({CandleCol.CLOSE: 140}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.CLOSE: 140}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 11, 10, 0)
-    second_row = pd.Series({CandleCol.CLOSE: 145}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.CLOSE: 145}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -182,14 +182,14 @@ async def test_position_in_range_extend_realtime_new_day(candles: "CandleStoreTe
     indicator = PositionInRangeIndicator(n_days=5)
 
     day1_time = datetime(2023, 1, 10, 9, 30)
-    day1_row = pd.Series({CandleCol.CLOSE: 140}, name=day1_time)
+    day1_row = {"datetime": day1_time, CandleCol.CLOSE: 140}
     await indicator.extend_realtime("AAPL", day1_row)
 
     high_day1 = indicator._high_n_days._rolling_values["AAPL"].copy()
     low_day1 = indicator._low_n_days._rolling_values["AAPL"].copy()
 
     day2_time = datetime(2023, 1, 12, 9, 30)
-    day2_row = pd.Series({CandleCol.CLOSE: 145}, name=day2_time)
+    day2_row = {"datetime": day2_time, CandleCol.CLOSE: 145}
     result_row = await indicator.extend_realtime("AAPL", day2_row)
 
     assert indicator._high_n_days._last_date["AAPL"] == day2_time.date()
@@ -225,7 +225,7 @@ async def test_position_in_range_extend_realtime_multiple_symbols(
     indicator = PositionInRangeIndicator(n_days=5)
 
     aapl_time = datetime(2023, 1, 11, 9, 30)
-    aapl_row = pd.Series({CandleCol.CLOSE: 140}, name=aapl_time)
+    aapl_row = {"datetime": aapl_time, CandleCol.CLOSE: 140}
     result_row = await indicator.extend_realtime("AAPL", aapl_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -234,7 +234,7 @@ async def test_position_in_range_extend_realtime_multiple_symbols(
     assert abs(result_row[indicator.column_name()] - 0.25) < 1e-6
 
     msft_time = datetime(2023, 1, 11, 9, 30)
-    msft_row = pd.Series({CandleCol.CLOSE: 245}, name=msft_time)
+    msft_row = {"datetime": msft_time, CandleCol.CLOSE: 245}
     result_row = await indicator.extend_realtime("MSFT", msft_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -264,7 +264,7 @@ async def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     indicator = PositionInRangeIndicator(n_days=5)
 
     low_time = datetime(2023, 1, 11, 9, 30)
-    low_row = pd.Series({CandleCol.CLOSE: 130}, name=low_time)
+    low_row = {"datetime": low_time, CandleCol.CLOSE: 130}
     result_row = await indicator.extend_realtime("AAPL", low_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -273,7 +273,7 @@ async def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     assert abs(result_row[indicator.column_name()] - (-0.1667)) < 1e-4
 
     high_time = datetime(2023, 1, 11, 10, 0)
-    high_row = pd.Series({CandleCol.CLOSE: 150}, name=high_time)
+    high_row = {"datetime": high_time, CandleCol.CLOSE: 150}
     result_row = await indicator.extend_realtime("AAPL", high_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -282,7 +282,7 @@ async def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     assert abs(result_row[indicator.column_name()] - 0.6667) < 1e-4
 
     above_time = datetime(2023, 1, 11, 10, 30)
-    above_row = pd.Series({CandleCol.CLOSE: 160}, name=above_time)
+    above_row = {"datetime": above_time, CandleCol.CLOSE: 160}
     result_row = await indicator.extend_realtime("AAPL", above_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):
@@ -291,7 +291,7 @@ async def test_position_in_range_edge_cases(candles: "CandleStoreTest"):
     assert abs(result_row[indicator.column_name()] - 1.0833) < 1e-4
 
     below_time = datetime(2023, 1, 11, 11, 0)
-    below_row = pd.Series({CandleCol.CLOSE: 120}, name=below_time)
+    below_row = {"datetime": below_time, CandleCol.CLOSE: 120}
     result_row = await indicator.extend_realtime("AAPL", below_row)
 
     # For the last 5 days (2023-01-06 to 2023-01-10):

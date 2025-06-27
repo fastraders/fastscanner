@@ -7,7 +7,11 @@ import pytest
 
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
-from fastscanner.services.indicators.ports import FundamentalData, FundamentalDataStore
+from fastscanner.services.indicators.ports import (
+    CandleCol,
+    FundamentalData,
+    FundamentalDataStore,
+)
 from fastscanner.services.registry import ApplicationRegistry
 
 
@@ -115,19 +119,21 @@ async def test_market_cap_indicator_extend_realtime(fundamentals):
 
     fundamentals.set("GOOG", create_fundamental_data_with_market_caps(market_caps))
 
-    df_dates = [datetime(2023, 1, 1, 10, 0)]
-    df = pd.DataFrame(
-        {"some_col": [1]},
-        index=pd.DatetimeIndex(df_dates).tz_localize(LOCAL_TIMEZONE_STR),
-    )
-
     indicator = MarketCapIndicator()
 
-    new_row = df.iloc[0]
-    new_row.name = df.index[0]
+    # Create dict representing candle data
+    new_row = {
+        "datetime": datetime(2023, 1, 1, 10, 0),
+        CandleCol.OPEN: 100.0,
+        CandleCol.HIGH: 105.0,
+        CandleCol.LOW: 95.0,
+        CandleCol.CLOSE: 102.0,
+        CandleCol.VOLUME: 1000000,
+        "some_col": 1,
+    }
 
     extended_row = await indicator.extend_realtime("GOOG", new_row)
 
-    assert indicator._last_date["GOOG"] == new_row.name.date()
+    assert indicator._last_date["GOOG"] == new_row["datetime"].date()
     assert indicator._last_market_cap["GOOG"] == 1000.0
     assert extended_row[indicator.column_name()] == 1000.0

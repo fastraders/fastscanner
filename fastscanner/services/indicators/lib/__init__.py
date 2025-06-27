@@ -55,7 +55,9 @@ class Indicator(Protocol):
 
     def column_name(self) -> str: ...
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]: ...
 
 
 class IndicatorsLibrary:

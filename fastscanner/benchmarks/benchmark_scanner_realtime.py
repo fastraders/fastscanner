@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime
 from datetime import time as dt_time
+from typing import Any
 
 import pandas as pd
 
@@ -36,17 +37,19 @@ total_messages = 0
 
 
 class BenchmarkScannerHandler:
-    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+    async def handle(
+        self, symbol: str, new_row: dict[str, Any], passed: bool
+    ) -> dict[str, Any]:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = new_row.name
+        ts = new_row["datetime"]
 
         log_ts = datetime.now().strftime("%H:%M:%S")
         candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
         if passed:
             logger.info(
-                f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {new_row.to_dict()}"
+                f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {new_row}"
             )
         if batch_start_time is None:
             batch_start_time = now
