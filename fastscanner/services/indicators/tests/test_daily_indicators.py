@@ -293,16 +293,14 @@ async def test_prev_day_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     candles.set_data("AAPL", daily_data)
 
-    # Create a new row for realtime data
-    new_row = pd.Series(
-        {
-            CandleCol.CLOSE: 110,
-            CandleCol.HIGH: 112,
-            CandleCol.LOW: 108,
-            CandleCol.OPEN: 109,
-        },
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    # Create a new row dict for realtime data
+    new_row = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.CLOSE: 110,
+        CandleCol.HIGH: 112,
+        CandleCol.LOW: 108,
+        CandleCol.OPEN: 109,
+    }
 
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
     result_row = await indicator.extend_realtime("AAPL", new_row.copy())
@@ -325,17 +323,17 @@ async def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
 
     # First call for Jan 11
-    row1 = pd.Series(
-        {CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 11 (same day)
-    row2 = pd.Series(
-        {CandleCol.CLOSE: 112},
-        name=datetime(2023, 1, 11, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 11, 10, 0),
+        CandleCol.CLOSE: 112,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same previous day value (105)
@@ -361,17 +359,17 @@ async def test_prev_day_indicator_extend_realtime_different_days(
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
 
     # Call for Jan 11
-    row1 = pd.Series(
-        {CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 12 (different day)
-    row2 = pd.Series(
-        {CandleCol.CLOSE: 115},
-        name=datetime(2023, 1, 12, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 12, 9, 30),
+        CandleCol.CLOSE: 115,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Jan 11 should have Jan 10's close (105)
@@ -390,16 +388,14 @@ async def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
 
     candles.set_data("AAPL", daily_data)
 
-    # Create a new row for realtime data at market open
-    new_row = pd.Series(
-        {
-            CandleCol.CLOSE: 110,
-            CandleCol.HIGH: 112,
-            CandleCol.LOW: 108,
-            CandleCol.OPEN: 110,  # This will be used as the daily open
-        },
-        name=datetime(2023, 1, 11, 9, 30),  # Market open time
-    )
+    # Create a new row dict for realtime data at market open
+    new_row = {
+        "datetime": datetime(2023, 1, 11, 9, 30),  # Market open time
+        CandleCol.CLOSE: 110,
+        CandleCol.HIGH: 112,
+        CandleCol.LOW: 108,
+        CandleCol.OPEN: 110,  # This will be used as the daily open
+    }
 
     indicator = DailyGapIndicator()
     result_row = await indicator.extend_realtime("AAPL", new_row.copy())
@@ -425,17 +421,19 @@ async def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
     indicator = DailyGapIndicator()
 
     # First call for Jan 11 at market open
-    row1 = pd.Series(
-        {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.OPEN: 110,
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 11 (same day, later time)
-    row2 = pd.Series(
-        {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
-        name=datetime(2023, 1, 11, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 11, 10, 0),
+        CandleCol.OPEN: 112,
+        CandleCol.CLOSE: 112,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same gap value
@@ -462,17 +460,19 @@ async def test_daily_gap_indicator_extend_realtime_different_days(
     indicator = DailyGapIndicator()
 
     # Call for Jan 11
-    row1 = pd.Series(
-        {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.OPEN: 110,
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 12 (different day)
-    row2 = pd.Series(
-        {CandleCol.OPEN: 115, CandleCol.CLOSE: 115},
-        name=datetime(2023, 1, 12, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 12, 9, 30),
+        CandleCol.OPEN: 115,
+        CandleCol.CLOSE: 115,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Jan 11 gap: (110 - 105) / 105 = 0.0476
@@ -482,6 +482,9 @@ async def test_daily_gap_indicator_extend_realtime_different_days(
     # Jan 12 gap: (115 - 110) / 110 = 0.0455
     expected_gap2 = (115 - 110) / 110
     assert abs(result2[indicator.column_name()] - expected_gap2) < 1e-4
+
+    # Ensure the values are different
+    assert result1[indicator.column_name()] != result2[indicator.column_name()]
 
 
 @pytest.mark.asyncio
@@ -498,20 +501,22 @@ async def test_daily_gap_indicator_extend_realtime_premarket(
     indicator = DailyGapIndicator()
 
     # Pre-market call (before 9:30)
-    premarket_row = pd.Series(
-        {CandleCol.OPEN: 108, CandleCol.CLOSE: 108},
-        name=datetime(2023, 1, 11, 9, 0),
-    )
+    premarket_row = {
+        "datetime": datetime(2023, 1, 11, 9, 0),
+        CandleCol.OPEN: 108,
+        CandleCol.CLOSE: 108,
+    }
     premarket_result = await indicator.extend_realtime("AAPL", premarket_row.copy())
 
     # Should be NaN because we don't have a market open price yet
     assert pd.isna(premarket_result[indicator.column_name()])
 
     # Market open call (at 9:30)
-    market_open_row = pd.Series(
-        {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    market_open_row = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.OPEN: 110,
+        CandleCol.CLOSE: 110,
+    }
     market_open_result = await indicator.extend_realtime("AAPL", market_open_row.copy())
 
     # Now we should have a gap value
@@ -519,10 +524,11 @@ async def test_daily_gap_indicator_extend_realtime_premarket(
     assert abs(market_open_result[indicator.column_name()] - expected_gap) < 1e-4
 
     # Another pre-market call for the next day
-    next_premarket_row = pd.Series(
-        {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
-        name=datetime(2023, 1, 12, 9, 0),
-    )
+    next_premarket_row = {
+        "datetime": datetime(2023, 1, 12, 9, 0),
+        CandleCol.OPEN: 112,
+        CandleCol.CLOSE: 112,
+    }
     next_premarket_result = await indicator.extend_realtime(
         "AAPL", next_premarket_row.copy()
     )
@@ -546,10 +552,11 @@ async def test_daily_gap_indicator_extend_realtime_missing_prev_close(
     indicator = DailyGapIndicator()
 
     # Call for Jan 11 (missing previous day's close)
-    row = pd.Series(
-        {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 11, 9, 30),
-    )
+    row = {
+        "datetime": datetime(2023, 1, 11, 9, 30),
+        CandleCol.OPEN: 110,
+        CandleCol.CLOSE: 110,
+    }
 
     result = await indicator.extend_realtime("AAPL", row.copy())
     assert pd.isna(result[indicator.column_name()])
@@ -748,15 +755,13 @@ async def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create a new row for realtime data
-    new_row = pd.Series(
-        {
-            CandleCol.OPEN: 140,
-            CandleCol.HIGH: 150,
-            CandleCol.LOW: 130,
-            CandleCol.CLOSE: 145,
-        },
-        name=datetime(2023, 1, 6, 9, 30),
-    )
+    new_row = {
+        "datetime": datetime(2023, 1, 6, 9, 30),
+        CandleCol.OPEN: 140,
+        CandleCol.HIGH: 150,
+        CandleCol.LOW: 130,
+        CandleCol.CLOSE: 145,
+    }
 
     # Use a smaller period for easier calculation
     indicator = DailyATRIndicator(period=5)
@@ -790,27 +795,23 @@ async def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
     indicator = DailyATRIndicator(period=5)
 
     # First call for Jan 7
-    row1 = pd.Series(
-        {
-            CandleCol.OPEN: 145,
-            CandleCol.HIGH: 160,
-            CandleCol.LOW: 140,
-            CandleCol.CLOSE: 155,
-        },
-        name=datetime(2023, 1, 7, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 7, 9, 30),
+        CandleCol.OPEN: 145,
+        CandleCol.HIGH: 160,
+        CandleCol.LOW: 140,
+        CandleCol.CLOSE: 155,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 7 (same day)
-    row2 = pd.Series(
-        {
-            CandleCol.OPEN: 155,
-            CandleCol.HIGH: 165,
-            CandleCol.LOW: 145,
-            CandleCol.CLOSE: 160,
-        },
-        name=datetime(2023, 1, 7, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 7, 10, 0),
+        CandleCol.OPEN: 155,
+        CandleCol.HIGH: 165,
+        CandleCol.LOW: 145,
+        CandleCol.CLOSE: 160,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ATR value
@@ -859,15 +860,13 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
     indicator = DailyATRIndicator(period=3)
 
     # Call for Jan 6
-    row1 = pd.Series(
-        {
-            CandleCol.OPEN: 140,
-            CandleCol.HIGH: 150,
-            CandleCol.LOW: 130,
-            CandleCol.CLOSE: 145,
-        },
-        name=datetime(2023, 1, 6, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 6, 9, 30),
+        CandleCol.OPEN: 140,
+        CandleCol.HIGH: 150,
+        CandleCol.LOW: 130,
+        CandleCol.CLOSE: 145,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ATR value for Jan 6
@@ -886,15 +885,13 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
     candles.set_data("AAPL", updated_daily_data)
 
     # Call for Jan 7 with significantly different values
-    row2 = pd.Series(
-        {
-            CandleCol.OPEN: 160,
-            CandleCol.HIGH: 180,
-            CandleCol.LOW: 140,
-            CandleCol.CLOSE: 170,
-        },
-        name=datetime(2023, 1, 7, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 7, 9, 30),
+        CandleCol.OPEN: 160,
+        CandleCol.HIGH: 180,
+        CandleCol.LOW: 140,
+        CandleCol.CLOSE: 170,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ATR value for Jan 7
@@ -1103,10 +1100,11 @@ async def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create a new row for realtime data
-    new_row = pd.Series(
-        {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    new_row = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.VOLUME: 100000,
+        CandleCol.CLOSE: 110,
+    }
 
     # Test with period=14
     indicator = ADVIndicator(period=14)
@@ -1150,17 +1148,19 @@ async def test_adv_indicator_extend_realtime_multiple_calls_same_day(
     indicator = ADVIndicator(period=14)
 
     # First call for Jan 15
-    row1 = pd.Series(
-        {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.VOLUME: 100000,
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 15 (same day)
-    row2 = pd.Series(
-        {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 112},
-        name=datetime(2023, 1, 15, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 15, 10, 0),
+        CandleCol.VOLUME: 120000,
+        CandleCol.CLOSE: 112,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ADV value
@@ -1201,10 +1201,11 @@ async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStor
     indicator = ADVIndicator(period=14)
 
     # Call for Jan 15
-    row1 = pd.Series(
-        {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.VOLUME: 100000,
+        CandleCol.CLOSE: 110,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ADV value for Jan 15
@@ -1219,10 +1220,11 @@ async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStor
     candles.set_data("AAPL", updated_daily_data)
 
     # Call for Jan 16 (different day)
-    row2 = pd.Series(
-        {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 115},
-        name=datetime(2023, 1, 16, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 16, 9, 30),
+        CandleCol.VOLUME: 120000,
+        CandleCol.CLOSE: 115,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ADV value for Jan 16
@@ -1588,14 +1590,12 @@ async def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create a new row for realtime data
-    new_row = pd.Series(
-        {
-            CandleCol.HIGH: 123,
-            CandleCol.LOW: 113,
-            CandleCol.CLOSE: 121,
-        },
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    new_row = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.HIGH: 123,
+        CandleCol.LOW: 113,
+        CandleCol.CLOSE: 121,
+    }
 
     # Test with period=14
     indicator = ADRIndicator(period=14)
@@ -1679,25 +1679,21 @@ async def test_adr_indicator_extend_realtime_multiple_calls_same_day(
     indicator = ADRIndicator(period=14)
 
     # First call for Jan 15
-    row1 = pd.Series(
-        {
-            CandleCol.HIGH: 123,
-            CandleCol.LOW: 113,
-            CandleCol.CLOSE: 121,
-        },
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.HIGH: 123,
+        CandleCol.LOW: 113,
+        CandleCol.CLOSE: 121,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 15 (same day)
-    row2 = pd.Series(
-        {
-            CandleCol.HIGH: 125,
-            CandleCol.LOW: 115,
-            CandleCol.CLOSE: 123,
-        },
-        name=datetime(2023, 1, 15, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 15, 10, 0),
+        CandleCol.HIGH: 125,
+        CandleCol.LOW: 115,
+        CandleCol.CLOSE: 123,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ADR value
@@ -1778,14 +1774,12 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
     indicator = ADRIndicator(period=14)
 
     # Call for Jan 15
-    row1 = pd.Series(
-        {
-            CandleCol.HIGH: 123,
-            CandleCol.LOW: 113,
-            CandleCol.CLOSE: 121,
-        },
-        name=datetime(2023, 1, 15, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 15, 9, 30),
+        CandleCol.HIGH: 123,
+        CandleCol.LOW: 113,
+        CandleCol.CLOSE: 121,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Get the ADR value for Jan 15
@@ -1804,14 +1798,12 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
     candles.set_data("AAPL", updated_daily_data)
 
     # Call for Jan 16 (different day)
-    row2 = pd.Series(
-        {
-            CandleCol.HIGH: 125,
-            CandleCol.LOW: 115,
-            CandleCol.CLOSE: 123,
-        },
-        name=datetime(2023, 1, 16, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 16, 9, 30),
+        CandleCol.HIGH: 125,
+        CandleCol.LOW: 115,
+        CandleCol.CLOSE: 123,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Get the ADR value for Jan 16

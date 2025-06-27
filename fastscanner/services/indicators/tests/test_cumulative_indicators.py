@@ -67,7 +67,7 @@ async def test_cumulative_daily_volume_extend_realtime_first_candle():
     indicator = CumulativeDailyVolumeIndicator()
 
     row_time = datetime(2023, 1, 1, 9, 30)
-    row = pd.Series({CandleCol.VOLUME: 100}, name=row_time)
+    row = {"datetime": row_time, CandleCol.VOLUME: 100}
 
     result_row = await indicator.extend_realtime("AAPL", row)
 
@@ -82,17 +82,17 @@ async def test_cumulative_daily_volume_extend_realtime_same_day():
     indicator = CumulativeDailyVolumeIndicator()
 
     first_time = datetime(2023, 1, 1, 9, 30)
-    first_row = pd.Series({CandleCol.VOLUME: 100}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.VOLUME: 100}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 1, 10, 0)
-    second_row = pd.Series({CandleCol.VOLUME: 150}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.VOLUME: 150}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     assert result_row[indicator.column_name()] == 250
 
     third_time = datetime(2023, 1, 1, 10, 30)
-    third_row = pd.Series({CandleCol.VOLUME: 200}, name=third_time)
+    third_row = {"datetime": third_time, CandleCol.VOLUME: 200}
     result_row = await indicator.extend_realtime("AAPL", third_row)
     assert result_row[indicator.column_name()] == 450
 
@@ -102,11 +102,11 @@ async def test_cumulative_daily_volume_extend_realtime_new_day():
     indicator = CumulativeDailyVolumeIndicator()
 
     first_time = datetime(2023, 1, 1, 9, 30)
-    first_row = pd.Series({CandleCol.VOLUME: 100}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.VOLUME: 100}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 2, 9, 30)
-    second_row = pd.Series({CandleCol.VOLUME: 200}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.VOLUME: 200}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # Volume should reset for new day
@@ -118,18 +118,18 @@ async def test_cumulative_daily_volume_extend_realtime_multiple_symbols():
     indicator = CumulativeDailyVolumeIndicator()
 
     aapl_time = datetime(2023, 1, 1, 9, 30)
-    aapl_row = pd.Series({CandleCol.VOLUME: 100}, name=aapl_time)
+    aapl_row = {"datetime": aapl_time, CandleCol.VOLUME: 100}
     result_row = await indicator.extend_realtime("AAPL", aapl_row)
     assert result_row[indicator.column_name()] == 100
 
     msft_time = datetime(2023, 1, 1, 9, 30)
-    msft_row = pd.Series({CandleCol.VOLUME: 200}, name=msft_time)
+    msft_row = {"datetime": msft_time, CandleCol.VOLUME: 200}
     result_row = await indicator.extend_realtime("MSFT", msft_row)
 
     assert result_row[indicator.column_name()] == 200
 
     aapl_time2 = datetime(2023, 1, 1, 10, 0)
-    aapl_row2 = pd.Series({CandleCol.VOLUME: 150}, name=aapl_time2)
+    aapl_row2 = {"datetime": aapl_time2, CandleCol.VOLUME: 150}
     result_row = await indicator.extend_realtime("AAPL", aapl_row2)
 
     assert result_row[indicator.column_name()] == 250
@@ -243,7 +243,7 @@ async def test_premarket_cumulative_extend_realtime_first_candle():
     indicator = PremarketCumulativeIndicator(CandleCol.HIGH, CumulativeOperation.MAX)
 
     row_time = datetime(2023, 1, 1, 8, 0)
-    row = pd.Series({CandleCol.HIGH: 150}, name=row_time)
+    row = {"datetime": row_time, CandleCol.HIGH: 150}
 
     result_row = await indicator.extend_realtime("AAPL", row)
 
@@ -258,17 +258,17 @@ async def test_premarket_cumulative_extend_realtime_same_day_premarket():
     indicator = PremarketCumulativeIndicator(CandleCol.HIGH, CumulativeOperation.MAX)
 
     first_time = datetime(2023, 1, 1, 8, 0)
-    first_row = pd.Series({CandleCol.HIGH: 150}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.HIGH: 150}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 1, 8, 30)
-    second_row = pd.Series({CandleCol.HIGH: 160}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.HIGH: 160}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     assert result_row[indicator.column_name()] == 160
 
     third_time = datetime(2023, 1, 1, 9, 0)
-    third_row = pd.Series({CandleCol.HIGH: 155}, name=third_time)
+    third_row = {"datetime": third_time, CandleCol.HIGH: 155}
     result_row = await indicator.extend_realtime("AAPL", third_row)
 
     # Maintains highest value
@@ -280,18 +280,18 @@ async def test_premarket_cumulative_extend_realtime_market_hours():
     indicator = PremarketCumulativeIndicator(CandleCol.HIGH, CumulativeOperation.MAX)
 
     premarket_time = datetime(2023, 1, 1, 8, 0)
-    premarket_row = pd.Series({CandleCol.HIGH: 150}, name=premarket_time)
+    premarket_row = {"datetime": premarket_time, CandleCol.HIGH: 150}
     await indicator.extend_realtime("AAPL", premarket_row)
 
     market_time = datetime(2023, 1, 1, 9, 30)
-    market_row = pd.Series({CandleCol.HIGH: 170}, name=market_time)
+    market_row = {"datetime": market_time, CandleCol.HIGH: 170}
     result_row = await indicator.extend_realtime("AAPL", market_row)
 
     # Maintains premarket value during market hours
     assert result_row[indicator.column_name()] == 150
 
     later_time = datetime(2023, 1, 1, 10, 0)
-    later_row = pd.Series({CandleCol.HIGH: 180}, name=later_time)
+    later_row = {"datetime": later_time, CandleCol.HIGH: 180}
     result_row = await indicator.extend_realtime("AAPL", later_row)
 
     # Still maintains premarket value
@@ -303,11 +303,11 @@ async def test_premarket_cumulative_extend_realtime_new_day():
     indicator = PremarketCumulativeIndicator(CandleCol.HIGH, CumulativeOperation.MAX)
 
     day1_time = datetime(2023, 1, 1, 8, 0)
-    day1_row = pd.Series({CandleCol.HIGH: 150}, name=day1_time)
+    day1_row = {"datetime": day1_time, CandleCol.HIGH: 150}
     await indicator.extend_realtime("AAPL", day1_row)
 
     day2_time = datetime(2023, 1, 2, 8, 0)
-    day2_row = pd.Series({CandleCol.HIGH: 160}, name=day2_time)
+    day2_row = {"datetime": day2_time, CandleCol.HIGH: 160}
     result_row = await indicator.extend_realtime("AAPL", day2_row)
 
     # Resets for new day
@@ -319,17 +319,17 @@ async def test_premarket_cumulative_extend_realtime_multiple_symbols():
     indicator = PremarketCumulativeIndicator(CandleCol.HIGH, CumulativeOperation.MAX)
 
     aapl_time = datetime(2023, 1, 1, 8, 0)
-    aapl_row = pd.Series({CandleCol.HIGH: 150}, name=aapl_time)
+    aapl_row = {"datetime": aapl_time, CandleCol.HIGH: 150}
     result_row = await indicator.extend_realtime("AAPL", aapl_row)
     assert result_row[indicator.column_name()] == 150
 
     msft_time = datetime(2023, 1, 1, 8, 0)
-    msft_row = pd.Series({CandleCol.HIGH: 250}, name=msft_time)
+    msft_row = {"datetime": msft_time, CandleCol.HIGH: 250}
     result_row = await indicator.extend_realtime("MSFT", msft_row)
     assert result_row[indicator.column_name()] == 250
 
     aapl_time2 = datetime(2023, 1, 1, 8, 30)
-    aapl_row2 = pd.Series({CandleCol.HIGH: 160}, name=aapl_time2)
+    aapl_row2 = {"datetime": aapl_time2, CandleCol.HIGH: 160}
     result_row = await indicator.extend_realtime("AAPL", aapl_row2)
     assert result_row[indicator.column_name()] == 160
 
@@ -343,17 +343,17 @@ async def test_premarket_cumulative_min_operation():
 
     # First premarket candle
     first_time = datetime(2023, 1, 1, 8, 0)
-    first_row = pd.Series({CandleCol.LOW: 150}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.LOW: 150}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 1, 8, 30)
-    second_row = pd.Series({CandleCol.LOW: 140}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.LOW: 140}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     assert result_row[indicator.column_name()] == 140
 
     third_time = datetime(2023, 1, 1, 9, 0)
-    third_row = pd.Series({CandleCol.LOW: 145}, name=third_time)
+    third_row = {"datetime": third_time, CandleCol.LOW: 145}
     result_row = await indicator.extend_realtime("AAPL", third_row)
 
     # Maintains lowest value
@@ -365,18 +365,18 @@ async def test_premarket_cumulative_sum_operation():
     indicator = PremarketCumulativeIndicator(CandleCol.VOLUME, CumulativeOperation.SUM)
 
     first_time = datetime(2023, 1, 1, 8, 0)
-    first_row = pd.Series({CandleCol.VOLUME: 100}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.VOLUME: 100}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 1, 8, 30)
-    second_row = pd.Series({CandleCol.VOLUME: 150}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.VOLUME: 150}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     # Sums values correctly
     assert result_row[indicator.column_name()] == 250
 
     third_time = datetime(2023, 1, 1, 9, 0)
-    third_row = pd.Series({CandleCol.VOLUME: 200}, name=third_time)
+    third_row = {"datetime": third_time, CandleCol.VOLUME: 200}
     result_row = await indicator.extend_realtime("AAPL", third_row)
 
     # Continues summing correctly

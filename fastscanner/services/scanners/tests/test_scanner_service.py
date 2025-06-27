@@ -28,8 +28,8 @@ class DummyScanner:
         return pd.DataFrame()
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]:
         # Add a test indicator to the row to verify processing
         enhanced_row = new_row.copy()
         enhanced_row["test_indicator"] = new_row.get("close", 0) * 2
@@ -80,7 +80,9 @@ class MockSubscriptionHandler(SubscriptionHandler):
         self.handled_rows = []
         self.handled_passed = []
 
-    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+    async def handle(
+        self, symbol: str, new_row: dict[str, Any], passed: bool
+    ) -> dict[str, Any]:
         self.handled_symbols.append(symbol)
         self.handled_rows.append(new_row)
         self.handled_passed.append(passed)

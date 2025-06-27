@@ -1,6 +1,7 @@
 import math
 import uuid
 from datetime import date, time
+from typing import Any
 
 import pandas as pd
 
@@ -138,6 +139,5 @@ class SmallCapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]:
-        return pd.Series(), False
+        self, symbol: str, new_row: dict[str, Any], freq: str
+    ) -> tuple[dict[str, Any], bool]: ...
