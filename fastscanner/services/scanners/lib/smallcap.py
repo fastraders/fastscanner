@@ -100,10 +100,14 @@ class SmallCapUpScanner:
         ):
             df = await shift_indicator.extend(symbol, df)
             change_col = f"change_{shift}"
-            df[change_col] = (df[C.HIGH] - df[shift_indicator.column_name()]) / df[
-                shift_indicator.column_name()
-            ]
-            df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
+            try:
+                df[change_col] = (df[C.HIGH] - df[shift_indicator.column_name()]) / df[
+                    shift_indicator.column_name()
+                ]
+                df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
+            except Exception as e:
+                print(f"Error calculating change for {symbol} with shift {shift}: {e}")
+                raise e
 
         # Comment out for highest high from 4am logic
         # df = await self._cum_high.extend(symbol, df)
