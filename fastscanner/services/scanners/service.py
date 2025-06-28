@@ -98,7 +98,6 @@ class ScannerService:
         scanner_id = scanner.id()
         handler.set_scanner_id(scanner_id)
         symbols = await self._symbols_provider.active_symbols()
-
         tasks = [
             asyncio.create_task(self._subscribe_symbol(symbol, scanner, handler, freq))
             for symbol in symbols
