@@ -95,19 +95,8 @@ class SmallCapUpScanner:
             freq,
         )
         df = await self._cum_volume.extend(symbol, df)
-        for shift, min_change, shift_indicator in zip(
-            self._shift_periods, self._shift_min_change, self._shift_indicators
-        ):
+        for shift_indicator in self._shift_indicators:
             df = await shift_indicator.extend(symbol, df)
-            change_col = f"change_{shift}"
-            try:
-                df[change_col] = (df[C.HIGH] - df[shift_indicator.column_name()]) / df[
-                    shift_indicator.column_name()
-                ]
-                df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
-            except Exception as e:
-                print(f"Error calculating change for {symbol} with shift {shift}: {e}")
-                raise e
 
         # Comment out for highest high from 4am logic
         # df = await self._cum_high.extend(symbol, df)
@@ -169,6 +158,16 @@ class SmallCapUpScanner:
 
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
         df = df[df[self._gap.column_name()] >= self._min_gap]
+        if df.empty:
+            return df
+
+        for shift, min_change in zip(self._shift_periods, self._shift_min_change):
+            change_col = f"change_{shift}"
+            df.loc[:, change_col] = (
+                df[C.HIGH] - df[shift_indicator.column_name()]
+            ) / df[shift_indicator.column_name()]
+            df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
+
         df = df[df["triggered_alert"].notnull()]
 
         return df

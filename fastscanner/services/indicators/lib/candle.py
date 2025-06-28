@@ -37,6 +37,10 @@ class CumulativeDailyVolumeIndicator:
         return self.type()
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df.loc[:, self.column_name()] = 0.0
+            return df
+
         volume = df[CandleCol.VOLUME]
         assert isinstance(volume.index, pd.DatetimeIndex)
         cum_volume = volume.groupby(volume.index.date).cumsum()
@@ -104,6 +108,10 @@ class PremarketCumulativeIndicator:
         return f"premarket_{self._op.label()}_{self._candle_col}"
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df.loc[:, self.column_name()] = 0.0
+            return df
+
         values = df[self._candle_col]
         assert isinstance(values.index, pd.DatetimeIndex)
         cum_values = values.groupby(values.index.date).agg(self._op.pandas_func())
