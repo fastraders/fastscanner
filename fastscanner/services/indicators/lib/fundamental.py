@@ -50,15 +50,16 @@ class DaysToEarningsIndicator:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, pd.Timestamp)
         new_date = timestamp.date()
+
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_days[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
+
+            extended_df = await self.extend(symbol, df_row)
+
+            extended_row = extended_df.iloc[0].to_dict()
+            extended_row["datetime"] = timestamp
+
+            self._last_days[symbol] = extended_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._last_days[symbol]
@@ -101,22 +102,19 @@ class DaysFromEarningsIndicator:
         df = df.join(date_from_earnings, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(
-        self, symbol: str, new_row: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, pd.Timestamp)
         new_date = timestamp.date()
+
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_days[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
+
+            extended_df = await self.extend(symbol, df_row)
+
+            extended_row = extended_df.iloc[0].to_dict()
+            extended_row["datetime"] = timestamp  
+            self._last_days[symbol] = extended_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._last_days[symbol]
@@ -158,23 +156,19 @@ class MarketCapIndicator:
         df = df.join(date_to_market_cap, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(
-        self, symbol: str, new_row: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_market_cap[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
+
+            extended_df = await self.extend(symbol, df_row)
+
+            extended_row = extended_df.iloc[0].to_dict()
+            extended_row["datetime"] = timestamp
+            self._last_market_cap[symbol] = extended_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._last_market_cap.get(symbol, np.nan)

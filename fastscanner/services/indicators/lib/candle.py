@@ -124,7 +124,7 @@ class PremarketCumulativeIndicator:
         last_value = self._last_value.get(symbol)
         if timestamp.time() >= time(9, 30):
             if last_date is None or last_date != timestamp.date():
-                new_row[self.column_name()] = pd.NA
+                new_row[self.column_name()] = None
             else:
                 new_row[self.column_name()] = last_value
             return new_row
@@ -318,7 +318,7 @@ class PositionInRangeIndicator:
         low = new_row[low_col]
         close = new_row[CandleCol.CLOSE]
         if pd.isna(high) or pd.isna(low) or high == low:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
         else:
             new_row[self.column_name()] = (close - low) / (high - low)
 
@@ -402,17 +402,13 @@ class DailyRollingIndicator:
         last_date = self._last_date.get(symbol)
 
         if last_date is None or last_date != timestamp.date():
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-            daily_df = await self._get_data_for_n_days(symbol, df_row)
+            daily_df = await self._get_data_for_n_days(symbol, pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp])))
             self._last_date[symbol] = timestamp.date()
-
-            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
-                -self._n_days :
-            ]
+            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[-self._n_days:]
 
         values = self._rolling_values.get(symbol, [])
         if not values:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         if self._operation == "min":
@@ -422,7 +418,7 @@ class DailyRollingIndicator:
         elif self._operation == "sum":
             agg_val = sum(values)
         else:
-            agg_val = pd.NA
+            agg_val = None
 
         new_row[self.column_name()] = agg_val
         return new_row
@@ -521,7 +517,7 @@ class ATRGapIndicator:
                 / new_row[self._atr.column_name()]
             )
         else:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
 
         return {key: value for key, value in new_row.items() if key not in cols_to_drop}
 
@@ -561,7 +557,7 @@ class ShiftIndicator:
         values = self._last_values.setdefault(symbol, [])
         values.append(new_row[self._candle_col])
         if len(values) < self._shift + 1:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         new_row[self.column_name()] = values.pop(0)

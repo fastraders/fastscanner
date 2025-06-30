@@ -52,7 +52,7 @@ class PrevDayIndicator:
                 self._prev_day[symbol] = close[self._candle_col].values[0]
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._prev_day.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._prev_day.get(symbol, None)
         return new_row
 
 
@@ -114,7 +114,7 @@ class DailyGapIndicator:
         if day_open is not None and day_close is not None:
             new_row[self.column_name()] = (day_open - day_close) / day_close
         else:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
 
         return new_row
 
@@ -163,21 +163,19 @@ class DailyATRIndicator:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
+
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._daily_atr[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))  
+            extended_df = await self.extend(symbol, df_row) 
+
+            updated_row = extended_df.iloc[0].to_dict()
+            updated_row["datetime"] = timestamp
+
+            self._daily_atr[symbol] = updated_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._daily_atr[symbol]
         return new_row
-
 
 class DailyATRGapIndicator:
     def __init__(self, period: int):
@@ -245,7 +243,7 @@ class DailyATRGapIndicator:
             self._daily_gap[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._daily_gap.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._daily_gap.get(symbol, None)
         return new_row
 
 
@@ -288,22 +286,19 @@ class ADRIndicator:
         df = df.join(adr, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(
-        self, symbol: str, new_row: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
+
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_value[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
+            extended_df = await self.extend(symbol, df_row)
+
+            extended_row = extended_df.iloc[0].to_dict()
+            extended_row["datetime"] = timestamp
+
+            self._last_value[symbol] = extended_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._last_value[symbol]
@@ -351,16 +346,17 @@ class ADVIndicator:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
+
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_value[symbol] = result_dict[self.column_name()]
+            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
+
+            extended_df = await self.extend(symbol, df_row)
+
+            extended_row = extended_df.iloc[0].to_dict()
+
+            extended_row["datetime"] = timestamp
+
+            self._last_value[symbol] = extended_row[self.column_name()]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._last_value[symbol]
