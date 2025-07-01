@@ -481,9 +481,13 @@ class GapIndicator:
             cols_to_drop.append(self._prev_day.column_name())
 
         prev_col = self._prev_day.column_name()
-        new_row[self.column_name()] = (
-            new_row[self._candle_col] - new_row[prev_col]
-        ) / new_row[prev_col]
+        prev_close = new_row[prev_col]
+        if prev_close is None:
+            new_row[self.column_name()] = None
+        else:
+            new_row[self.column_name()] = (
+                new_row[self._candle_col] - prev_close
+            ) / prev_close
 
         return {key: value for key, value in new_row.items() if key not in cols_to_drop}
 
@@ -531,12 +535,17 @@ class ATRGapIndicator:
                 new_row = await ind.extend_realtime(symbol, new_row)
                 cols_to_drop.append(ind.column_name())
 
-        if new_row[self._atr.column_name()] > 0:
-            new_row[self.column_name()] = (
-                new_row[self._gap.column_name()]
-                * new_row[self._prev_day.column_name()]
-                / new_row[self._atr.column_name()]
-            )
+        atr_value = new_row[self._atr.column_name()]
+        gap_value = new_row[self._gap.column_name()]
+        prev_day_close = new_row[self._prev_day.column_name()]
+
+        if (
+            atr_value
+            and atr_value > 0
+            and gap_value is not None
+            and prev_day_close is not None
+        ):
+            new_row[self.column_name()] = gap_value * prev_day_close / atr_value
         else:
             new_row[self.column_name()] = None
 

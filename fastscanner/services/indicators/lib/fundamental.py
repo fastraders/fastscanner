@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from ...registry import ApplicationRegistry
 class DaysToEarningsIndicator:
     def __init__(self) -> None:
         self._last_date: dict[str, date] = {}
-        self._last_days: dict[str, Optional[int]] = {}
+        self._last_days: dict[str, int] = {}
 
     @classmethod
     def type(cls):
@@ -55,19 +55,14 @@ class DaysToEarningsIndicator:
             fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
             earnings_dates = fundamentals.earnings_dates.date
             future_earnings = earnings_dates[earnings_dates >= new_date]
-            if len(future_earnings) > 0:
-                next_earnings = future_earnings[0]
-                days = (next_earnings - new_date).days
-            else:
-                days = None
-            self._last_days[symbol] = days
             self._last_date[symbol] = new_date
+            if len(future_earnings) == 0:
+                new_row[self.column_name()] = None
+                return new_row
+            next_earnings = future_earnings[0]
+            self._last_days[symbol] = (next_earnings - new_date).days
 
-        value = self._last_days.get(symbol, None)
-        if value is None:
-            new_row[self.column_name()] = pd.NA
-        else:
-            new_row[self.column_name()] = int(value)
+        new_row[self.column_name()] = self._last_days.get(symbol)
 
         return new_row
 
@@ -75,7 +70,7 @@ class DaysToEarningsIndicator:
 class DaysFromEarningsIndicator:
     def __init__(self) -> None:
         self._last_date: dict[str, date] = {}
-        self._last_days: dict[str, Optional[int]] = {}
+        self._last_days: dict[str, int] = {}
 
     @classmethod
     def type(cls):
@@ -119,19 +114,14 @@ class DaysFromEarningsIndicator:
             fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
             earnings_dates = fundamentals.earnings_dates.date
             past_earnings = earnings_dates[earnings_dates <= new_date]
-            if len(past_earnings) > 0:
-                last_earnings = past_earnings[-1]
-                days = (new_date - last_earnings).days
-            else:
-                days = None
-            self._last_days[symbol] = days
             self._last_date[symbol] = new_date
+            if len(past_earnings) == 0:
+                new_row[self.column_name()] = None
+                return new_row
+            last_earnings = past_earnings[-1]
+            self._last_days[symbol] = (new_date - last_earnings).days
 
-        value = self._last_days.get(symbol, None)
-        if value is None:
-            new_row[self.column_name()] = None
-        else:
-            new_row[self.column_name()] = int(value)
+        new_row[self.column_name()] = self._last_days.get(symbol)
         return new_row
 
 
@@ -183,17 +173,12 @@ class MarketCapIndicator:
             filtered_series = historical_market_cap[
                 historical_market_cap.index <= new_date
             ]
-            if not filtered_series.empty:
-                market_cap = filtered_series.iloc[-1]
-            else:
-                market_cap = float("nan")
-            self._last_market_cap[symbol] = market_cap
             self._last_date[symbol] = new_date
+            if filtered_series.empty:
+                new_row[self.column_name()] = None
+                return new_row
+            self._last_market_cap[symbol] = filtered_series.iloc[-1]
 
-        value = self._last_market_cap.get(symbol)
-        if value is not None and np.isfinite(value):
-            new_row[self.column_name()] = value
-        else:
-            new_row[self.column_name()] = None
+        new_row[self.column_name()] = self._last_market_cap.get(symbol)
 
         return new_row

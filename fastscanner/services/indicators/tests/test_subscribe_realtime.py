@@ -297,10 +297,10 @@ async def test_atr_indicator(setup):
         timestamp = pd.to_datetime(
             int(msg["timestamp"]), unit="ms", utc=True
         ).tz_convert(LOCAL_TIMEZONE_STR)
-        row_dict = {
-            "datetime": timestamp,
-            **{k: float(v) for k, v in msg.items() if k != "timestamp"},
+        row_dict: dict[str, Any] = {
+            k: float(v) for k, v in msg.items() if k != "timestamp"
         }
+        row_dict["datetime"] = timestamp
         await indicator.extend_realtime(symbol, row_dict)
 
     ts = index[3]

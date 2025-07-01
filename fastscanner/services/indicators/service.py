@@ -104,11 +104,11 @@ class CandleChannelHandler:
         self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
 
-    async def _handle(self, row_dict: dict[str, Any]) -> None:
+    async def _handle(self, row: dict[str, Any]) -> None:
         for ind in self._indicators:
-            row_dict = await ind.extend_realtime(self._symbol, row_dict)
+            row = await ind.extend_realtime(self._symbol, row)
 
-        self._handler.handle(self._symbol, row_dict)
+        self._handler.handle(self._symbol, row)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
@@ -131,18 +131,14 @@ class CandleChannelHandler:
             )
 
             if self._freq == "1min":
-                row_dict = {
-                    "datetime": ts,
-                    **{k: v for k, v in data.items() if k != "timestamp"},
-                }
-                await self._handle(row_dict)
+                row = {k: v for k, v in data.items() if k != "timestamp"}
+                row["datetime"] = ts
+                await self._handle(row)
                 return
 
-            row_dict = {
-                "datetime": ts,
-                **{k: v for k, v in data.items() if k != "timestamp"},
-            }
-            await self._buffer.add(row_dict)
+            row = {k: v for k, v in data.items() if k != "timestamp"}
+            row["datetime"] = ts
+            await self._buffer.add(row)
 
         except Exception as e:
             logger.exception(
