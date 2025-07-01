@@ -41,7 +41,10 @@ class CandleBuffer:
             floor_ts = ts.floor(self._freq)
             end_ts = floor_ts + pd.Timedelta(self._freq) - pd.Timedelta("1min")
             if ts == end_ts:
-                return await self.flush()
+                row = await self.flush()
+                if row is not None:
+                    await self._timeout_handler(row)
+                return row
             if self._timeout_task is None or self._timeout_task.done():
                 self._timeout_task = asyncio.create_task(self._timeout_flush(floor_ts))
         return None

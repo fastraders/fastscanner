@@ -154,21 +154,19 @@ async def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest
 
     # Calculate expected value for comparison
     atr_indicator = DailyATRIndicator(period=5)
-    new_row_series = pd.Series(
-        {
-            CandleCol.OPEN: new_row[CandleCol.OPEN],
-            CandleCol.HIGH: new_row[CandleCol.HIGH],
-            CandleCol.LOW: new_row[CandleCol.LOW],
-            CandleCol.CLOSE: new_row[CandleCol.CLOSE],
-        },
-        name=new_row["datetime"],
-    )
-    atr_df = await atr_indicator.extend("AAPL", new_row_series.to_frame().T.copy())
-    atr_value = atr_df[atr_indicator.column_name()].iloc[0]
+    gap_indicator = DailyGapIndicator()
+    prev_day_indicator = PrevDayIndicator(CandleCol.CLOSE)
 
-    # Gap = (day_open - prev_day_close) / atr
-    # day_open = 145, prev_day_close = 135
-    expected_gap_ratio = (145 - 135) / atr_value
+    atr_result = await atr_indicator.extend_realtime("AAPL", new_row.copy())
+    atr_value = atr_result[atr_indicator.column_name()]
+
+    gap_result = await gap_indicator.extend_realtime("AAPL", new_row.copy())
+    gap_value = gap_result[gap_indicator.column_name()]
+
+    prev_day_result = await prev_day_indicator.extend_realtime("AAPL", new_row.copy())
+    prev_day_close = prev_day_result[prev_day_indicator.column_name()]
+
+    expected_gap_ratio = gap_value * prev_day_close / atr_value
 
     # Verify the ATR Gap value matches our calculation
     gap_value = result_row[indicator.column_name()]

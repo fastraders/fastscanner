@@ -383,7 +383,7 @@ class ADVIndicator:
             df_daily = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
             daily_vol = df_daily[C.VOLUME]
             if daily_vol.empty:
-                adv_val = float('nan')
+                adv_val = float("nan")
             else:
                 daily_vol = (
                     daily_vol.set_axis(daily_vol.index.date)  # type: ignore

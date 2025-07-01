@@ -253,6 +253,12 @@ class ATRIndicator:
                 self._last_close[symbol] = new_row[CandleCol.CLOSE]
 
                 return new_row
+            else:
+                tr = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
+                new_row[self.column_name()] = tr
+                self._last_atr[symbol] = tr
+                self._last_close[symbol] = new_row[CandleCol.CLOSE]
+                return new_row
 
         tr0 = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
         tr1 = abs(new_row[CandleCol.HIGH] - last_close)
