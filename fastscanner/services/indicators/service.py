@@ -84,7 +84,7 @@ class IndicatorsService:
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    def handle(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class CandleChannelHandler:
@@ -104,7 +104,7 @@ class CandleChannelHandler:
         self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
 
-    async def _handle(self, row: pd.Series) -> None:
+    async def _handle(self, row: dict[str, Any]) -> None:
         for ind in self._indicators:
             row = await ind.extend_realtime(self._symbol, row)
 
@@ -129,16 +129,16 @@ class CandleChannelHandler:
             ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
                 LOCAL_TIMEZONE_STR
             )
-            new_row = pd.Series(data, name=ts)
+
             if self._freq == "1min":
-                for ind in self._indicators:
-                    new_row = await ind.extend_realtime(self._symbol, new_row)
-                self._handler.handle(self._symbol, new_row)
+                row = {k: v for k, v in data.items() if k != "timestamp"}
+                row["datetime"] = ts
+                await self._handle(row)
                 return
-            agg = await self._buffer.add(new_row)
-            if agg is None:
-                return
-            await self._handle(agg)
+
+            row = {k: v for k, v in data.items() if k != "timestamp"}
+            row["datetime"] = ts
+            await self._buffer.add(row)
 
         except Exception as e:
             logger.exception(

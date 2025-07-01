@@ -15,8 +15,8 @@ from fastscanner.services.scanners.ports import Scanner, ScannerParams, SymbolsP
 
 class SubscriptionHandler(Protocol):
     async def handle(
-        self, symbol: str, new_row: pd.Series, passed: bool
-    ) -> pd.Series: ...
+        self, symbol: str, new_row: dict[str, Any], passed: bool
+    ) -> dict[str, Any]: ...
 
     def set_scanner_id(self, scanner_id: str): ...
 
@@ -38,7 +38,7 @@ class ScannerChannelHandler:
     def id(self) -> str:
         return f"{self._scanner.id()}_{self._symbol}"
 
-    async def _handle(self, row: pd.Series) -> None:
+    async def _handle(self, row: dict[str, Any]) -> None:
         new_row, passed = await self._scanner.scan_realtime(
             self._symbol, row, self._freq
         )
@@ -57,18 +57,21 @@ class ScannerChannelHandler:
         ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
             LOCAL_TIMEZONE_STR
         )
-        row = pd.Series(data, name=ts)
+
+        # Create dict directly
+        row_dict = {
+            "datetime": ts,
+            **{k: v for k, v in data.items() if k != "timestamp"},
+        }
 
         if self._freq == "1min":
             new_row, passed = await self._scanner.scan_realtime(
-                self._symbol, row, self._freq
+                self._symbol, row_dict, self._freq
             )
             await self._handler.handle(self._symbol, new_row, passed)
             return
-        agg = await self._buffer.add(row)
-        if agg is None:
-            return
-        await self._handle(agg)
+
+        await self._buffer.add(row_dict)
 
 
 class ScannerService:
@@ -98,7 +101,7 @@ class ScannerService:
         scanner_id = scanner.id()
         handler.set_scanner_id(scanner_id)
         symbols = await self._symbols_provider.active_symbols()
-
+        symbols = symbols[:1000]
         tasks = [
             asyncio.create_task(self._subscribe_symbol(symbol, scanner, handler, freq))
             for symbol in symbols

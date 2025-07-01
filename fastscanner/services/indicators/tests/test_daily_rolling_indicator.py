@@ -131,7 +131,7 @@ async def test_daily_rolling_extend_realtime_first_candle(candles: "CandleStoreT
     indicator = DailyRollingIndicator(n_days=5, operation="min", candle_col="close")
 
     row_time = datetime(2023, 1, 11, 9, 30)
-    row = pd.Series({CandleCol.CLOSE: 140}, name=row_time)
+    row = {"datetime": row_time, CandleCol.CLOSE: 140}
 
     result_row = await indicator.extend_realtime("AAPL", row)
 
@@ -151,11 +151,11 @@ async def test_daily_rolling_extend_realtime_same_day(candles: "CandleStoreTest"
     indicator = DailyRollingIndicator(n_days=5, operation="max", candle_col="high")
 
     first_time = datetime(2023, 1, 11, 9, 30)
-    first_row = pd.Series({CandleCol.HIGH: 140}, name=first_time)
+    first_row = {"datetime": first_time, CandleCol.HIGH: 140}
     await indicator.extend_realtime("AAPL", first_row)
 
     second_time = datetime(2023, 1, 11, 10, 0)
-    second_row = pd.Series({CandleCol.HIGH: 145}, name=second_time)
+    second_row = {"datetime": second_time, CandleCol.HIGH: 145}
     result_row = await indicator.extend_realtime("AAPL", second_row)
 
     assert result_row[indicator.column_name()] == 158
@@ -173,13 +173,13 @@ async def test_daily_rolling_extend_realtime_new_day(candles: "CandleStoreTest")
     indicator = DailyRollingIndicator(n_days=5, operation="sum", candle_col="volume")
 
     day1_time = datetime(2023, 1, 10, 9, 30)
-    day1_row = pd.Series({CandleCol.VOLUME: 500}, name=day1_time)
+    day1_row = {"datetime": day1_time, CandleCol.VOLUME: 500}
     await indicator.extend_realtime("AAPL", day1_row)
 
     values_day1 = indicator._rolling_values["AAPL"].copy()
 
     day2_time = datetime(2023, 1, 12, 9, 30)
-    day2_row = pd.Series({CandleCol.VOLUME: 600}, name=day2_time)
+    day2_row = {"datetime": day2_time, CandleCol.VOLUME: 600}
     result_row = await indicator.extend_realtime("AAPL", day2_row)
 
     assert indicator._last_date["AAPL"] == day2_time.date()
@@ -208,13 +208,13 @@ async def test_daily_rolling_extend_realtime_multiple_symbols(
     indicator = DailyRollingIndicator(n_days=5, operation="min", candle_col="close")
 
     aapl_time = datetime(2023, 1, 11, 9, 30)
-    aapl_row = pd.Series({CandleCol.CLOSE: 140}, name=aapl_time)
+    aapl_row = {"datetime": aapl_time, CandleCol.CLOSE: 140}
     result_row = await indicator.extend_realtime("AAPL", aapl_row)
 
     assert result_row[indicator.column_name()] == 154
 
     msft_time = datetime(2023, 1, 11, 9, 30)
-    msft_row = pd.Series({CandleCol.CLOSE: 240}, name=msft_time)
+    msft_row = {"datetime": msft_time, CandleCol.CLOSE: 240}
     result_row = await indicator.extend_realtime("MSFT", msft_row)
 
     assert result_row[indicator.column_name()] == 254
@@ -236,7 +236,7 @@ async def test_daily_rolling_edge_cases(candles: "CandleStoreTest"):
     indicator = DailyRollingIndicator(n_days=5, operation="min", candle_col="close")
 
     row_time = datetime(2023, 1, 11, 9, 30)
-    row = pd.Series({CandleCol.CLOSE: 140}, name=row_time)
+    row = {"datetime": row_time, CandleCol.CLOSE: 140}
     result_row = await indicator.extend_realtime("AAPL", row)
 
     assert result_row[indicator.column_name()] == 150

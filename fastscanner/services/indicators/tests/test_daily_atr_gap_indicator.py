@@ -136,27 +136,27 @@ async def test_daily_atr_gap_indicator_extend_realtime(candles: "CandleStoreTest
     candles.set_data("AAPL", daily_data)
 
     # Create a new row for realtime data at market open
-    new_row = pd.Series(
-        {
-            CandleCol.OPEN: 145,  # Open price for Jan 6
-            CandleCol.HIGH: 150,
-            CandleCol.LOW: 140,
-            CandleCol.CLOSE: 148,
-        },
-        name=datetime(2023, 1, 6, 9, 30),  # Market open time
-    )
+    new_row = {
+        "datetime": datetime(2023, 1, 6, 9, 30),  # Market open time
+        CandleCol.OPEN: 145,  # Open price for Jan 6
+        CandleCol.HIGH: 150,
+        CandleCol.LOW: 140,
+        CandleCol.CLOSE: 148,
+    }
 
     # Test with period=5
     indicator = DailyATRGapIndicator(period=5)
     result_row = await indicator.extend_realtime("AAPL", new_row.copy())
 
     # Verify the ATR Gap value exists
-    assert indicator.column_name() in result_row.index
+    assert indicator.column_name() in result_row
     assert not pd.isna(result_row[indicator.column_name()])
 
-    # Calculate expected value for comparison
     atr_indicator = DailyATRIndicator(period=5)
-    atr_df = await atr_indicator.extend("AAPL", new_row.to_frame().T.copy())
+    # Create DataFrame from dict for the extend method
+    df_row = pd.DataFrame([new_row])
+    df_row.index = pd.DatetimeIndex([new_row["datetime"]])
+    atr_df = await atr_indicator.extend("AAPL", df_row.copy())
     atr_value = atr_df[atr_indicator.column_name()].iloc[0]
 
     # Gap = (day_open - prev_day_close) / atr
@@ -188,27 +188,23 @@ async def test_daily_atr_gap_indicator_extend_realtime_multiple_calls_same_day(
     indicator = DailyATRGapIndicator(period=5)
 
     # First call for Jan 6 at market open
-    row1 = pd.Series(
-        {
-            CandleCol.OPEN: 145,
-            CandleCol.HIGH: 150,
-            CandleCol.LOW: 140,
-            CandleCol.CLOSE: 148,
-        },
-        name=datetime(2023, 1, 6, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 6, 9, 30),
+        CandleCol.OPEN: 145,
+        CandleCol.HIGH: 150,
+        CandleCol.LOW: 140,
+        CandleCol.CLOSE: 148,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Second call for Jan 6 (same day, later time)
-    row2 = pd.Series(
-        {
-            CandleCol.OPEN: 146,  # Different open, but should use the first one
-            CandleCol.HIGH: 152,
-            CandleCol.LOW: 142,
-            CandleCol.CLOSE: 150,
-        },
-        name=datetime(2023, 1, 6, 10, 0),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 6, 10, 0),
+        CandleCol.OPEN: 146,  # Different open, but should use the first one
+        CandleCol.HIGH: 152,
+        CandleCol.LOW: 142,
+        CandleCol.CLOSE: 150,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # Both should have the same ATR Gap value
@@ -238,27 +234,23 @@ async def test_daily_atr_gap_indicator_extend_realtime_different_days(
     indicator = DailyATRGapIndicator(period=5)
 
     # Call for Jan 6
-    row1 = pd.Series(
-        {
-            CandleCol.OPEN: 150,
-            CandleCol.HIGH: 155,
-            CandleCol.LOW: 145,
-            CandleCol.CLOSE: 152,
-        },
-        name=datetime(2023, 1, 6, 9, 30),
-    )
+    row1 = {
+        "datetime": datetime(2023, 1, 6, 9, 30),
+        CandleCol.OPEN: 150,
+        CandleCol.HIGH: 155,
+        CandleCol.LOW: 145,
+        CandleCol.CLOSE: 152,
+    }
     result1 = await indicator.extend_realtime("AAPL", row1.copy())
 
     # Call for Jan 7 (different day)
-    row2 = pd.Series(
-        {
-            CandleCol.OPEN: 155,
-            CandleCol.HIGH: 160,
-            CandleCol.LOW: 150,
-            CandleCol.CLOSE: 158,
-        },
-        name=datetime(2023, 1, 7, 9, 30),
-    )
+    row2 = {
+        "datetime": datetime(2023, 1, 7, 9, 30),
+        CandleCol.OPEN: 155,
+        CandleCol.HIGH: 160,
+        CandleCol.LOW: 150,
+        CandleCol.CLOSE: 158,
+    }
     result2 = await indicator.extend_realtime("AAPL", row2.copy())
 
     # The values should be different for different days
@@ -294,45 +286,39 @@ async def test_daily_atr_gap_indicator_extend_realtime_premarket(
     indicator = DailyATRGapIndicator(period=5)
 
     # Pre-market call (before 9:30)
-    premarket_row = pd.Series(
-        {
-            CandleCol.OPEN: 140,
-            CandleCol.HIGH: 142,
-            CandleCol.LOW: 138,
-            CandleCol.CLOSE: 141,
-        },
-        name=datetime(2023, 1, 6, 9, 0),
-    )
+    premarket_row = {
+        "datetime": datetime(2023, 1, 6, 9, 0),
+        CandleCol.OPEN: 140,
+        CandleCol.HIGH: 142,
+        CandleCol.LOW: 138,
+        CandleCol.CLOSE: 141,
+    }
     premarket_result = await indicator.extend_realtime("AAPL", premarket_row.copy())
 
     # Should be NaN because we don't have a market open price yet
     assert pd.isna(premarket_result[indicator.column_name()])
 
     # Market open call (at 9:30)
-    market_open_row = pd.Series(
-        {
-            CandleCol.OPEN: 145,
-            CandleCol.HIGH: 150,
-            CandleCol.LOW: 140,
-            CandleCol.CLOSE: 148,
-        },
-        name=datetime(2023, 1, 6, 9, 30),
-    )
+    market_open_row = {
+        "datetime": datetime(2023, 1, 6, 9, 30),
+        CandleCol.OPEN: 145,
+        CandleCol.HIGH: 150,
+        CandleCol.LOW: 140,
+        CandleCol.CLOSE: 148,
+    }
     market_open_result = await indicator.extend_realtime("AAPL", market_open_row.copy())
 
     # Now we should have a value
     assert not pd.isna(market_open_result[indicator.column_name()])
 
     # Another pre-market call for the next day
-    next_premarket_row = pd.Series(
-        {
-            CandleCol.OPEN: 150,
-            CandleCol.HIGH: 152,
-            CandleCol.LOW: 148,
-            CandleCol.CLOSE: 151,
-        },
-        name=datetime(2023, 1, 7, 9, 0),
-    )
+    next_premarket_row = {
+        "datetime": datetime(2023, 1, 7, 9, 0),
+        CandleCol.OPEN: 150,
+        CandleCol.HIGH: 152,
+        CandleCol.LOW: 148,
+        CandleCol.CLOSE: 151,
+    }
     next_premarket_result = await indicator.extend_realtime(
         "AAPL", next_premarket_row.copy()
     )

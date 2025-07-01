@@ -47,14 +47,17 @@ class CumulativeDailyVolumeIndicator:
         df.loc[:, self.column_name()] = cum_volume
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
         volume = new_row[CandleCol.VOLUME]
-        assert isinstance(new_row.name, datetime)
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_date = self._last_date.get(symbol)
-        if last_date is not None and last_date == new_row.name.date():
+        if last_date is not None and last_date == timestamp.date():
             volume += self._last_volume.get(symbol, 0)
         new_row[self.column_name()] = volume
-        self._last_date[symbol] = new_row.name.date()
+        self._last_date[symbol] = timestamp.date()
         self._last_volume[symbol] = volume
         return new_row
 
@@ -120,23 +123,26 @@ class PremarketCumulativeIndicator:
         df[self.column_name()] = cum_values
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_date = self._last_date.get(symbol)
         last_value = self._last_value.get(symbol)
-        if new_row.name.time() >= time(9, 30):
-            if last_date is None or last_date != new_row.name.date():
-                new_row[self.column_name()] = pd.NA
+        if timestamp.time() >= time(9, 30):
+            if last_date is None or last_date != timestamp.date():
+                new_row[self.column_name()] = None
             else:
                 new_row[self.column_name()] = last_value
             return new_row
 
         value = new_row[self._candle_col]
-        if last_value is not None and last_date == new_row.name.date():
+        if last_value is not None and last_date == timestamp.date():
             value = self._op.func()(value, last_value)
 
         new_row[self.column_name()] = value
-        self._last_date[symbol] = new_row.name.date()
+        self._last_date[symbol] = timestamp.date()
         self._last_value[symbol] = value
         return new_row
 
@@ -162,8 +168,11 @@ class CumulativeIndicator:
         )
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_value = self._last_value.get(symbol)
         value = new_row[self._candle_col]
         if last_value is not None:
@@ -224,19 +233,43 @@ class ATRIndicator:
         )
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_close = self._last_close.get(symbol)
         if last_close is None:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_atr[symbol] = new_row[self.column_name()]
-            self._last_close[symbol] = new_row[CandleCol.CLOSE]
-            return new_row
+            end_date = timestamp.date() - timedelta(days=1)
+            start_date = end_date - timedelta(days=self._lookback_days())
+            prev_df = await ApplicationRegistry.candles.get(
+                symbol, start_date, end_date, self._freq
+            )
 
-        tr0: float = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
-        tr1: float = abs(new_row[CandleCol.HIGH] - last_close)
-        tr2: float = abs(new_row[CandleCol.LOW] - last_close)
-        tr: float = max(tr0, tr1, tr2)
+            if not prev_df.empty:
+                tr0 = (prev_df[CandleCol.HIGH] - prev_df[CandleCol.LOW]).abs()
+                tr1 = (
+                    prev_df[CandleCol.HIGH] - prev_df[CandleCol.CLOSE].shift(1)
+                ).abs()
+                tr2 = (prev_df[CandleCol.LOW] - prev_df[CandleCol.CLOSE].shift(1)).abs()
+
+                df_tr = pd.concat([tr0, tr1, tr2], axis=1).max(axis=1)
+                atr_value = df_tr.ewm(alpha=1 / self._period).mean().iloc[-1]
+
+                new_row[self.column_name()] = atr_value
+                self._last_atr[symbol] = atr_value
+                self._last_close[symbol] = new_row[CandleCol.CLOSE]
+
+                return new_row
+            else:
+                self._last_close[symbol] = new_row[CandleCol.CLOSE]
+                new_row[self.column_name()] = None
+                return new_row
+
+        tr0 = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
+        tr1 = abs(new_row[CandleCol.HIGH] - last_close)
+        tr2 = abs(new_row[CandleCol.LOW] - last_close)
+        tr = max(tr0, tr1, tr2)
 
         last_atr = self._last_atr.get(symbol)
         if last_atr is None:
@@ -293,8 +326,10 @@ class PositionInRangeIndicator:
 
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        original_columns = set(new_row.index)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        original_columns = set(new_row.keys())
         new_row = await self._high_n_days.extend_realtime(symbol, new_row)
         new_row = await self._low_n_days.extend_realtime(symbol, new_row)
 
@@ -305,14 +340,16 @@ class PositionInRangeIndicator:
         low = new_row[low_col]
         close = new_row[CandleCol.CLOSE]
         if pd.isna(high) or pd.isna(low) or high == low:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
         else:
             new_row[self.column_name()] = (close - low) / (high - low)
 
         columns_to_drop = [
             col for col in [high_col, low_col] if col not in original_columns
         ]
-        new_row = new_row.drop(columns_to_drop)
+        new_row = {
+            key: value for key, value in new_row.items() if key not in columns_to_drop
+        }
 
         return new_row
 
@@ -379,21 +416,28 @@ class DailyRollingIndicator:
 
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_date = self._last_date.get(symbol)
+        current_date = timestamp.date()
 
-        if last_date is None or last_date != new_row.name.date():
-            daily_df = await self._get_data_for_n_days(symbol, new_row.to_frame().T)
-            self._last_date[symbol] = new_row.name.date()
-
+        if last_date is None or last_date != current_date:
+            start_date = lookback_days(current_date, self._n_days)
+            end_date = current_date - timedelta(days=1)
+            daily_df = await ApplicationRegistry.candles.get(
+                symbol, start_date, end_date, "1d"
+            )
+            self._last_date[symbol] = current_date
             self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
                 -self._n_days :
             ]
 
         values = self._rolling_values.get(symbol, [])
         if not values:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         if self._operation == "min":
@@ -403,7 +447,7 @@ class DailyRollingIndicator:
         elif self._operation == "sum":
             agg_val = sum(values)
         else:
-            agg_val = pd.NA
+            agg_val = None
 
         new_row[self.column_name()] = agg_val
         return new_row
@@ -434,19 +478,26 @@ class GapIndicator:
 
         return df.drop(columns=cols_to_drop)
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         cols_to_drop: list[str] = []
-        if self._prev_day.column_name() not in new_row.index:
+        if self._prev_day.column_name() not in new_row:
             new_row = await self._prev_day.extend_realtime(symbol, new_row)
             cols_to_drop.append(self._prev_day.column_name())
 
         prev_col = self._prev_day.column_name()
-        new_row.at[self.column_name()] = (
-            new_row[self._candle_col] - new_row[prev_col]
-        ) / new_row[prev_col]
+        prev_close = new_row[prev_col]
+        if prev_close is None:
+            new_row[self.column_name()] = None
+        else:
+            new_row[self.column_name()] = (
+                new_row[self._candle_col] - prev_close
+            ) / prev_close
 
-        return new_row.drop(cols_to_drop)
+        return {key: value for key, value in new_row.items() if key not in cols_to_drop}
 
 
 class ATRGapIndicator:
@@ -480,25 +531,33 @@ class ATRGapIndicator:
         )
         return df.drop(columns=cols_to_drop)
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        aux_indicators: "list[Indicator]" = [self._atr, self._gap, self._prev_day]
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
+        aux_indicators = [self._atr, self._gap, self._prev_day]
         cols_to_drop: list[str] = []
         for ind in aux_indicators:
-            if ind.column_name() not in new_row.index:
+            if ind.column_name() not in new_row:
                 new_row = await ind.extend_realtime(symbol, new_row)
                 cols_to_drop.append(ind.column_name())
 
-        if new_row[self._atr.column_name()] > 0:
-            new_row.at[self.column_name()] = (
-                new_row[self._gap.column_name()]
-                * new_row[self._prev_day.column_name()]
-                / new_row[self._atr.column_name()]
-            )
-        else:
-            new_row.at[self.column_name()] = pd.NA
+        atr_value = new_row[self._atr.column_name()]
+        gap_value = new_row[self._gap.column_name()]
+        prev_day_close = new_row[self._prev_day.column_name()]
 
-        return new_row.drop(cols_to_drop)
+        if (
+            atr_value
+            and atr_value > 0
+            and gap_value is not None
+            and prev_day_close is not None
+        ):
+            new_row[self.column_name()] = gap_value * prev_day_close / atr_value
+        else:
+            new_row[self.column_name()] = None
+
+        return {key: value for key, value in new_row.items() if key not in cols_to_drop}
 
 
 class ShiftIndicator:
@@ -522,18 +581,21 @@ class ShiftIndicator:
         df[self.column_name()] = df[self._candle_col].groupby(df.index.date).shift(self._shift)  # type: ignore
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
+        timestamp = new_row["datetime"]
+        assert isinstance(timestamp, datetime)
         last_date = self._last_date.get(symbol)
 
-        if last_date is None or last_date != new_row.name.date():
-            self._last_date[symbol] = new_row.name.date()
+        if last_date is None or last_date != timestamp.date():
+            self._last_date[symbol] = timestamp.date()
             self._last_values[symbol] = []
 
         values = self._last_values.setdefault(symbol, [])
         values.append(new_row[self._candle_col])
         if len(values) < self._shift + 1:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         new_row[self.column_name()] = values.pop(0)

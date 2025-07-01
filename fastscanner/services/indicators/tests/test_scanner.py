@@ -169,6 +169,8 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
 
         realtime_passed_timestamps = set()
         for timestamp, row in intraday_data.iterrows():
+            # Convert Series to dict for scan_realtime
+            row = {"datetime": timestamp, **row.to_dict()}
             _, passes_filter = await scanner.scan_realtime(
                 symbol=symbol, new_row=row, freq=freq
             )
