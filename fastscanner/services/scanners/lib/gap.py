@@ -24,9 +24,6 @@ from fastscanner.services.registry import ApplicationRegistry
 
 from .utils import filter_by_market_cap
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
 
 class ATRGapDownScanner:
     def __init__(

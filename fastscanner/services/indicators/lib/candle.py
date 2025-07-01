@@ -232,22 +232,32 @@ class ATRIndicator:
         assert isinstance(timestamp, datetime)
         last_close = self._last_close.get(symbol)
         if last_close is None:
-            # Convert dict to Series for extend method
-            series_row = pd.Series(new_row, name=timestamp)
-            extended_series = (await self.extend(symbol, series_row.to_frame().T)).iloc[
-                0
-            ]
-            # Convert back to dict
-            result_dict = extended_series.to_dict()
-            result_dict["datetime"] = timestamp
-            self._last_atr[symbol] = result_dict[self.column_name()]
-            self._last_close[symbol] = result_dict[CandleCol.CLOSE]
-            return result_dict
+            end_date = timestamp.date() - timedelta(days=1)
+            start_date = end_date - timedelta(days=self._lookback_days())
+            prev_df = await ApplicationRegistry.candles.get(
+                symbol, start_date, end_date, self._freq
+            )
 
-        tr0: float = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
-        tr1: float = abs(new_row[CandleCol.HIGH] - last_close)
-        tr2: float = abs(new_row[CandleCol.LOW] - last_close)
-        tr: float = max(tr0, tr1, tr2)
+            if not prev_df.empty:
+                tr0 = (prev_df[CandleCol.HIGH] - prev_df[CandleCol.LOW]).abs()
+                tr1 = (
+                    prev_df[CandleCol.HIGH] - prev_df[CandleCol.CLOSE].shift(1)
+                ).abs()
+                tr2 = (prev_df[CandleCol.LOW] - prev_df[CandleCol.CLOSE].shift(1)).abs()
+
+                df_tr = pd.concat([tr0, tr1, tr2], axis=1).max(axis=1)
+                atr_value = df_tr.ewm(alpha=1 / self._period).mean().iloc[-1]
+
+                new_row[self.column_name()] = atr_value
+                self._last_atr[symbol] = atr_value
+                self._last_close[symbol] = new_row[CandleCol.CLOSE]
+
+                return new_row
+
+        tr0 = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])
+        tr1 = abs(new_row[CandleCol.HIGH] - last_close)
+        tr2 = abs(new_row[CandleCol.LOW] - last_close)
+        tr = max(tr0, tr1, tr2)
 
         last_atr = self._last_atr.get(symbol)
         if last_atr is None:
@@ -400,11 +410,18 @@ class DailyRollingIndicator:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         last_date = self._last_date.get(symbol)
+        current_date = timestamp.date()
 
-        if last_date is None or last_date != timestamp.date():
-            daily_df = await self._get_data_for_n_days(symbol, pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp])))
-            self._last_date[symbol] = timestamp.date()
-            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[-self._n_days:]
+        if last_date is None or last_date != current_date:
+            start_date = lookback_days(current_date, self._n_days)
+            end_date = current_date - timedelta(days=1)
+            daily_df = await ApplicationRegistry.candles.get(
+                symbol, start_date, end_date, "1d"
+            )
+            self._last_date[symbol] = current_date
+            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
+                -self._n_days :
+            ]
 
         values = self._rolling_values.get(symbol, [])
         if not values:

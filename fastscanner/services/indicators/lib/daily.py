@@ -165,17 +165,34 @@ class DailyATRIndicator:
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))  
-            extended_df = await self.extend(symbol, df_row) 
+            start_date = lookback_days(new_date, self._period + 1)
+            end_date = new_date - timedelta(days=1)
+            daily = await ApplicationRegistry.candles.get(
+                symbol, start_date, end_date, "1d"
+            )
+            daily = daily.set_index(daily.index.date)  # type: ignore
+            daily.loc[new_date, [C.HIGH, C.LOW, C.CLOSE]] = pd.NA
+            daily = daily.shift(1)
 
-            updated_row = extended_df.iloc[0].to_dict()
-            updated_row["datetime"] = timestamp
+            tr0 = (daily[C.HIGH] - daily[C.LOW]).abs()
+            tr1 = (daily[C.HIGH] - daily[C.CLOSE].shift(1)).abs()
+            tr2 = (daily[C.LOW] - daily[C.CLOSE].shift(1)).abs()
 
-            self._daily_atr[symbol] = updated_row[self.column_name()]
+            atr = (
+                pd.concat([tr0, tr1, tr2], axis=1)
+                .max(axis=1)
+                .ewm(alpha=1 / self._period)
+                .mean()
+            )
+            atr_val = atr.shift(1).get(new_date, pd.NA)
+
+            self._daily_atr[symbol] = atr_val
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._daily_atr[symbol]
+        val = self._daily_atr.get(symbol, pd.NA)
+        new_row[self.column_name()] = val
         return new_row
+
 
 class DailyATRGapIndicator:
     def __init__(self, period: int):
@@ -286,22 +303,35 @@ class ADRIndicator:
         df = df.join(adr, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-            extended_df = await self.extend(symbol, df_row)
-
-            extended_row = extended_df.iloc[0].to_dict()
-            extended_row["datetime"] = timestamp
-
-            self._last_value[symbol] = extended_row[self.column_name()]
+            start = lookback_days(new_date, self._period + 1)
+            end = new_date - timedelta(days=1)
+            daily_df = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
+            if daily_df.empty:
+                adr_val = float("nan")
+            else:
+                adr = (
+                    ((daily_df[C.HIGH] - daily_df[C.LOW]) / daily_df[C.CLOSE])
+                    .rolling(self._period, min_periods=1)
+                    .mean()
+                    .set_axis(daily_df.index.date)  # type: ignore
+                    .rename(self.column_name())
+                )
+                adr[new_date] = pd.NA
+                adr = adr.shift(1)
+                adr_val = adr.get(new_date, pd.NA)
+            self._last_value[symbol] = adr_val
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_value[symbol]
+        val = self._last_value.get(symbol, pd.NA)
+        new_row[self.column_name()] = val
         return new_row
 
 
@@ -348,16 +378,26 @@ class ADVIndicator:
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-
-            extended_df = await self.extend(symbol, df_row)
-
-            extended_row = extended_df.iloc[0].to_dict()
-
-            extended_row["datetime"] = timestamp
-
-            self._last_value[symbol] = extended_row[self.column_name()]
+            start = lookback_days(new_date, self._period + 1)
+            end = new_date - timedelta(days=1)
+            df_daily = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
+            daily_vol = df_daily[C.VOLUME]
+            if daily_vol.empty:
+                adv_val = pd.NA
+            else:
+                daily_vol = (
+                    daily_vol.set_axis(daily_vol.index.date)  # type: ignore
+                    .rolling(self._period, min_periods=1)
+                    .mean()
+                    .rename(self.column_name())
+                )
+                daily_vol[new_date] = pd.NA
+                daily_vol = daily_vol.shift(1)
+                adv_val = daily_vol.get(new_date, pd.NA)
+            self._last_value[symbol] = adv_val
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_value[symbol]
+        val = self._last_value.get(symbol, pd.NA)
+
+        new_row[self.column_name()] = val
         return new_row

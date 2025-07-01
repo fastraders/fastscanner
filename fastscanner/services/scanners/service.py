@@ -38,9 +38,9 @@ class ScannerChannelHandler:
     def id(self) -> str:
         return f"{self._scanner.id()}_{self._symbol}"
 
-    async def _handle(self, row_dict: dict[str, Any]) -> None:
+    async def _handle(self, row: dict[str, Any]) -> None:
         new_row, passed = await self._scanner.scan_realtime(
-            self._symbol, row_dict, self._freq
+            self._symbol, row, self._freq
         )
         await self._handler.handle(self._symbol, new_row, passed)
 

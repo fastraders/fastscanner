@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from ...registry import ApplicationRegistry
 class DaysToEarningsIndicator:
     def __init__(self) -> None:
         self._last_date: dict[str, date] = {}
-        self._last_days: dict[str, int] = {}
+        self._last_days: dict[str, Optional[int]] = {}
 
     @classmethod
     def type(cls):
@@ -48,28 +48,34 @@ class DaysToEarningsIndicator:
         self, symbol: str, new_row: dict[str, Any]
     ) -> dict[str, Any]:
         timestamp = new_row["datetime"]
-        assert isinstance(timestamp, pd.Timestamp)
+        assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-
-            extended_df = await self.extend(symbol, df_row)
-
-            extended_row = extended_df.iloc[0].to_dict()
-            extended_row["datetime"] = timestamp
-
-            self._last_days[symbol] = extended_row[self.column_name()]
+            fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
+            earnings_dates = fundamentals.earnings_dates.date
+            future_earnings = earnings_dates[earnings_dates >= new_date]
+            if len(future_earnings) > 0:
+                next_earnings = future_earnings[0]
+                days = (next_earnings - new_date).days
+            else:
+                days = None
+            self._last_days[symbol] = days
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_days[symbol]
+        value = self._last_days.get(symbol, None)
+        if value is None:
+            new_row[self.column_name()] = pd.NA
+        else:
+            new_row[self.column_name()] = int(value)
+
         return new_row
 
 
 class DaysFromEarningsIndicator:
     def __init__(self) -> None:
         self._last_date: dict[str, date] = {}
-        self._last_days: dict[str, int] = {}
+        self._last_days: dict[str, Optional[int]] = {}
 
     @classmethod
     def type(cls):
@@ -102,22 +108,30 @@ class DaysFromEarningsIndicator:
         df = df.join(date_from_earnings, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
         timestamp = new_row["datetime"]
-        assert isinstance(timestamp, pd.Timestamp)
+        assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-
-            extended_df = await self.extend(symbol, df_row)
-
-            extended_row = extended_df.iloc[0].to_dict()
-            extended_row["datetime"] = timestamp  
-            self._last_days[symbol] = extended_row[self.column_name()]
+            fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
+            earnings_dates = fundamentals.earnings_dates.date
+            past_earnings = earnings_dates[earnings_dates <= new_date]
+            if len(past_earnings) > 0:
+                last_earnings = past_earnings[-1]
+                days = (new_date - last_earnings).days
+            else:
+                days = None
+            self._last_days[symbol] = days
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_days[symbol]
+        value = self._last_days.get(symbol, None)
+        if value is None:
+            new_row[self.column_name()] = None
+        else:
+            new_row[self.column_name()] = int(value)
         return new_row
 
 
@@ -156,20 +170,30 @@ class MarketCapIndicator:
         df = df.join(date_to_market_cap, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: dict[str, Any]) -> dict[str, Any]:
+    async def extend_realtime(
+        self, symbol: str, new_row: dict[str, Any]
+    ) -> dict[str, Any]:
         timestamp = new_row["datetime"]
         assert isinstance(timestamp, datetime)
         new_date = timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            df_row = pd.DataFrame([new_row]).set_index(pd.DatetimeIndex([timestamp]))
-
-            extended_df = await self.extend(symbol, df_row)
-
-            extended_row = extended_df.iloc[0].to_dict()
-            extended_row["datetime"] = timestamp
-            self._last_market_cap[symbol] = extended_row[self.column_name()]
+            fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
+            historical_market_cap = fundamentals.historical_market_cap
+            filtered_series = historical_market_cap[
+                historical_market_cap.index <= new_date
+            ]
+            if not filtered_series.empty:
+                market_cap = filtered_series.iloc[-1]
+            else:
+                market_cap = None
+            self._last_market_cap[symbol] = market_cap
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_market_cap.get(symbol, np.nan)
+        value = self._last_market_cap.get(symbol)
+        if value is not None and isinstance(value, (int, float)):
+            new_row[self.column_name()] = value
+        else:
+            new_row[self.column_name()] = None
+
         return new_row

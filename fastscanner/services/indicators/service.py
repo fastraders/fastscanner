@@ -100,11 +100,11 @@ class CandleChannelHandler:
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
-        self._buffer = CandleBuffer(symbol, freq, self._handle_dict, candle_timeout)
+        self._buffer = CandleBuffer(symbol, freq, self._handle, candle_timeout)
         self._candle_timeout = candle_timeout
         self._buffer_lock = asyncio.Lock()
 
-    async def _handle_dict(self, row_dict: dict[str, Any]) -> None:
+    async def _handle(self, row_dict: dict[str, Any]) -> None:
         for ind in self._indicators:
             row_dict = await ind.extend_realtime(self._symbol, row_dict)
 
@@ -135,7 +135,7 @@ class CandleChannelHandler:
                     "datetime": ts,
                     **{k: v for k, v in data.items() if k != "timestamp"},
                 }
-                await self._handle_dict(row_dict)
+                await self._handle(row_dict)
                 return
 
             row_dict = {
