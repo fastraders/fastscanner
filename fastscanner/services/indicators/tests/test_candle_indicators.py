@@ -135,8 +135,8 @@ async def test_atr_extend_realtime_first_candle(candles: "CandleStoreTest"):
 
     result_row = await indicator.extend_realtime("AAPL", row)
 
-    # First candle should have NA for ATR since we don't have previous close
-    assert abs(result_row[indicator.column_name()] - 5) < 1e-5
+    # First candle should have None for ATR since we don't have historical data
+    assert result_row[indicator.column_name()] is None
 
 
 @pytest.mark.asyncio

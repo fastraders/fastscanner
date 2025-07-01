@@ -191,7 +191,7 @@ class MarketCapIndicator:
             self._last_date[symbol] = new_date
 
         value = self._last_market_cap.get(symbol)
-        if value is not None and isinstance(value, (int, float)):
+        if value is not None and np.isfinite(value):
             new_row[self.column_name()] = value
         else:
             new_row[self.column_name()] = None

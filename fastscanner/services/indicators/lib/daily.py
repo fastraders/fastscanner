@@ -184,7 +184,7 @@ class DailyATRIndicator:
                 .ewm(alpha=1 / self._period)
                 .mean()
             )
-            atr_val = atr.shift(1).get(new_date, pd.NA)
+            atr_val = atr.get(new_date, pd.NA)
 
             self._daily_atr[symbol] = atr_val
             self._last_date[symbol] = new_date

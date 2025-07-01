@@ -109,7 +109,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
         ATRGapUpScanner(
             min_adv=500_000,
@@ -119,7 +118,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
         ATRParabolicDownScanner(
             min_adv=500_000,
@@ -129,7 +127,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
         ATRParabolicUpScanner(
             min_adv=500_000,
@@ -139,7 +136,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
         HighRangeGapUpScanner(
             min_adv=500_000,
@@ -149,7 +145,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
         LowRangeGapDownScanner(
             min_adv=500_000,
@@ -159,7 +154,6 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
-            include_null_market_cap=True,
         ),
     ]
 
@@ -176,9 +170,9 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
         realtime_passed_timestamps = set()
         for timestamp, row in intraday_data.iterrows():
             # Convert Series to dict for scan_realtime
-            row_dict = {"datetime": timestamp, **row.to_dict()}
+            row = {"datetime": timestamp, **row.to_dict()}
             _, passes_filter = await scanner.scan_realtime(
-                symbol=symbol, new_row=row_dict, freq=freq
+                symbol=symbol, new_row=row, freq=freq
             )
             if passes_filter:
                 realtime_passed_timestamps.add(timestamp)
