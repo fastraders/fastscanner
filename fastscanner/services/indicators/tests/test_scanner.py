@@ -109,6 +109,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
         ATRGapUpScanner(
             min_adv=500_000,
@@ -118,6 +119,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
         ATRParabolicDownScanner(
             min_adv=500_000,
@@ -127,6 +129,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
         ATRParabolicUpScanner(
             min_adv=500_000,
@@ -136,6 +139,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
         HighRangeGapUpScanner(
             min_adv=500_000,
@@ -145,6 +149,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
         LowRangeGapDownScanner(
             min_adv=500_000,
@@ -154,6 +159,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             start_time=time(9, 20),
             end_time=time(12, 0),
             min_market_cap=0,
+            include_null_market_cap=True,
         ),
     ]
 

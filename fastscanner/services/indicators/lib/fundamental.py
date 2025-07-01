@@ -186,7 +186,7 @@ class MarketCapIndicator:
             if not filtered_series.empty:
                 market_cap = filtered_series.iloc[-1]
             else:
-                market_cap = None
+                market_cap = float('nan')
             self._last_market_cap[symbol] = market_cap
             self._last_date[symbol] = new_date
 
