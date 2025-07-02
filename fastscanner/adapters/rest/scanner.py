@@ -66,7 +66,6 @@ class WebSocketScannerHandler:
     async def _send_message(self, message: ScannerMessage):
         try:
             message_json = message.model_dump_json()
-            logger.info(f"Sending scanner result: {message_json}")
             await self._websocket.send_text(message_json)
         except Exception as e:
             logger.error(f"Failed to send websocket message: {e}")
@@ -104,26 +103,19 @@ async def websocket_realtime_scanner(websocket: WebSocket):
     service = ScannerService(candles=candles, channel=channel, symbols_provider=polygon)
 
     data = await websocket.receive_text()
-    request_data = json.loads(data)
-
-    scanner_request = ScannerRequest(**request_data)
+    scanner_request = ScannerRequest.model_validate_json(data)
     processed_params = _parse_known_parameters(scanner_request.params)
-
     scanner_params = ScannerParams(type_=scanner_request.type, params=processed_params)
-
     handler = WebSocketScannerHandler(websocket)
 
-    freq = processed_params["freq"]
-
     scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq=freq
+        params=scanner_params, handler=handler, freq=processed_params["freq"]
     )
 
     response = ScannerResponse(scanner_id=scanner_id)
-    logger.info(f"response is as follows: {response}")
     await websocket.send_text(response.model_dump_json())
 
-    logger.info(f"Started scanner with ID: {scanner_id}")
+    logger.info(f"Started scanner with ID: {scanner_id}, Type: {scanner_request.type}")
 
     try:
         while True:
