@@ -40,7 +40,7 @@ class MockChannel:
     async def unsubscribe(self, channel_id: str, handler_id: str):
         pass
 
-    async def redis_cleanup(self):
+    async def reset(self):
         pass
 
 

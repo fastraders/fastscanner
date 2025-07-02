@@ -98,7 +98,7 @@ class RedisChannel:
                 self._xread_task.cancel()
                 self._xread_task = None
 
-    async def redis_cleanup(self) -> None:
+    async def reset(self) -> None:
         try:
 
             await self.redis.flushdb(asynchronous=True)

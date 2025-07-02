@@ -25,7 +25,7 @@ async def daily_cleanup_job() -> None:
     )
     logger.info("Starting daily cleanup job")
     start_time = time.time()
-    await redis_channel.redis_cleanup()
+    await redis_channel.reset()
     end_time = time.time()
     duration = end_time - start_time
     logger.info(f"Daily cleanup job completed successfully in {duration:.2f} seconds")
