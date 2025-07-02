@@ -120,6 +120,9 @@ async def websocket_realtime_scanner(websocket: WebSocket):
     try:
         while True:
             await websocket.receive_text()
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for scanner {scanner_id}")
     finally:
-        await service.unsubscribe_realtime(scanner_id)
-        logger.info(f"Unsubscribed scanner {scanner_id}")
+        if scanner_id:
+            await service.unsubscribe_realtime(scanner_id)
+            logger.info(f"Unsubscribed scanner {scanner_id}")

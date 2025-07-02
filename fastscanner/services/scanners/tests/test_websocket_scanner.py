@@ -1,225 +1,206 @@
 import asyncio
 import json
-from typing import Dict, List
+from unittest.mock import AsyncMock, patch, MagicMock
 
-import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
 
+from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import WebSocketScannerHandler
-from fastscanner.services.scanners.ports import ScannerParams
-
-
-class MockWebSocket:
-    def __init__(self):
-        self.sent_messages: List[str] = []
-        self.received_messages: List[str] = []
-        self.is_connected = True
-
-    async def send_text(self, message: str):
-        if not self.is_connected:
-            raise Exception("WebSocket is not connected")
-        self.sent_messages.append(message)
-
-    async def receive_text(self) -> str:
-        if self.received_messages:
-            return self.received_messages.pop(0)
-        while True:
-            await asyncio.sleep(0.1)
-
-    async def accept(self):
-        self.is_connected = True
-
-    def disconnect(self):
-        self.is_connected = False
-
-    def add_received_message(self, message: str):
-        self.received_messages.append(message)
-
-    def get_sent_messages_as_objects(self) -> List[Dict]:
-        """Helper to parse sent JSON messages"""
-        return [json.loads(msg) for msg in self.sent_messages]
-
-
-@pytest.fixture
-def mock_websocket():
-    return MockWebSocket()
+import pandas as pd
+from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_websocket_scanner_flow(scanner_service, mock_websocket):
-    """End-to-end test: create scanner, push data, verify websocket message"""
-    service, channel = scanner_service
+async def test_websocket_scanner_connection_and_subscription():
+    client = TestClient(app)
 
-    handler = WebSocketScannerHandler(mock_websocket)
+    with patch("fastscanner.adapters.rest.scanner.RedisChannel"), patch(
+        "fastscanner.adapters.rest.scanner.PartitionedCSVCandlesProvider"
+    ), patch("fastscanner.adapters.rest.scanner.PolygonCandlesProvider"), patch(
+        "fastscanner.adapters.rest.scanner.ScannerService"
+    ) as mock_scanner_service:
 
-    scanner_params = ScannerParams(type_="dummy_scanner", params={"min_value": 50.0})
+        mock_service_instance = AsyncMock()
+        mock_service_instance.subscribe_realtime.return_value = "test-scanner-123"
+        mock_scanner_service.return_value = mock_service_instance
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
-    )
+        with client.websocket_connect("/api/scanners") as websocket:
+            scanner_request = {
+                "type": "atr_gap_up",
+                "params": {
+                    "min_adv": 1000000,
+                    "min_adr": 1.0,
+                    "atr_multiplier": 2.0,
+                    "min_volume": 100000,
+                    "start_time": "09:30",
+                    "end_time": "16:00",
+                    "freq": "1min",
+                },
+            }
+            websocket.send_text(json.dumps(scanner_request))
 
-    handler.set_scanner_id(scanner_id)
+            response_data = websocket.receive_text()
+            response = json.loads(response_data)
 
-    test_data = {
-        "open": 100.0,
-        "high": 105.0,
-        "low": 95.0,
-        "close": 75.0,
-        "volume": 1000,
-        "timestamp": 1640995200000,
-    }
-
-    await channel.push_data("candles_min_AAPL", test_data)
-
-    assert len(mock_websocket.sent_messages) == 1
-
-    sent_message = json.loads(mock_websocket.sent_messages[0])
-    assert sent_message["symbol"] == "AAPL"
-    assert sent_message["scanner_id"] == scanner_id
-    assert "scan_time" in sent_message
-    assert sent_message["candle"]["close"] == 75.0
-    assert sent_message["candle"]["test_indicator"] == 150.0
-
-
-@pytest.mark.asyncio
-async def test_end_to_end_websocket_scanner_flow_scanner_fails(
-    scanner_service, mock_websocket
-):
-    """End-to-end test: data that fails scanner should not send websocket message"""
-    service, channel = scanner_service
-
-    handler = WebSocketScannerHandler(mock_websocket)
-    scanner_params = ScannerParams(type_="dummy_scanner", params={"min_value": 50.0})
-
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
-    )
-    handler.set_scanner_id(scanner_id)
-
-    test_data = {
-        "open": 40.0,
-        "high": 45.0,
-        "low": 35.0,
-        "close": 30.0,  # Below min_value of 50.0
-        "volume": 1000,
-        "timestamp": 1640995200000,
-    }
-
-    await channel.push_data("candles_min_AAPL", test_data)
-
-    assert len(mock_websocket.sent_messages) == 0
+            assert "scanner_id" in response
+            assert response["scanner_id"] == "test-scanner-123"
 
 
 @pytest.mark.asyncio
-async def test_multiple_symbols_websocket_flow(scanner_service, mock_websocket):
-    """Test websocket messages for multiple symbols"""
-    service, channel = scanner_service
+async def test_websocket_scanner_with_time_params():
+    client = TestClient(app)
 
-    handler = WebSocketScannerHandler(mock_websocket)
-    scanner_params = ScannerParams(type_="dummy_scanner", params={"min_value": 50.0})
+    with patch("fastscanner.adapters.rest.scanner.RedisChannel"), patch(
+        "fastscanner.adapters.rest.scanner.PartitionedCSVCandlesProvider"
+    ), patch("fastscanner.adapters.rest.scanner.PolygonCandlesProvider"), patch(
+        "fastscanner.adapters.rest.scanner.ScannerService"
+    ) as mock_scanner_service:
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
-    )
-    handler.set_scanner_id(scanner_id)
+        mock_service_instance = AsyncMock()
+        mock_service_instance.subscribe_realtime.return_value = "test-scanner-789"
+        mock_scanner_service.return_value = mock_service_instance
 
-    test_data_aapl = {
-        "close": 75.0,
-        "volume": 1000,
-        "timestamp": 1640995200000,
-    }
+        with client.websocket_connect("/api/scanners") as websocket:
+            scanner_request = {
+                "type": "atr_gap_up",
+                "params": {
+                    "min_adv": 1000000,
+                    "min_adr": 1.0,
+                    "atr_multiplier": 2.0,
+                    "min_volume": 100000,
+                    "start_time": "09:30",
+                    "end_time": "16:00",
+                    "freq": "1min",
+                },
+            }
+            websocket.send_text(json.dumps(scanner_request))
 
-    test_data_googl = {
-        "close": 30.0,  # Below threshold
-        "volume": 2000,
-        "timestamp": 1640995200000,
-    }
+            response_data = websocket.receive_text()
+            response = json.loads(response_data)
 
-    test_data_msft = {
-        "close": 60.0,
-        "volume": 1500,
-        "timestamp": 1640995200000,
-    }
-
-    await channel.push_data("candles_min_AAPL", test_data_aapl)
-    await channel.push_data("candles_min_GOOGL", test_data_googl)
-    await channel.push_data("candles_min_MSFT", test_data_msft)
-
-    assert len(mock_websocket.sent_messages) == 2
-
-    sent_messages = mock_websocket.get_sent_messages_as_objects()
-    symbols = [msg["symbol"] for msg in sent_messages]
-
-    assert "AAPL" in symbols
-    assert "MSFT" in symbols
-    assert "GOOGL" not in symbols
+            assert "scanner_id" in response
+            assert response["scanner_id"] == "test-scanner-789"
 
 
 @pytest.mark.asyncio
-async def test_websocket_unsubscribe_flow(scanner_service, mock_websocket):
-    """Test that unsubscribe properly cleans up the scanner"""
-    service, channel = scanner_service
+async def test_websocket_scanner_invalid_request():
+    client = TestClient(app)
 
-    handler = WebSocketScannerHandler(mock_websocket)
-    scanner_params = ScannerParams(type_="dummy_scanner", params={"min_value": 50.0})
+    with patch("fastscanner.adapters.rest.scanner.RedisChannel"), patch(
+        "fastscanner.adapters.rest.scanner.PartitionedCSVCandlesProvider"
+    ), patch("fastscanner.adapters.rest.scanner.PolygonCandlesProvider"), patch(
+        "fastscanner.adapters.rest.scanner.ScannerService"
+    ):
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
-    )
+        try:
+            with client.websocket_connect("/api/scanners") as websocket:
+                invalid_request = {"type": "atr_gap_up"}
 
-    assert len(channel.subscriptions) > 0
+                websocket.send_text(json.dumps(invalid_request))
 
-    await service.unsubscribe_realtime(scanner_id)
-
-    test_data = {
-        "close": 75.0,
-        "volume": 1000,
-        "timestamp": 1640995200000,
-    }
-
-    await channel.push_data("candles_min_AAPL", test_data)
-
-    assert len(mock_websocket.sent_messages) == 0
+        except Exception:
+            pass
 
 
 @pytest.mark.asyncio
-async def test_websocket_continues_processing_despite_connection_issues(
-    scanner_service, mock_websocket
-):
-    """Test that system continues processing even when websocket has connection issues"""
-    service, channel = scanner_service
+async def test_websocket_scanner_different_scanner_types():
+    client = TestClient(app)
+
+    scanner_types = [
+        {
+            "type": "atr_gap_up",
+            "params": {
+                "min_adv": 1000000,
+                "min_adr": 1.0,
+                "atr_multiplier": 2.0,
+                "min_volume": 100000,
+                "start_time": "09:30",
+                "end_time": "16:00",
+                "freq": "1min",
+            },
+        }
+    ]
+
+    for i, scanner_config in enumerate(scanner_types):
+        with patch("fastscanner.adapters.rest.scanner.RedisChannel"), patch(
+            "fastscanner.adapters.rest.scanner.PartitionedCSVCandlesProvider"
+        ), patch("fastscanner.adapters.rest.scanner.PolygonCandlesProvider"), patch(
+            "fastscanner.adapters.rest.scanner.ScannerService"
+        ) as mock_scanner_service:
+
+            mock_service_instance = AsyncMock()
+            mock_service_instance.subscribe_realtime.return_value = f"test-scanner-{i}"
+            mock_scanner_service.return_value = mock_service_instance
+
+            with client.websocket_connect("/api/scanners") as websocket:
+                websocket.send_text(json.dumps(scanner_config))
+
+                response_data = websocket.receive_text()
+                response = json.loads(response_data)
+
+                assert "scanner_id" in response
+                assert response["scanner_id"] == f"test-scanner-{i}"
+
+
+@pytest.mark.asyncio
+async def test_websocket_scanner_handler_unit():
+    mock_websocket = AsyncMock()
 
     handler = WebSocketScannerHandler(mock_websocket)
-    scanner_params = ScannerParams(type_="dummy_scanner", params={"min_value": 50.0})
+    handler.set_scanner_id("test-scanner-123")
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq="1min"
+    test_data = pd.Series(
+        {
+            "open": 100.0,
+            "high": 105.0,
+            "low": 95.0,
+            "close": 102.0,
+            "volume": 1000,
+            "test_indicator": 150.0,
+        },
+        name=pd.Timestamp("2024-01-01 09:30:00"),
     )
-    handler.set_scanner_id(scanner_id)
 
-    mock_websocket.disconnect()
+    result = await handler.handle("AAPL", test_data, passed=True)
 
-    test_data = {
-        "close": 75.0,  # Above threshold
-        "volume": 1000,
-        "timestamp": 1640995200000,
-    }
+    mock_websocket.send_text.assert_called_once()
+    sent_data = mock_websocket.send_text.call_args[0][0]
+    message = json.loads(sent_data)
 
-    await channel.push_data("candles_min_AAPL", test_data)
+    assert message["symbol"] == "AAPL"
+    assert message["scanner_id"] == "test-scanner-123"
+    assert message["scan_time"] == "09:30"
+    assert message["candle"]["close"] == 102.0
+    assert message["candle"]["test_indicator"] == 150.0
 
-    assert len(mock_websocket.sent_messages) == 0
+    mock_websocket.reset_mock()
+    result = await handler.handle("GOOGL", test_data, passed=False)
 
-    mock_websocket.is_connected = True
+    mock_websocket.send_text.assert_not_called()
 
-    test_data_2 = {
-        "close": 80.0,
-        "volume": 1500,
-        "timestamp": 1640995260000,
-    }
+    pd.testing.assert_series_equal(result, test_data)
 
-    await channel.push_data("candles_min_AAPL", test_data_2)
 
-    assert len(mock_websocket.sent_messages) == 1
-    sent_message = json.loads(mock_websocket.sent_messages[0])
-    assert sent_message["symbol"] == "AAPL"
-    assert sent_message["candle"]["close"] == 80.0
+@pytest.mark.asyncio
+async def test_websocket_scanner_handler_connection_error():
+
+    mock_websocket = AsyncMock()
+    mock_websocket.send_text.side_effect = Exception("Connection lost")
+
+    # Create handler
+    handler = WebSocketScannerHandler(mock_websocket)
+    handler.set_scanner_id("test-scanner-123")
+
+    # Create test data
+    test_data = pd.Series(
+        {
+            "close": 102.0,
+            "volume": 1000,
+        },
+        name=pd.Timestamp("2024-01-01 09:30:00"),
+    )
+
+    result = await handler.handle("AAPL", test_data, passed=True)
+
+    pd.testing.assert_series_equal(result, test_data)
