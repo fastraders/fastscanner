@@ -5,12 +5,13 @@ from datetime import datetime, time
 from typing import Any, Dict
 
 import pandas as pd
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
+from fastscanner.adapters.rest.services import get_scanner_service
 from fastscanner.pkg import config
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
@@ -87,20 +88,11 @@ def _parse_known_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.websocket("")
-async def websocket_realtime_scanner(websocket: WebSocket):
+async def websocket_realtime_scanner(
+    websocket: WebSocket, service: ScannerService = Depends(get_scanner_service)
+):
     await websocket.accept()
     scanner_id = None
-
-    polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
-    candles = PartitionedCSVCandlesProvider(polygon)
-    channel = RedisChannel(
-        unix_socket_path=config.UNIX_SOCKET_PATH,
-        host=config.REDIS_DB_HOST,
-        port=config.REDIS_DB_PORT,
-        password=None,
-        db=0,
-    )
-    service = ScannerService(candles=candles, channel=channel, symbols_provider=polygon)
 
     data = await websocket.receive_text()
     scanner_request = ScannerRequest.model_validate_json(data)
