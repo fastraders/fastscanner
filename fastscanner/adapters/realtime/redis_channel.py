@@ -97,3 +97,17 @@ class RedisChannel:
             if not self._handlers and self._xread_task is not None:
                 self._xread_task.cancel()
                 self._xread_task = None
+
+    async def redis_cleanup(self) -> None:
+        try:
+
+            await self.redis.flushdb(asynchronous=True)
+            logger.info("Successfully cleared all Redis data in database 0")
+
+        except RedisError as e:
+            logger.error(f"Redis error during cleanup: {e}", exc_info=True)
+            raise
+        finally:
+            if self.redis:
+                await self.redis.aclose()
+                logger.info("Redis connection closed")
