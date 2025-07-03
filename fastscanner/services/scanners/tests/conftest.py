@@ -73,6 +73,8 @@ class MockChannel:
 
     async def flush(self): ...
 
+    async def reset(self):...
+
 
 class MockCandleStore:
     async def get(self, symbol, start, end, freq):
