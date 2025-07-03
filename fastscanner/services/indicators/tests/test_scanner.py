@@ -158,6 +158,17 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             end_time=time(12, 0),
             min_market_cap=0,
         ),
+        SmallCapUpScanner(
+            min_volume=500000,
+            start_time=time(9, 0),
+            end_time=time(16, 0),
+            min_gap=0.03,
+            min_price=1.0,
+            max_price=50.0,
+            min_market_cap=100000,
+            max_market_cap=1000000,
+            include_null_market_cap=False,
+        ),
     ]
 
     for scanner in scanners:
