@@ -1,6 +1,6 @@
 import math
 import uuid
-from datetime import date, time
+from datetime import date, datetime, time
 
 import pandas as pd
 
@@ -175,4 +175,64 @@ class SmallCapUpScanner:
     async def scan_realtime(
         self, symbol: str, new_row: pd.Series, freq: str
     ) -> tuple[pd.Series, bool]:
-        return pd.Series(), False
+        assert isinstance(new_row.name, pd.Timestamp)
+
+        if (
+            new_row.name.time() > self._end_time
+            or new_row.name.time() < self._start_time
+        ):
+            new_row["triggered_alert"] = pd.NA
+            return new_row, False
+
+        new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._gap.extend_realtime(symbol, new_row)
+
+        for shift_indicator in self._shift_indicators:
+            new_row = await shift_indicator.extend_realtime(symbol, new_row)
+
+        market_cap_value = new_row[self._market_cap.column_name()]
+        cum_vol_val = new_row[self._cum_volume.column_name()]
+        gap_val = new_row[self._gap.column_name()]
+
+        mandatory_values = [
+            new_row[C.CLOSE],
+            new_row[C.HIGH],
+            market_cap_value,
+            cum_vol_val,
+            gap_val,
+        ]
+        if any(pd.isna(v) for v in mandatory_values):
+            new_row["triggered_alert"] = pd.NA
+            return new_row, False
+
+        market_cap_passes = (
+            not pd.isna(market_cap_value)
+            and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+
+        passes_filter = (
+            self._min_price <= new_row[C.CLOSE] <= self._max_price
+            and cum_vol_val >= self._min_volume
+            and market_cap_passes
+            and gap_val >= self._min_gap
+        )
+        if not passes_filter:
+            new_row["triggered_alert"] = pd.NA
+            return new_row, False
+
+        for shift, min_change, shift_indicator in zip(
+            self._shift_periods, self._shift_min_change, self._shift_indicators
+        ):
+            base_val = new_row[shift_indicator.column_name()]
+            change_col = f"change_{shift}"
+            if pd.isna(base_val) and base_val == 0:
+                continue
+            change = (new_row[C.HIGH] - base_val) / base_val
+            new_row[change_col] = change
+            if change > min_change:
+                new_row["triggered_alert"] = change_col
+                return new_row, True
+
+        new_row["triggered_alert"] = pd.NA
+        return new_row, False
