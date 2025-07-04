@@ -181,7 +181,7 @@ class SmallCapUpScanner:
             new_row.name.time() > self._end_time
             or new_row.name.time() < self._start_time
         ):
-            new_row["signal"] = pd.NA
+            new_row["triggered_alert"] = pd.NA
             return new_row, False
 
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
@@ -203,7 +203,7 @@ class SmallCapUpScanner:
             gap_val,
         ]
         if any(pd.isna(v) for v in mandatory_values):
-            new_row["signal"] = pd.NA
+            new_row["triggered_alert"] = pd.NA
             return new_row, False
 
         market_cap_passes = (
@@ -218,18 +218,21 @@ class SmallCapUpScanner:
             and gap_val >= self._min_gap
         )
         if not passes_filter:
-            new_row["signal"] = pd.NA
+            new_row["triggered_alert"] = pd.NA
             return new_row, False
 
         for shift, min_change, shift_indicator in zip(
             self._shift_periods, self._shift_min_change, self._shift_indicators
         ):
             base_val = new_row[shift_indicator.column_name()]
-            if pd.notna(base_val) and base_val != 0:
-                change = (new_row[C.HIGH] - base_val) / base_val
-                if change > min_change:
-                    new_row["signal"] = f"change_{shift}"
-                    return new_row, True
+            change_col = f"change_{shift}"
+            if pd.isna(base_val) and base_val == 0:
+                continue
+            change = (new_row[C.HIGH] - base_val) / base_val
+            new_row[change_col] = change
+            if change > min_change:
+                new_row["triggered_alert"] = change_col
+                return new_row, True
 
-        new_row["signal"] = pd.NA
+        new_row["triggered_alert"] = pd.NA
         return new_row, False
