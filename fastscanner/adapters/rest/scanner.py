@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, time
-from typing import Any, Dict
+from datetime import datetime, time, date
+from typing import Any, Dict, List
 
 import pandas as pd
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -13,8 +13,10 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.adapters.rest.services import get_scanner_service
 from fastscanner.pkg import config
-from fastscanner.services.scanners.ports import ScannerParams
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
+from fastscanner.services.scanners.ports import ScannerParams, SymbolsProvider
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
+from fastscanner.services.scanners.lib import ScannersLibrary
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,20 @@ class ScannerRequest(BaseModel):
 
 class ScannerResponse(BaseModel):
     scanner_id: str
+
+
+class ScanRequest(BaseModel):
+    start: date
+    end: date
+    freq: str
+    type: str
+    params: Dict[str, Any]
+
+
+class ScanResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    total_symbols: int
+    scanner_type: str
 
 
 class ScannerMessage(BaseModel):
@@ -118,3 +134,44 @@ async def websocket_realtime_scanner(
         if scanner_id:
             await service.unsubscribe_realtime(scanner_id)
             logger.info(f"Unsubscribed scanner {scanner_id}")
+
+
+@router.post("/scan")
+async def scan(
+    request: ScanRequest, service: ScannerService = Depends(get_scanner_service)
+) -> ScanResponse:
+    try:
+        ClockRegistry.set(LocalClock())
+        scanner = ScannersLibrary.instance().get(request.type, request.params)
+
+        symbols = await service._symbols_provider.active_symbols()
+        all_results = []
+
+        scan_tasks = [
+            _scan_symbol(scanner, symbol, request.start, request.end, request.freq)
+            for symbol in symbols
+        ]
+
+        scan_results = await asyncio.gather(*scan_tasks, return_exceptions=True)
+
+        for symbol, result in zip(symbols, scan_results):
+            if isinstance(result, pd.DataFrame) and not result.empty:
+                logger.info(result)
+                result = result.reset_index()
+                result["symbols"] = symbol
+                symbol_results = result.to_dict(orient="records", index=True)
+                all_results.extend(symbol_results)
+
+        return ScanResponse(
+            results=all_results, total_symbols=len(symbols), scanner_type=request.type
+        )
+
+    except Exception as e:
+        logger.error(f"Error in scan: {e}")
+        raise
+
+
+async def _scan_symbol(
+    scanner, symbol: str, start: date, end: date, freq: str
+) -> pd.DataFrame:
+    return await scanner.scan(symbol, start, end, freq)

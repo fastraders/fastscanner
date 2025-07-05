@@ -14,6 +14,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 async def run():
+    ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
