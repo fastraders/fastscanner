@@ -10,16 +10,16 @@ from fastscanner.services.scanners.lib import ScannersLibrary
 
 
 @pytest.fixture
-def client_with_scanner_service(scanner_service):
+def client(scanner_service):
     service, channel = scanner_service
     app.dependency_overrides[get_scanner_service] = lambda: service
     client = TestClient(app)
-    yield client, service, channel
+    yield client
     app.dependency_overrides.clear()
 
 
-def test_scan_endpoint_success(client_with_scanner_service):
-    client, service, channel = client_with_scanner_service
+def test_scan_endpoint_success(client, scanner_service):
+    service, channel = scanner_service
 
     request_data = {
         "start": "2023-01-01",
@@ -42,8 +42,8 @@ def test_scan_endpoint_success(client_with_scanner_service):
     assert isinstance(response_data["results"], list)
 
 
-def test_scan_endpoint_with_results(client_with_scanner_service):
-    client, service, channel = client_with_scanner_service
+def test_scan_endpoint_with_results(client, scanner_service):
+    service, channel = scanner_service
 
     request_data = {
         "start": "2023-01-01",
@@ -63,8 +63,8 @@ def test_scan_endpoint_with_results(client_with_scanner_service):
     assert isinstance(results, list)
 
 
-def test_scan_endpoint_invalid_date_format(client_with_scanner_service):
-    client, service, channel = client_with_scanner_service
+def test_scan_endpoint_invalid_date_format(client, scanner_service):
+    service, channel = scanner_service
 
     request_data = {
         "start": "invalid-date",
@@ -79,8 +79,8 @@ def test_scan_endpoint_invalid_date_format(client_with_scanner_service):
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-def test_scan_endpoint_missing_required_fields(client_with_scanner_service):
-    client, service, channel = client_with_scanner_service
+def test_scan_endpoint_missing_required_fields(client, scanner_service):
+    service, channel = scanner_service
 
     request_data = {
         "start": "2023-01-01",
@@ -91,8 +91,8 @@ def test_scan_endpoint_missing_required_fields(client_with_scanner_service):
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-def test_scan_endpoint_different_frequencies(client_with_scanner_service):
-    client, service, channel = client_with_scanner_service
+def test_scan_endpoint_different_frequencies(client, scanner_service):
+    service, channel = scanner_service
 
     frequencies = ["1min", "5min", "15min", "1H", "1D"]
 

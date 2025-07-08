@@ -11,6 +11,13 @@ class ScannerParams:
     params: dict[str, Any]
 
 
+@dataclass
+class ScanAllResult:
+    results: list[dict[str, Any]]
+    total_symbols: int
+    scanner_type: str
+
+
 class Scanner(Protocol):
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
