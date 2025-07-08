@@ -133,15 +133,14 @@ async def websocket_realtime_scanner(
             logger.info(f"Unsubscribed scanner {scanner_id}")
 
 
-@router.post("/scan")
+@router.post("")
 async def scan(
     request: ScanRequest, service: ScannerService = Depends(get_scanner_service)
 ) -> ScanResponse:
-    processed_params = _parse_known_parameters(request.params)
 
     result = await service.scan_all(
         scanner_type=request.type,
-        params=processed_params,
+        params=request.params,
         start=request.start,
         end=request.end,
         freq=request.freq,
