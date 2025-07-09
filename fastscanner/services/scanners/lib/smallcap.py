@@ -107,8 +107,6 @@ class SmallCapUpScanner:
         # Comment out for highest high from start time logic
         # df = await self._cum_high.extend(symbol, df)
         # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
-        # filtered_df['High_Change'] = filtered_df['high'].pct_change()
-        # filtered_df['Low_Change'] = filtered_df['low'].pct_change()
 
         # Comment out for anomaly filtering logic
         # df.loc[:, "_body"] = (df[C.CLOSE] - df[C.OPEN]).abs().replace(0, 0.0001)
