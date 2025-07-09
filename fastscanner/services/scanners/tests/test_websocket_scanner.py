@@ -1,9 +1,11 @@
 import asyncio
 import json
-from fastapi import WebSocketDisconnect
-from pydantic import ValidationError
+
 import pytest
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
 from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import get_scanner_service
 

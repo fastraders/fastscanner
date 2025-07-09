@@ -1,7 +1,10 @@
 import json
 import os
-from datetime import date, datetime, time, timedelta
+import tempfile
+import time
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -278,3 +281,136 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
         assert isinstance(start_arg, date)
         assert isinstance(end_arg, date)
         assert freq_arg in expected_freqs
+
+
+class MockClockBeforeMidnight:
+    def __init__(self):
+        self._start = time.time()
+
+    def now(self):
+        time.sleep(0.1)
+        elapsed_time = time.time() - self._start  # Time elapsed in seconds
+
+        base_time = datetime(
+            2020, 1, 8, 23, 59, 59, 999000, tzinfo=ZoneInfo("UTC")
+        )  # January 8, 2020, 23:59:59.999000
+
+        new_time = base_time + timedelta(seconds=elapsed_time)
+
+        return new_time
+
+
+class MockClockSunday:
+    def __init__(self, today: date):
+        self._now = datetime.combine(
+            today, datetime.min.time(), tzinfo=ZoneInfo(LOCAL_TIMEZONE_STR)
+        )
+
+    def now(self):
+        return self._now
+
+
+class MockStoreWithDelay:
+    def __init__(self):
+        self.calls = []
+
+    async def get(self, symbol, start, end, freq):
+        self.calls.append((symbol, start, end, freq))
+        time.sleep(0.2)
+
+        df = pd.DataFrame({"datetime": pd.to_datetime([], utc=True)}).set_index(
+            "datetime"
+        )
+        return df
+
+    async def splits(self, start, end):
+        return {}
+
+
+class MockStoreReturningData:
+    def __init__(self):
+        self.calls = []
+
+    async def get(self, symbol, start, end, freq):
+        self.calls.append((start, end, freq))
+        rng = pd.date_range(start, end, freq="1D", tz=LOCAL_TIMEZONE_STR)
+        df = pd.DataFrame(
+            {
+                CandleCol.DATETIME: rng,
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 100,
+            }
+        ).set_index(CandleCol.DATETIME)
+        return df
+
+    async def splits(self, start, end):
+        return {}
+
+
+def setup_cache_env(tmp_path):
+    cache_dir = tmp_path
+    PartitionedCSVCandlesProvider.CACHE_DIR = str(cache_dir)
+    os.makedirs(cache_dir / "AAPL", exist_ok=True)
+    (cache_dir / "last_checked_splits.txt").write_text("2019-12-31")
+
+
+@pytest.mark.asyncio
+async def test_midnight_expiration_skips_days(tmp_path):
+    setup_cache_env(tmp_path)
+
+    clock = MockClockBeforeMidnight()
+    ClockRegistry.set(clock)
+
+    now = clock.now()
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
+
+    store = MockStoreWithDelay()
+    provider = PartitionedCSVCandlesProvider(store)
+
+    await provider.collect_expired_data("AAPL")
+
+    assert len(store.calls) > 0, "No calls made to store"
+
+    for call in store.calls:
+        _, start, end, _ = call
+        end_date = end.date() if hasattr(end, "date") else end
+        assert (
+            end_date <= yesterday
+        ), f"Store called with end date {end_date} which should be <= {yesterday}"
+
+    assert "AAPL" in provider._expirations, "No expirations set for AAPL"
+
+    for exp_date in provider._expirations["AAPL"].values():
+        assert exp_date == tomorrow, f"Expiration should be {tomorrow}, got {exp_date}"
+
+    today_str = today.strftime("%Y-%m-%d")
+    assert not any(
+        today_str in key for key in provider._expirations.get("AAPL", {})
+    ), f"Data was unexpectedly collected for {today}"
+
+
+@pytest.mark.asyncio
+async def test_sunday_run_misses_week(tmp_path):
+    setup_cache_env(tmp_path)
+    store = MockStoreReturningData()
+
+    ClockRegistry.set(MockClockSunday(date(2020, 1, 6)))
+    provider = PartitionedCSVCandlesProvider(store)
+    await provider.collect_expired_data("AAPL")
+
+    ClockRegistry.set(MockClockSunday(date(2020, 1, 20)))
+    await provider.collect_expired_data("AAPL")
+    expected_start = date(2020, 1, 6)
+    expected_end = date(2020, 1, 12)
+    week_collected = any(
+        (start == expected_start and end == expected_end)
+        for start, end, _ in store.calls
+    )
+    assert (
+        week_collected
+    ), f"Expected week {expected_start} to {expected_end} to be collected"
