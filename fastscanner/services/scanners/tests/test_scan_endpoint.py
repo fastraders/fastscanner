@@ -29,7 +29,7 @@ def test_scan_endpoint_success(client, scanner_service):
         "params": {"min_value": 50.0, "max_value": 200.0},
     }
 
-    response = client.post("/api/scanners/scan", json=request_data)
+    response = client.post("/api/scanners", json=request_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -53,7 +53,7 @@ def test_scan_endpoint_with_results(client, scanner_service):
         "params": {},
     }
 
-    response = client.post("/api/scanners/scan", json=request_data)
+    response = client.post("/api/scanners", json=request_data)
 
     assert response.status_code == status.HTTP_200_OK
 
@@ -74,7 +74,7 @@ def test_scan_endpoint_invalid_date_format(client, scanner_service):
         "params": {},
     }
 
-    response = client.post("/api/scanners/scan", json=request_data)
+    response = client.post("/api/scanners", json=request_data)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -86,7 +86,7 @@ def test_scan_endpoint_missing_required_fields(client, scanner_service):
         "start": "2023-01-01",
     }
 
-    response = client.post("/api/scanners/scan", json=request_data)
+    response = client.post("/api/scanners", json=request_data)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -105,7 +105,7 @@ def test_scan_endpoint_different_frequencies(client, scanner_service):
             "params": {},
         }
 
-        response = client.post("/api/scanners/scan", json=request_data)
+        response = client.post("/api/scanners", json=request_data)
 
         assert (
             response.status_code == status.HTTP_200_OK
