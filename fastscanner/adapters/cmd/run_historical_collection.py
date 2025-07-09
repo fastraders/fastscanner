@@ -3,29 +3,32 @@ import logging
 import math
 import multiprocessing
 import time
+from datetime import datetime
 
 import pandas as pd
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
-from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, LocalClock
+from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 
-async def _collect(symbol: str, candles: PartitionedCSVCandlesProvider) -> None:
-    for year in range(2010, ClockRegistry.clock.today().year + 1):
+async def _collect(
+    symbol: str, candles: PartitionedCSVCandlesProvider, now: datetime
+) -> None:
+    for year in range(2010, now.today().year + 1):
         await candles.cache_all_freqs(symbol, year)
         logger.info(f"Collected data for {symbol} in {year}")
 
     logger.info(f"Finished data collection for {symbol}")
 
 
-async def _collect_batch(symbols: list[str]) -> None:
-    ClockRegistry.set(LocalClock())
+async def _collect_batch(symbols: list[str], now: datetime) -> None:
+    ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
@@ -44,7 +47,7 @@ async def _collect_batch(symbols: list[str]) -> None:
     #         logger.info(f"Estimated remaining time: {time_left:.2f} seconds")
 
     tasks = [
-        asyncio.create_task(_collect(symbol, candles), name=symbol)
+        asyncio.create_task(_collect(symbol, candles, now), name=symbol)
         for symbol in symbols
     ]
     completed_tasks = 0
@@ -70,27 +73,30 @@ async def _collect_batch(symbols: list[str]) -> None:
         logger.error(f"Failed symbols: {failed_symbols}")
 
 
-def _run_batch(batch: list[str]) -> None:
-    asyncio.run(_collect_batch(batch))
+def _run_batch(batch: tuple[list[str], datetime]) -> None:
+    b, now = batch
+    asyncio.run(_collect_batch(b, now))
 
 
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     candles = PartitionedCSVCandlesProvider(polygon)
-    ClockRegistry.set(LocalClock())
+    now = LocalClock().now()
+    ClockRegistry.set(FixedClock(now))
 
     all_symbols = await polygon.all_symbols()
     # all_symbols = all_symbols[:100]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [
-        all_symbols[i : i + batch_size] for i in range(0, len(all_symbols), batch_size)
+        (all_symbols[i : i + batch_size], now)
+        for i in range(0, len(all_symbols), batch_size)
     ]
 
     with multiprocessing.Pool(n_workers) as pool:
         pool.map(_run_batch, batches)
 
-    candles.mark_splits_checked()
+    candles.mark_splits_checked(now.date())
 
 
 if __name__ == "__main__":

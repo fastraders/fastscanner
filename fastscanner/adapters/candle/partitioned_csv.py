@@ -28,8 +28,11 @@ class PartitionedCSVCandlesProvider:
     def __init__(self, store: CandleStoreWithSplits):
         self._store = store
 
-    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
-        max_date = ClockRegistry.clock.today() - timedelta(days=1)
+    async def get(
+        self, symbol: str, start: date, end: date, freq: str, _today: date | None = None
+    ) -> pd.DataFrame:
+        today = _today or ClockRegistry.clock.today()
+        max_date = today - timedelta(days=1)
         if end > max_date:
             raise ValueError(
                 f"End date {end} cannot be in the future. Max date is {max_date}."
@@ -40,7 +43,7 @@ class PartitionedCSVCandlesProvider:
 
         dfs: list[pd.DataFrame] = []
         for key in keys:
-            df = await self._cache(symbol, key, unit, freq)
+            df = await self._cache(symbol, key, unit, freq, _today=today)
             if df.empty:
                 continue
             dfs.append(df)
@@ -73,7 +76,7 @@ class PartitionedCSVCandlesProvider:
         minute_range = self._covering_range(start, end, "min")
         hourly_range = self._covering_range(start, end, "h")
         daily_range = self._covering_range(start, end, "d")
-        if self._is_all_freqs_cached(symbol, year):
+        if self._is_all_freqs_cached(symbol, year, today):
             # logger.info(
             #     f"Cache for {symbol} ({year}) already exists. Skipping cache creation."
             # )
@@ -113,15 +116,83 @@ class PartitionedCSVCandlesProvider:
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit, today)
 
-    def _is_all_freqs_cached(self, symbol: str, year: int) -> bool:
+    async def collect_expired_data(self, symbol: str) -> None:
+        today = ClockRegistry.clock.today()
+        yday = today - timedelta(days=1)
+        self._load_expirations(symbol)
+        expirations = self._expirations.get(symbol, {})
+        grouped_by_unit: dict[str, str] = {}
+        # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
+        unit_to_freqs: dict[str, list[str]] = {}
+        for freq in self._cache_freqs:
+            _, unit = split_freq(freq)
+            unit_to_freqs.setdefault(unit, []).append(freq)
+        for exp_key, exp_date in expirations.items():
+            if exp_date > yday:
+                continue
+            partition_key, unit = exp_key.rsplit("_", 1)
+            grouped_by_unit[unit] = partition_key
+
+        for unit in unit_to_freqs.keys():
+            if unit not in grouped_by_unit:
+                partition_key = self._partition_key(yday, unit)
+                grouped_by_unit[unit] = partition_key
+
+        for unit, partition_key in grouped_by_unit.items():
+            freqs = unit_to_freqs[unit]
+            for freq in freqs:
+                start_date, _ = self._range_from_key(partition_key, unit)
+                await self.get(symbol, start_date, yday, freq, today)
+
+    async def collect_splits(self) -> None:
+        today = ClockRegistry.clock.today()
+        last_checked_splits_path = os.path.join(
+            self.CACHE_DIR, "last_checked_splits.txt"
+        )
+
+        with open(last_checked_splits_path, "r") as f:
+            last_checked_str = f.read().strip()
+            splits_last_checked = date.fromisoformat(last_checked_str)
+
+        if splits_last_checked >= today:
+            return
+
+        splits = await self._store.splits(
+            splits_last_checked + timedelta(days=1), today
+        )
+
+        for symbol, _ in splits.items():
+            logger.info(
+                f"Found splits for {symbol} since {splits_last_checked}. Expiring cache."
+            )
+            path = os.path.join(self.CACHE_DIR, symbol)
+            shutil.rmtree(path, ignore_errors=True)
+
+        tasks = [
+            asyncio.create_task(self.cache_all_freqs(symbol, year))
+            for symbol in splits
+            for year in range(2010, today.year + 1)
+        ]
+
+        await asyncio.gather(*tasks)
+        self.mark_splits_checked(today)
+
+    def mark_splits_checked(self, date_: date):
+        with open(os.path.join(self.CACHE_DIR, "last_checked_splits.txt"), "w") as f:
+            f.write(date_.isoformat())
+
+    def _is_all_freqs_cached(self, symbol: str, year: int, today: date) -> bool:
         key = f"{year}"
         return os.path.exists(
             self._partition_path(symbol, key, "1d")
-        ) and not self._is_expired(symbol, key, "d")
+        ) and not self._is_expired(symbol, key, "d", today)
 
-    async def _cache(self, symbol: str, key: str, unit: str, freq: str) -> pd.DataFrame:
+    async def _cache(
+        self, symbol: str, key: str, unit: str, freq: str, _today: date | None = None
+    ) -> pd.DataFrame:
+        today = _today or ClockRegistry.clock.today()
         partition_path = self._partition_path(symbol, key, freq)
-        if not self._is_expired(symbol, key, unit):
+        if not self._is_expired(symbol, key, unit, today):
             try:
                 df = pd.read_csv(partition_path)
                 if unit.lower() != "d":
@@ -146,7 +217,6 @@ class PartitionedCSVCandlesProvider:
                 )
 
         start, end = self._range_from_key(key, unit)
-        today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
         end = min(end, yday)
         df = (await self._store.get(symbol, start, end, freq)).dropna()
@@ -212,7 +282,7 @@ class PartitionedCSVCandlesProvider:
 
     _expirations: dict[str, dict[str, date]]
 
-    def _is_expired(self, symbol: str, key: str, unit: str) -> bool:
+    def _is_expired(self, symbol: str, key: str, unit: str, today: date) -> bool:
         self._load_expirations(symbol)
 
         expiration_key = self._expiration_key(key, unit)
@@ -220,7 +290,6 @@ class PartitionedCSVCandlesProvider:
         if expiration_key not in expirations:
             return False
 
-        today = ClockRegistry.clock.today()
         return expirations[expiration_key] <= today
 
     def _mark_expiration(self, symbol: str, key: str, unit: str, today: date) -> None:
@@ -258,68 +327,3 @@ class PartitionedCSVCandlesProvider:
                 }
         except FileNotFoundError:
             self._expirations[symbol] = {}
-
-    async def collect_expired_data(self, symbol: str) -> None:
-        yday = ClockRegistry.clock.today() - timedelta(days=1)
-        self._load_expirations(symbol)
-        expirations = self._expirations.get(symbol, {})
-        grouped_by_unit: dict[str, str] = {}
-        # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
-        unit_to_freqs: dict[str, list[str]] = {}
-        for freq in self._cache_freqs:
-            _, unit = split_freq(freq)
-            unit_to_freqs.setdefault(unit, []).append(freq)
-        for exp_key, exp_date in expirations.items():
-            if exp_date > yday:
-                continue
-            partition_key, unit = exp_key.rsplit("_", 1)
-            grouped_by_unit[unit] = partition_key
-
-        for unit in unit_to_freqs.keys():
-            if unit not in grouped_by_unit:
-                partition_key = self._partition_key(yday, unit)
-                grouped_by_unit[unit] = partition_key
-
-        for unit, partition_key in grouped_by_unit.items():
-            freqs = unit_to_freqs[unit]
-            for freq in freqs:
-                start_date, _ = self._range_from_key(partition_key, unit)
-                await self.get(symbol, start_date, yday, freq)
-
-    async def collect_splits(self) -> None:
-        last_checked_splits_path = os.path.join(
-            self.CACHE_DIR, "last_checked_splits.txt"
-        )
-
-        with open(last_checked_splits_path, "r") as f:
-            last_checked_str = f.read().strip()
-            splits_last_checked = date.fromisoformat(last_checked_str)
-
-        if splits_last_checked >= ClockRegistry.clock.today():
-            return
-
-        today = ClockRegistry.clock.today()
-        splits = await self._store.splits(
-            splits_last_checked + timedelta(days=1), today
-        )
-
-        for symbol, _ in splits.items():
-            logger.info(
-                f"Found splits for {symbol} since {splits_last_checked}. Expiring cache."
-            )
-            path = os.path.join(self.CACHE_DIR, symbol)
-            shutil.rmtree(path, ignore_errors=True)
-
-        tasks = [
-            asyncio.create_task(self.cache_all_freqs(symbol, year))
-            for symbol in splits
-            for year in range(2010, today.year + 1)
-        ]
-
-        await asyncio.gather(*tasks)
-        self.mark_splits_checked()
-
-    def mark_splits_checked(self):
-        today = ClockRegistry.clock.today()
-        with open(os.path.join(self.CACHE_DIR, "last_checked_splits.txt"), "w") as f:
-            f.write(today.isoformat())
