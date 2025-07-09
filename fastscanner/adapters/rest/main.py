@@ -12,6 +12,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.service import ScannerService
@@ -30,6 +31,8 @@ class FastscannerApp(FastAPI):
         return self.state.scanner
 
     def startup(self) -> None:
+        ClockRegistry.set(LocalClock())
+
         polygon = PolygonCandlesProvider(
             config.POLYGON_BASE_URL, config.POLYGON_API_KEY
         )

@@ -1,8 +1,6 @@
-import asyncio
-import json
 import logging
-from datetime import datetime, time
-from typing import Any, Dict
+from datetime import datetime, time, date
+from typing import Any, Dict, List
 
 import pandas as pd
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -13,7 +11,8 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.adapters.rest.services import get_scanner_service
 from fastscanner.pkg import config
-from fastscanner.services.scanners.ports import ScannerParams
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
+from fastscanner.services.scanners.ports import ScannerParams, SymbolsProvider
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
 
 logger = logging.getLogger(__name__)
@@ -28,6 +27,20 @@ class ScannerRequest(BaseModel):
 
 class ScannerResponse(BaseModel):
     scanner_id: str
+
+
+class ScanRequest(BaseModel):
+    start: date
+    end: date
+    freq: str
+    type: str
+    params: Dict[str, Any]
+
+
+class ScanResponse(BaseModel):
+    results: List[Dict[str, Any]]
+    total_symbols: int
+    scanner_type: str
 
 
 class ScannerMessage(BaseModel):
@@ -118,3 +131,23 @@ async def websocket_realtime_scanner(
         if scanner_id:
             await service.unsubscribe_realtime(scanner_id)
             logger.info(f"Unsubscribed scanner {scanner_id}")
+
+
+@router.post("")
+async def scan(
+    request: ScanRequest, service: ScannerService = Depends(get_scanner_service)
+) -> ScanResponse:
+
+    result = await service.scan_all(
+        scanner_type=request.type,
+        params=request.params,
+        start=request.start,
+        end=request.end,
+        freq=request.freq,
+    )
+
+    return ScanResponse(
+        results=result.results,
+        total_symbols=result.total_symbols,
+        scanner_type=result.scanner_type,
+    )
