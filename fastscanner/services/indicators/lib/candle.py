@@ -38,7 +38,6 @@ class CumulativeDailyVolumeIndicator:
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
-            df.loc[:, self.column_name()] = 0.0
             return df
 
         volume = df[CandleCol.VOLUME]
