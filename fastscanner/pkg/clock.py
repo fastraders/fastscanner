@@ -42,6 +42,14 @@ class LocalClock:
         return datetime.now(tz=ZoneInfo(LOCAL_TIMEZONE_STR))
 
 
+class FixedClock:
+    def __init__(self, dt: datetime):
+        self._dt = dt
+
+    def now(self) -> datetime:
+        return self._dt
+
+
 LOCAL_TIMEZONE_STR = "America/New_York"
 LOCAL_TIMEZONE = ZoneInfo(LOCAL_TIMEZONE_STR)
 

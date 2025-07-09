@@ -66,7 +66,8 @@ class PartitionedCSVCandlesProvider:
     _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
 
     async def cache_all_freqs(self, symbol: str, year: int) -> None:
-        yday = datetime.now(zoneinfo.ZoneInfo(self.tz)).date() - timedelta(days=1)
+        today = ClockRegistry.clock.today()
+        yday = today - timedelta(days=1)
         start = date(year, 1, 1)
         end = min(date(year, 12, 31), yday)
         minute_range = self._covering_range(start, end, "min")
@@ -110,7 +111,7 @@ class PartitionedCSVCandlesProvider:
                 )
                 sub_df = df.loc[start_dt:end_dt]
                 self._save_cache(symbol, key, freq, sub_df)
-                self._mark_expiration(symbol, key, unit)
+                self._mark_expiration(symbol, key, unit, today)
 
     def _is_all_freqs_cached(self, symbol: str, year: int) -> bool:
         key = f"{year}"
@@ -145,11 +146,12 @@ class PartitionedCSVCandlesProvider:
                 )
 
         start, end = self._range_from_key(key, unit)
-        yday = ClockRegistry.clock.today() - timedelta(days=1)
+        today = ClockRegistry.clock.today()
+        yday = today - timedelta(days=1)
         end = min(end, yday)
         df = (await self._store.get(symbol, start, end, freq)).dropna()
         self._save_cache(symbol, key, freq, df)
-        self._mark_expiration(symbol, key, unit)
+        self._mark_expiration(symbol, key, unit, today)
         return df
 
     def _save_cache(self, symbol: str, key: str, freq: str, df: pd.DataFrame):
@@ -221,11 +223,10 @@ class PartitionedCSVCandlesProvider:
         today = ClockRegistry.clock.today()
         return expirations[expiration_key] <= today
 
-    def _mark_expiration(self, symbol: str, key: str, unit: str) -> None:
+    def _mark_expiration(self, symbol: str, key: str, unit: str, today: date) -> None:
         self._load_expirations(symbol)
 
         _, end = self._range_from_key(key, unit)
-        today = ClockRegistry.clock.today()
         expiration_key = self._expiration_key(key, unit)
         expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:
@@ -259,7 +260,7 @@ class PartitionedCSVCandlesProvider:
             self._expirations[symbol] = {}
 
     async def collect_expired_data(self, symbol: str) -> None:
-        yesterday = ClockRegistry.clock.now().date() - timedelta(days=1)
+        yday = ClockRegistry.clock.today() - timedelta(days=1)
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
         grouped_by_unit: dict[str, str] = {}
@@ -269,21 +270,21 @@ class PartitionedCSVCandlesProvider:
             _, unit = split_freq(freq)
             unit_to_freqs.setdefault(unit, []).append(freq)
         for exp_key, exp_date in expirations.items():
-            if exp_date > yesterday:
+            if exp_date > yday:
                 continue
             partition_key, unit = exp_key.rsplit("_", 1)
             grouped_by_unit[unit] = partition_key
 
         for unit in unit_to_freqs.keys():
             if unit not in grouped_by_unit:
-                partition_key = self._partition_key(yesterday, unit)
+                partition_key = self._partition_key(yday, unit)
                 grouped_by_unit[unit] = partition_key
 
         for unit, partition_key in grouped_by_unit.items():
             freqs = unit_to_freqs[unit]
             for freq in freqs:
                 start_date, _ = self._range_from_key(partition_key, unit)
-                await self.get(symbol, start_date, yesterday, freq)
+                await self.get(symbol, start_date, yday, freq)
 
     async def collect_splits(self) -> None:
         last_checked_splits_path = os.path.join(
