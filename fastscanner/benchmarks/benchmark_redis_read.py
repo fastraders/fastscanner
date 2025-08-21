@@ -29,7 +29,7 @@ class BenchmarkHandler(ChannelHandler):
 
         now = time.time()
         ts = float(data.get("timestamp", now))
-        logger.info(f"[{channel_id}] Timestamp: {ts}, Data: {data}")
+        # logger.info(f"[{channel_id}] Timestamp: {ts}, Data: {data}")
 
         if batch_start_time is None:
             batch_start_time = now

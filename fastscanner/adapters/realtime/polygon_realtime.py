@@ -113,7 +113,6 @@ class PolygonRealtime:
             await self._channel.flush()
         except Exception as e:
             logger.error(traceback.format_exc())
-            logger.error(f"Error handling messages {parsed_msgs}: {e}")
 
 
 async def main():
