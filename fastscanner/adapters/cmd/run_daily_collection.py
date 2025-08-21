@@ -69,7 +69,7 @@ async def collect_daily_data() -> None:
 
     await partitioned_provider.collect_splits()
     all_symbols = await provider.all_symbols()
-    # all_symbols = all_symbols[:100]
+    all_symbols = all_symbols[:100]
     # all_symbols = ["NDRA"]
 
     n_workers = multiprocessing.cpu_count()

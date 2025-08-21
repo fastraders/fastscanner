@@ -90,24 +90,30 @@ class PolygonRealtime:
             logger.warning(f"WebSocket connection was already closed: {e}")
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
-        for msg in msgs:
-            if not isinstance(msg, EquityAgg):
-                logger.warning("Received unexpected message %s", str(msg))
-                continue
+        parsed_msgs: list[dict] = []
+        try:
+            for msg in msgs:
+                if not isinstance(msg, EquityAgg):
+                    logger.warning("Received unexpected message %s", str(msg))
+                    continue
 
-            record = {
-                "symbol": msg.symbol,
-                "timestamp": msg.start_timestamp,
-                "open": msg.open,
-                "high": msg.high,
-                "low": msg.low,
-                "close": msg.close,
-                "volume": msg.volume,
-            }
-            channel_id = f"candles_min_{msg.symbol}"
-            await self._channel.push(channel_id, record, flush=False)
+                record = {
+                    "symbol": msg.symbol,
+                    "timestamp": msg.start_timestamp,
+                    "open": msg.open,
+                    "high": msg.high,
+                    "low": msg.low,
+                    "close": msg.close,
+                    "volume": msg.volume,
+                }
+                parsed_msgs.append(record)
+                channel_id = f"candles_min_{msg.symbol}"
+                await self._channel.push(channel_id, record, flush=False)
 
-        await self._channel.flush()
+            await self._channel.flush()
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"Error handling messages {parsed_msgs}: {e}")
 
 
 async def main():

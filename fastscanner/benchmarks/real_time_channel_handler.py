@@ -12,6 +12,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.services.indicators.lib import IndicatorsLibrary
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
@@ -61,6 +62,8 @@ async def main():
         channel=redis_channel,
     )
     ApplicationRegistry.init(candles, fundamentals, holidays)
+    ClockRegistry.set(LocalClock())
+
     prev_indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
     indicators = [
         IndicatorParams(
