@@ -71,7 +71,7 @@ class RedisChannel:
                     await asyncio.sleep(1)
                     continue
 
-                entries = await self.redis.xread(self._last_ids, block=1000, count=10000)  # type: ignore
+                entries = await self.redis.xread(self._last_ids)  # type: ignore
 
                 for stream, stream_entries in entries:
                     for entry_id, data in stream_entries:

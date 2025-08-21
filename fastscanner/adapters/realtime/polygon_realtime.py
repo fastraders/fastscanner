@@ -2,6 +2,7 @@ import asyncio
 import logging
 import traceback
 
+import uvloop
 from polygon import WebSocketClient
 from polygon.websocket.models import EquityAgg, Feed, Market, WebSocketMessage
 from websockets import ConnectionClosedError
@@ -141,4 +142,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

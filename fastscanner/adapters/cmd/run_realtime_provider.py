@@ -4,6 +4,7 @@ import traceback
 
 import pandas as pd
 import redis.asyncio as aioredis
+import uvloop
 
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
@@ -68,4 +69,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

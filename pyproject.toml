@@ -18,6 +18,7 @@ exchange-calendars= "^4.10"
 redis="^5.2.1"
 polygon-api-client= "^1.14.5"
 polars = "^1.31.0"
+uvloop = "^0.21.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"

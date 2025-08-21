@@ -5,6 +5,8 @@ import time
 from datetime import date
 from pathlib import Path
 
+import uvloop
+
 from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
@@ -42,4 +44,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

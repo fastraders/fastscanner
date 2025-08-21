@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import httpx
 import numpy as np
 import pandas as pd
+import uvloop
 
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
@@ -361,4 +362,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

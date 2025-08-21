@@ -8,6 +8,8 @@ from datetime import datetime
 from functools import wraps
 from types import MethodType
 
+import uvloop
+
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
@@ -152,4 +154,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

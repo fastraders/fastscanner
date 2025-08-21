@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from typing import Any
 
+import uvloop
+
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.services.indicators.ports import ChannelHandler
@@ -96,4 +98,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

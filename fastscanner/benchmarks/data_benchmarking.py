@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from itertools import product
 
 import pandas as pd
+import uvloop
 
 from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
@@ -88,4 +89,4 @@ if __name__ == "__main__":
         side_by_side.to_csv(csv_path, index=False)
         print(f"\nSide-by-side benchmark results saved to: {csv_path}")
 
-    asyncio.run(main())
+    uvloop.run(main())

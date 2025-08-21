@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import polars as pl
+import uvloop
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv_polars import (
@@ -256,4 +257,4 @@ async def main():
 if __name__ == "__main__":
     # Set multiprocessing start method for compatibility
     multiprocessing.set_start_method("spawn", force=True)
-    asyncio.run(main())
+    uvloop.run(main())

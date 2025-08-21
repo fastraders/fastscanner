@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 import pandas as pd
+import uvloop
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
@@ -101,4 +102,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())

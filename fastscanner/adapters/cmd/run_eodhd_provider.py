@@ -4,6 +4,8 @@ import sys
 import time
 from pathlib import Path
 
+import uvloop
+
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
@@ -32,4 +34,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvloop.run(main())
