@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 
@@ -64,7 +65,7 @@ class IndicatorsService:
         freq: str,
         indicators: list[IndicatorParams],
         handler: "SubscriptionHandler",
-    ):
+    ) -> str:
         """
         Redis -> RedisChannel -> For all subscribers, compute the indicators -> SubscriptionHandler
             candle                                                          candle with indicators
@@ -72,19 +73,28 @@ class IndicatorsService:
         Every time we get a new candle, for the symbol, we will first fill the new row with the indicators (extend_realtime).
         Then we will call the handler with the new row.
         The first time you get a subscription to a symbol, you need to subscribe to the channel.
+
+        Return the subscription ID.
         """
         indicator_instances = [
             IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
         ]
 
         stream_key = f"candles_min_{symbol}"
-        await self.channel.subscribe(
-            stream_key, CandleChannelHandler(symbol, indicator_instances, handler, freq)
-        )
+        sub_handler = CandleChannelHandler(symbol, indicator_instances, handler, freq)
+        await self.channel.subscribe(stream_key, sub_handler)
+        return sub_handler.id()
+
+    async def unsubscribe_realtime(self, symbol: str, subscription_id: str):
+        """
+        Unsubscribe from real-time updates for a specific symbol and frequency.
+        """
+        stream_key = f"candles_min_{symbol}"
+        await self.channel.unsubscribe(stream_key, subscription_id)
 
 
 class SubscriptionHandler:
-    def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
 class CandleChannelHandler:
@@ -96,6 +106,7 @@ class CandleChannelHandler:
         freq: str,
         candle_timeout: float = 20,
     ) -> None:
+        self._id = str(uuid4())
         self._symbol = symbol
         self._indicators = indicators
         self._handler = handler
@@ -108,20 +119,10 @@ class CandleChannelHandler:
         for ind in self._indicators:
             row = await ind.extend_realtime(self._symbol, row)
 
-        self._handler.handle(self._symbol, row)
+        await self._handler.handle(self._symbol, row)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         try:
-            for field in (
-                CandleCol.OPEN,
-                CandleCol.HIGH,
-                CandleCol.LOW,
-                CandleCol.CLOSE,
-                CandleCol.VOLUME,
-            ):
-                if field in data:
-                    data[field] = float(data[field])
-
             if "timestamp" not in data:
                 logger.warning(f"Missing timestamp in message from {channel_id}")
                 return
@@ -133,7 +134,7 @@ class CandleChannelHandler:
             if self._freq == "1min":
                 for ind in self._indicators:
                     new_row = await ind.extend_realtime(self._symbol, new_row)
-                self._handler.handle(self._symbol, new_row)
+                await self._handler.handle(self._symbol, new_row)
                 return
             agg = await self._buffer.add(new_row)
             if agg is None:
@@ -146,4 +147,4 @@ class CandleChannelHandler:
             )
 
     def id(self) -> str:
-        return f"{self._symbol}_{self._freq}"
+        return self._id

@@ -14,23 +14,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-async def print_latest_redis_data(redis, symbol: str):
-    stream_key = f"realtime_stream_{symbol}"
-    try:
-        entries = await redis.xrevrange(stream_key, count=10)
-        if not entries:
-            print(f"No data found for {symbol}.")
-            return
-
-        print(f"Latest data for {symbol}:")
-        for entry_id, fields in entries:
-            print(fields)
-
-    except Exception as e:
-        logger.error(f"Error reading Redis stream for {symbol}: {e}")
-
-
 async def main():
+    redis = None
     try:
         redis_channel = RedisChannel(
             unix_socket_path=config.UNIX_SOCKET_PATH,
@@ -54,18 +39,17 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe(["AAPL", "MSFT", "GOOGL"])
+        await realtime.subscribe(["*"])
 
-        await asyncio.sleep(5)
-
-        for _ in range(10):
-            await print_latest_redis_data(redis, "AAPL")
+        while True:
             await asyncio.sleep(5)
-        await redis.close()
 
     except Exception as e:
         logger.error(f"Error in main(): {e}")
         logger.error(traceback.format_exc())
+    finally:
+        if redis:
+            await redis.close()
 
 
 if __name__ == "__main__":

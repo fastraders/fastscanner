@@ -49,7 +49,7 @@ class HandlerTest(SubscriptionHandler):
     def __init__(self):
         self.received = []
 
-    def handle(self, symbol: str, new_row: pd.Series):
+    async def handle(self, symbol: str, new_row: pd.Series):
         self.received.append((symbol, new_row))
 
 
@@ -77,11 +77,11 @@ def create_stream_message(
         ts = ts.replace(tzinfo=pytz.timezone(LOCAL_TIMEZONE_STR))
     return {
         "timestamp": str(int(ts.timestamp() * 1000)),
-        CandleCol.OPEN: str(open),
-        CandleCol.HIGH: str(high),
-        CandleCol.LOW: str(low),
-        CandleCol.CLOSE: str(close),
-        CandleCol.VOLUME: str(volume),
+        CandleCol.OPEN: open,
+        CandleCol.HIGH: high,
+        CandleCol.LOW: low,
+        CandleCol.CLOSE: close,
+        CandleCol.VOLUME: volume,
     }
 
 

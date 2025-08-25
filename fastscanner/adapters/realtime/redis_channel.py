@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Any, Optional, cast
 
@@ -32,14 +33,24 @@ class RedisChannel:
         self._xread_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
         self._last_ids: dict[str, str] = {}
+        self._is_stopped = False
 
     async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True):
         if self._pipeline is None:
             self._pipeline = self.redis.pipeline()
 
-        self._pipeline.xadd(channel_id, data)
+        self._pipeline.xadd(channel_id, {"data": json.dumps(data)})
         if flush:
             await self.flush()
+
+    async def stop(self):
+        self._is_stopped = True
+        if self._xread_task:
+            self._xread_task.cancel()
+            try:
+                await self._xread_task
+            except asyncio.CancelledError:
+                ...
 
     async def flush(self):
         if self._pipeline:
@@ -65,7 +76,7 @@ class RedisChannel:
         return last_entry[0][0] if last_entry else "0-0"
 
     async def _xread_loop(self) -> None:
-        while True:
+        while not self._is_stopped:
             try:
                 if not self._handlers:
                     await asyncio.sleep(1)
@@ -76,11 +87,12 @@ class RedisChannel:
                 for stream, stream_entries in entries:
                     for entry_id, data in stream_entries:
                         self._last_ids[stream] = entry_id
+                        data = json.loads(data["data"])
                         for handler in self._handlers.get(stream, []):
                             await handler.handle(stream, data)
-
-            except RedisError as e:
-                logger.error("Redis xread error: %s", e, exc_info=True)
+            except Exception as e:
+                logger.exception(e)
+            finally:
                 await asyncio.sleep(1)
 
     async def unsubscribe(self, channel_id: str, handler_id: str) -> None:
