@@ -29,7 +29,13 @@ class PartitionedCSVCandlesProvider:
         self._store = store
 
     async def get(
-        self, symbol: str, start: date, end: date, freq: str, _today: date | None = None
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        freq: str,
+        _today: date | None = None,
+        _log_cache_miss: bool = True,
     ) -> pd.DataFrame:
         today = _today or ClockRegistry.clock.today()
         max_date = today - timedelta(days=1)
@@ -43,7 +49,9 @@ class PartitionedCSVCandlesProvider:
 
         dfs: list[pd.DataFrame] = []
         for key in keys:
-            df = await self._cache(symbol, key, unit, freq, _today=today)
+            df = await self._cache(
+                symbol, key, unit, freq, _today=today, _log_cache_miss=_log_cache_miss
+            )
             if df.empty:
                 continue
             dfs.append(df)
@@ -142,7 +150,9 @@ class PartitionedCSVCandlesProvider:
             freqs = unit_to_freqs[unit]
             for freq in freqs:
                 start_date, _ = self._range_from_key(partition_key, unit)
-                await self.get(symbol, start_date, yday, freq, today)
+                await self.get(
+                    symbol, start_date, yday, freq, today, _log_cache_miss=False
+                )
 
     async def collect_splits(self) -> None:
         today = ClockRegistry.clock.today()
@@ -177,7 +187,9 @@ class PartitionedCSVCandlesProvider:
             for key in keys:
                 partition_path = self._partition_path(symbol, key, "1d")
                 if os.path.exists(partition_path):
-                    df = await self._cache(symbol, key, "d", "1d")
+                    df = await self._cache(
+                        symbol, key, "d", "1d", _log_cache_miss=False
+                    )
                     if not df.empty:
                         break
             else:
@@ -205,7 +217,13 @@ class PartitionedCSVCandlesProvider:
         ) and not self._is_expired(symbol, key, "d", today)
 
     async def _cache(
-        self, symbol: str, key: str, unit: str, freq: str, _today: date | None = None
+        self,
+        symbol: str,
+        key: str,
+        unit: str,
+        freq: str,
+        _today: date | None = None,
+        _log_cache_miss: bool = True,
     ) -> pd.DataFrame:
         today = _today or ClockRegistry.clock.today()
         partition_path = self._partition_path(symbol, key, freq)
@@ -224,9 +242,10 @@ class PartitionedCSVCandlesProvider:
                 )
                 return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
             except FileNotFoundError:
-                logger.info(
-                    f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
-                )
+                if _log_cache_miss:
+                    logger.info(
+                        f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
+                    )
             except Exception as e:
                 logger.exception(e)
                 logger.error(
