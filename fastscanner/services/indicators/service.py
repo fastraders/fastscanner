@@ -129,11 +129,8 @@ class CandleChannelHandler:
         )
         new_row = pd.Series(data, name=ts)
         if self._freq == "1min":
-            for ind in self._indicators:
-                new_row = await ind.extend_realtime(self._symbol, new_row)
-            await self._handler.handle(self._symbol, new_row)
-            return
-        agg = await self._buffer.add(new_row)
+            return await self._handle(new_row)
+        agg = self._buffer.add(new_row)
         if agg is None:
             return
         await self._handle(agg)

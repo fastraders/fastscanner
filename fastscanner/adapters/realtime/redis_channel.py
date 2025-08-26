@@ -94,13 +94,9 @@ class RedisChannel:
                             logger.exception(e)
 
     async def unsubscribe(self, channel_id: str, handler_id: str) -> None:
-        handlers = self._handlers.get(channel_id, [])
-        for h in handlers:
-            if h.id() == handler_id:
-                handlers.remove(h)
-                break
-        else:
-            return
+        handlers = [
+            h for h in self._handlers.get(channel_id, []) if h.id() != handler_id
+        ]
         if not handlers:
             del self._handlers[channel_id]
             self._last_ids.pop(channel_id, None)

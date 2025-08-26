@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 from typing import Any, Callable, Protocol
 
 import websockets
@@ -30,7 +31,7 @@ class UnsubscriptionRequest(BaseModel):
 class CandleMessage(BaseModel):
     subscription_id: str
     symbol: str
-    timestamp: str
+    timestamp: datetime
     candle: dict[str, Any]
 
 

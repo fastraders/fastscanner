@@ -28,22 +28,17 @@ class CandleBuffer:
     def _expected_ts(self, ts: pd.Timestamp) -> pd.Timestamp:
         return ts.floor(self._freq)
 
-    async def add(self, row: pd.Series):
+    def add(self, row: pd.Series):
         if not isinstance(row.name, pd.Timestamp):
             raise ValueError("Expected row.name to be a pd.Timestamp")
-        import logging
 
-        logging.getLogger(__name__).error(
-            f"Adding row to buffer ts: {row.name} data:{row.to_dict()}"
-        )
-        async with self._lock:
-            self._buffer[row.name] = row
-            ts = row.name.floor(self._freq)
-            end_ts = ts + pd.Timedelta(self._freq) - pd.Timedelta("1min")
-            if row.name == end_ts:
-                return await self.flush()
-            if self._timeout_task is None or self._timeout_task.done():
-                self._timeout_task = asyncio.create_task(self._timeout_flush(ts))
+        self._buffer[row.name] = row
+        ts = row.name.floor(self._freq)
+        end_ts = ts + pd.Timedelta(self._freq) - pd.Timedelta("1min")
+        if row.name == end_ts:
+            return self.flush()
+        if self._timeout_task is None or self._timeout_task.done():
+            self._timeout_task = asyncio.create_task(self._timeout_flush(ts))
         return None
 
     async def _timeout_flush(self, candle_start: pd.Timestamp):
@@ -55,12 +50,12 @@ class CandleBuffer:
         )
         await asyncio.sleep((flush_at - now).total_seconds())
         async with self._lock:
-            row = await self.flush()
+            row = self.flush()
             if row is None:
                 return
             await self._timeout_handler(row)
 
-    async def flush(self):
+    def flush(self):
         if not self._buffer:
             return None
         df = pd.DataFrame(self._buffer.values())

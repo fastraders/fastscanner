@@ -202,6 +202,7 @@ class ATRIndicator:
         if df.empty:
             return df
 
+        df_start = df.index[0]
         end_date = df.index[0].date() - timedelta(days=1)
         start_date = end_date - timedelta(days=self._lookback_days())
         prev_df = await ApplicationRegistry.candles.get(
@@ -221,7 +222,7 @@ class ATRIndicator:
             .ewm(alpha=1 / self._period)
             .mean()
         )
-        return df
+        return df.loc[df_start:]
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)

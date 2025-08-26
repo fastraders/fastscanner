@@ -348,9 +348,11 @@ async def test_channel_handler_missing_timestamp(setup):
         symbol, [], handler, "1min", candle_timeout=0.1
     )
 
-    await channel_handler.handle(f"candles_min_{symbol}", {})
-    await asyncio.sleep(0.2)
-    assert len(handler.received) == 0
+    try:
+        await channel_handler.handle(f"candles_min_{symbol}", {})
+        assert False, "Expected KeyError"
+    except KeyError:
+        ...
 
 
 @pytest.mark.asyncio
@@ -360,10 +362,13 @@ async def test_channel_handler_invalid_data(setup):
         symbol, [], handler, "1min", candle_timeout=0.1
     )
 
-    await channel_handler.handle(
-        f"candles_min_{symbol}", {"timestamp": "invalid", "open": "not_a_number"}
-    )
-    assert len(handler.received) == 0
+    try:
+        await channel_handler.handle(
+            f"candles_min_{symbol}", {"timestamp": "invalid", "open": "not_a_number"}
+        )
+        assert False, "Expected ValueError"
+    except ValueError:
+        ...
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import asyncio
-from datetime import datetime, timedelta, date
-from typing import Any, Protocol
 import logging
+from datetime import date, datetime, timedelta
+from typing import Any, Protocol
 
 import pandas as pd
 
@@ -12,10 +12,10 @@ from fastscanner.services.indicators.ports import CandleStore, Channel, ChannelH
 from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.scanners.lib import ScannersLibrary
 from fastscanner.services.scanners.ports import (
+    ScanAllResult,
     Scanner,
     ScannerParams,
     SymbolsProvider,
-    ScanAllResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class ScannerChannelHandler:
             )
             await self._handler.handle(self._symbol, new_row, passed)
             return
-        agg = await self._buffer.add(row)
+        agg = self._buffer.add(row)
         if agg is None:
             return
         await self._handle(agg)
