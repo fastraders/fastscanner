@@ -1,18 +1,14 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Awaitable, Callable, Protocol
 
 import websockets
 from pydantic import BaseModel
 
-from fastscanner.services.indicators.service import IndicatorParams
+from .indicators import IndicatorModel
 
 logger = logging.getLogger(__name__)
-
-
-class IndicatorModel(Protocol):
-    def to_params(self) -> "IndicatorParams": ...
 
 
 class SubscriptionRequest(BaseModel):
@@ -40,20 +36,20 @@ class CandleSubscriptionClient:
 
     def __init__(self, url: str):
         self.url = url
-        self.websocket = None
-        self.subscriptions: dict[str, Callable] = {}
+        self._websocket = None
+        self._subscriptions: dict[str, Callable[[CandleMessage], Awaitable[None]]] = {}
         self._running = False
 
     async def connect(self):
         """Connect to the websocket server."""
-        self.websocket = await websockets.connect(self.url)
+        self._websocket = await websockets.connect(self.url)
         self._running = True
 
     async def disconnect(self):
         """Disconnect from the websocket server."""
         self._running = False
-        if self.websocket:
-            await self.websocket.close()
+        if self._websocket:
+            await self._websocket.close()
 
     async def subscribe(
         self,
@@ -61,10 +57,10 @@ class CandleSubscriptionClient:
         symbol: str,
         freq: str,
         indicators: list[IndicatorModel],
-        callback: Callable[[CandleMessage], None],
+        callback: Callable[[CandleMessage], Awaitable[None]],
     ):
         """Subscribe to indicators for a symbol."""
-        if not self.websocket:
+        if not self._websocket:
             raise RuntimeError("Not connected. Call connect() first.")
 
         # Convert indicator models to params
@@ -80,27 +76,27 @@ class CandleSubscriptionClient:
             indicators=indicator_params,
         )
 
-        await self.websocket.send(request.model_dump_json())
-        self.subscriptions[subscription_id] = callback
+        await self._websocket.send(request.model_dump_json())
+        self._subscriptions[subscription_id] = callback
 
     async def unsubscribe(self, subscription_id: str):
         """Unsubscribe from a subscription."""
-        if not self.websocket:
+        if not self._websocket:
             raise RuntimeError("Not connected. Call connect() first.")
 
         request = UnsubscriptionRequest(subscription_id=subscription_id)
-        await self.websocket.send(request.model_dump_json())
+        await self._websocket.send(request.model_dump_json())
 
-        if subscription_id in self.subscriptions:
-            del self.subscriptions[subscription_id]
+        if subscription_id in self._subscriptions:
+            del self._subscriptions[subscription_id]
 
     async def listen(self):
         """Listen for incoming messages and dispatch to callbacks."""
-        if not self.websocket:
+        if not self._websocket:
             raise RuntimeError("Not connected. Call connect() first.")
 
         while self._running:
-            message = await self.websocket.recv()
+            message = await self._websocket.recv()
             data = json.loads(message)
 
             # Check if it's an indicator message
@@ -109,11 +105,11 @@ class CandleSubscriptionClient:
             indicator_msg = CandleMessage(**data)
             subscription_id = indicator_msg.subscription_id
 
-            if subscription_id not in self.subscriptions:
+            if subscription_id not in self._subscriptions:
                 continue
-            callback = self.subscriptions[subscription_id]
+            callback = self._subscriptions[subscription_id]
             try:
-                callback(indicator_msg)
+                await callback(indicator_msg)
             except Exception as e:
                 logger.exception(e)
 

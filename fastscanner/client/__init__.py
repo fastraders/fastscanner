@@ -1,13 +1,13 @@
 """FastScanner indicators websocket client library."""
 
+from .candle import CandleSubscriptionClient
 from .indicators import *
-from .websocket_client import CandleSubscriptionClient
 
 __all__ = [
     "CandleSubscriptionClient",
     # Indicator models
     "CumulativeDailyVolume",
-    "PremarketCumulative", 
+    "PremarketCumulative",
     "Cumulative",
     "ATR",
     "PositionInRange",

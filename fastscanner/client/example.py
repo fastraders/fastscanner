@@ -12,7 +12,7 @@ from fastscanner.client import (
 from fastscanner.pkg.logging import load_logging_config
 
 
-def handle_candle_data(message):
+async def handle_candle_data(message):
     """Handle incoming candle data with indicators."""
     print(f"Received data for {message.symbol} at {message.timestamp}")
     print(f"Candle: {message.candle}")
