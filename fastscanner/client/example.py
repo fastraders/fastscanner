@@ -32,21 +32,21 @@ async def main():
 
         # Define indicators
         indicators = [
-            ATR(period=14, freq="1min"),
+            ATR(period=14, freq="3min"),
             DailyGap(),
             CumulativeDailyVolume(),
             PositionInRange(n_days=5),
         ]
 
         # Subscribe to AAPL with indicators
-        await client.subscribe(
-            subscription_id="aapl_indicators",
-            symbol="AAPL",
-            freq="1min",
-            indicators=indicators,
-            callback=handle_candle_data,
-        )
-
+        for symbol in ["AAPL", "MSFT", "GOOGL", "AMZN", "ABNB"]:
+            await client.subscribe(
+                subscription_id=f"{symbol.lower()}_indicators",
+                symbol=symbol,
+                freq="3min",
+                indicators=indicators,
+                callback=handle_candle_data,
+            )
         print("Subscribed to AAPL indicators. Listening for data...")
 
         # Listen for messages

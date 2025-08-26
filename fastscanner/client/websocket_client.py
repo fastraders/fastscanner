@@ -98,31 +98,23 @@ class CandleSubscriptionClient:
         if not self.websocket:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        try:
-            while self._running:
-                message = await self.websocket.recv()
-                data = json.loads(message)
+        while self._running:
+            message = await self.websocket.recv()
+            data = json.loads(message)
 
-                # Check if it's an indicator message
-                if "candle" in data and "subscription_id" in data:
-                    indicator_msg = CandleMessage(**data)
-                    subscription_id = indicator_msg.subscription_id
+            # Check if it's an indicator message
+            if "candle" not in data or "subscription_id" not in data:
+                continue
+            indicator_msg = CandleMessage(**data)
+            subscription_id = indicator_msg.subscription_id
 
-                    if subscription_id in self.subscriptions:
-                        callback = self.subscriptions[subscription_id]
-                        try:
-                            callback(indicator_msg)
-                        except Exception as e:
-                            logger.error(
-                                f"Error in callback for {subscription_id}: {e}"
-                            )
-                else:
-                    logger.info(f"Received response: {data}")
-
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("WebSocket connection closed")
-        except Exception as e:
-            logger.error(f"Error in listen loop: {e}")
+            if subscription_id not in self.subscriptions:
+                continue
+            callback = self.subscriptions[subscription_id]
+            try:
+                callback(indicator_msg)
+            except Exception as e:
+                logger.exception(e)
 
     async def run(self):
         """Connect and start listening for messages."""

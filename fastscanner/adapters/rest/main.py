@@ -13,6 +13,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
+from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.service import ScannerService
@@ -57,6 +58,7 @@ class FastscannerApp(FastAPI):
         ApplicationRegistry.init(candles, fundamental, holidays)
 
 
+load_logging_config()
 app = FastscannerApp(docs_url="/api/docs", redoc_url="/api/redoc")
 
 api_router = APIRouter(prefix="/api")

@@ -31,6 +31,11 @@ class CandleBuffer:
     async def add(self, row: pd.Series):
         if not isinstance(row.name, pd.Timestamp):
             raise ValueError("Expected row.name to be a pd.Timestamp")
+        import logging
+
+        logging.getLogger(__name__).error(
+            f"Adding row to buffer ts: {row.name} data:{row.to_dict()}"
+        )
         async with self._lock:
             self._buffer[row.name] = row
             ts = row.name.floor(self._freq)

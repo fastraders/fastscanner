@@ -97,9 +97,10 @@ class PolygonRealtime:
                 if not isinstance(msg, EquityAgg):
                     logger.warning("Received unexpected message %s", str(msg))
                     continue
+                if msg.start_timestamp is None:
+                    continue
 
                 record = {
-                    "symbol": msg.symbol,
                     "timestamp": msg.start_timestamp,
                     "open": msg.open,
                     "high": msg.high,

@@ -122,29 +122,21 @@ class CandleChannelHandler:
         await self._handler.handle(self._symbol, row)
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        try:
-            if "timestamp" not in data:
-                logger.warning(f"Missing timestamp in message from {channel_id}")
-                return
-
-            ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
-                LOCAL_TIMEZONE_STR
-            )
-            new_row = pd.Series(data, name=ts)
-            if self._freq == "1min":
-                for ind in self._indicators:
-                    new_row = await ind.extend_realtime(self._symbol, new_row)
-                await self._handler.handle(self._symbol, new_row)
-                return
-            agg = await self._buffer.add(new_row)
-            if agg is None:
-                return
-            await self._handle(agg)
-
-        except Exception as e:
-            logger.exception(
-                f"[Handler Error] Failed processing message from {channel_id}: {e}"
-            )
+        data = data.copy()
+        timestamp = data.pop("timestamp")
+        ts = pd.to_datetime(timestamp, unit="ms", utc=True).tz_convert(
+            LOCAL_TIMEZONE_STR
+        )
+        new_row = pd.Series(data, name=ts)
+        if self._freq == "1min":
+            for ind in self._indicators:
+                new_row = await ind.extend_realtime(self._symbol, new_row)
+            await self._handler.handle(self._symbol, new_row)
+            return
+        agg = await self._buffer.add(new_row)
+        if agg is None:
+            return
+        await self._handle(agg)
 
     def id(self) -> str:
         return self._id

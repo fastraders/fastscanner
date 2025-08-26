@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from fastscanner.adapters.rest.indicators import (
     ActionType,
     StatusType,
-    get_indicators_service,
+    get_indicators_service_ws,
 )
 from fastscanner.adapters.rest.main import app
 from fastscanner.services.indicators.lib import Indicator, IndicatorsLibrary
@@ -40,14 +40,10 @@ class DummyIndicator(Indicator):
 
 class MockChannel:
     def __init__(self):
-        self.subscriptions = {}
         self.unsubscriptions = {}
         self.handlers: dict[str, list[ChannelHandler]] = {}
 
     async def subscribe(self, channel_id: str, handler):
-        if channel_id not in self.subscriptions:
-            self.subscriptions[channel_id] = []
-        self.subscriptions[channel_id].append(handler)
         self.handlers.setdefault(channel_id, []).append(handler)
         return handler.id()
 
@@ -117,7 +113,7 @@ def indicators_service():
 async def test_websocket_subscribe_single_symbol(indicators_service):
     """Test subscribing to a single symbol with indicators."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -144,6 +140,7 @@ async def test_websocket_subscribe_single_symbol(indicators_service):
         response = websocket.receive_text()
         response_data = json.loads(response)
 
+        print(response_data)
         assert response_data["status"] == StatusType.SUCCESS
         assert response_data["subscription_id"] == "test_sub_1"
         assert "Subscribed to AAPL" in response_data["message"]
@@ -168,7 +165,7 @@ async def test_websocket_subscribe_single_symbol(indicators_service):
 async def test_websocket_multiple_subscriptions(indicators_service):
     """Test subscribing to multiple symbols with different indicators."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -240,7 +237,7 @@ async def test_websocket_multiple_subscriptions(indicators_service):
 async def test_websocket_unsubscribe(indicators_service):
     """Test unsubscribing from a symbol."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -281,7 +278,7 @@ async def test_websocket_unsubscribe(indicators_service):
 async def test_websocket_unsubscribe_nonexistent(indicators_service):
     """Test unsubscribing from a non-existent subscription."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -304,7 +301,7 @@ async def test_websocket_unsubscribe_nonexistent(indicators_service):
 async def test_websocket_resubscribe_scenario(indicators_service):
     """Test full scenario: subscribe, unsubscribe, subscribe again."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -370,7 +367,7 @@ async def test_websocket_resubscribe_scenario(indicators_service):
 async def test_websocket_invalid_action(indicators_service):
     """Test handling of invalid action types."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -389,7 +386,7 @@ async def test_websocket_invalid_action(indicators_service):
 async def test_websocket_disconnect_cleanup(indicators_service):
     """Test that all subscriptions are cleaned up when websocket disconnects."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -432,7 +429,7 @@ async def test_websocket_disconnect_cleanup(indicators_service):
 async def test_websocket_complex_scenario(indicators_service):
     """Test complex scenario with multiple subscribes, unsubscribes, and data pushes."""
     service, channel = indicators_service
-    app.dependency_overrides[get_indicators_service] = lambda: service
+    app.dependency_overrides[get_indicators_service_ws] = lambda: service
 
     client = TestClient(app)
 

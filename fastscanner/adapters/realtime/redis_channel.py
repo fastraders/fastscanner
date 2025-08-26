@@ -77,23 +77,21 @@ class RedisChannel:
 
     async def _xread_loop(self) -> None:
         while not self._is_stopped:
-            try:
-                if not self._handlers:
-                    await asyncio.sleep(1)
-                    continue
-
-                entries = await self.redis.xread(self._last_ids)  # type: ignore
-
-                for stream, stream_entries in entries:
-                    for entry_id, data in stream_entries:
-                        self._last_ids[stream] = entry_id
-                        data = json.loads(data["data"])
-                        for handler in self._handlers.get(stream, []):
-                            await handler.handle(stream, data)
-            except Exception as e:
-                logger.exception(e)
-            finally:
+            if not self._handlers:
                 await asyncio.sleep(1)
+                continue
+
+            entries = await self.redis.xread(self._last_ids)  # type: ignore
+
+            for stream, stream_entries in entries:
+                for entry_id, data in stream_entries:
+                    self._last_ids[stream] = entry_id
+                    data = json.loads(data["data"])
+                    for handler in self._handlers.get(stream, []):
+                        try:
+                            await handler.handle(stream, data)
+                        except Exception as e:
+                            logger.exception(e)
 
     async def unsubscribe(self, channel_id: str, handler_id: str) -> None:
         handlers = self._handlers.get(channel_id, [])
