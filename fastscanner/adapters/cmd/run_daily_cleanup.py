@@ -10,11 +10,9 @@ from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 
-load_logging_config()
-logger = logging.getLogger(__name__)
-
 
 async def daily_cleanup_job() -> None:
+    logger = logging.getLogger(__name__)
 
     redis_channel = RedisChannel(
         host=config.REDIS_DB_HOST,
@@ -32,7 +30,7 @@ async def daily_cleanup_job() -> None:
 
 
 def main() -> None:
-
+    load_logging_config()
     asyncio.run(daily_cleanup_job())
 
 

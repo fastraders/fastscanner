@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 import math
@@ -57,7 +58,8 @@ def _run_batch(batch: list[str]) -> None:
     asyncio.run(_collect_batch(batch))
 
 
-async def collect_daily_data() -> None:
+async def collect_daily_data(only_active: bool = False) -> None:
+    logger.error("Starting daily data collection")
     ClockRegistry.set(FixedClock(LocalClock().now()))
     provider = PolygonCandlesProvider(
         base_url=config.POLYGON_BASE_URL,
@@ -68,8 +70,11 @@ async def collect_daily_data() -> None:
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
     await partitioned_provider.collect_splits()
-    all_symbols = await provider.all_symbols()
-    all_symbols = all_symbols[:100]
+    if only_active:
+        all_symbols = await provider.active_symbols()
+    else:
+        all_symbols = await provider.all_symbols()
+    # all_symbols = all_symbols[:100]
     # all_symbols = ["NDRA"]
 
     n_workers = multiprocessing.cpu_count()
@@ -85,7 +90,16 @@ async def collect_daily_data() -> None:
 
 
 def main() -> None:
-    asyncio.run(collect_daily_data())
+    parser = argparse.ArgumentParser(description="Run daily data collection")
+    parser.add_argument(
+        "--only-active",
+        action="store_true",
+        help="Collect data only for active symbols instead of all symbols",
+        default=False,
+    )
+    args = parser.parse_args()
+
+    asyncio.run(collect_daily_data(only_active=args.only_active))
 
 
 if __name__ == "__main__":

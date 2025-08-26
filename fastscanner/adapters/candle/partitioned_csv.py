@@ -150,9 +150,12 @@ class PartitionedCSVCandlesProvider:
             self.CACHE_DIR, "last_checked_splits.txt"
         )
 
-        with open(last_checked_splits_path, "r") as f:
-            last_checked_str = f.read().strip()
-            splits_last_checked = date.fromisoformat(last_checked_str)
+        if os.path.exists(last_checked_splits_path):
+            with open(last_checked_splits_path, "r") as f:
+                last_checked_str = f.read().strip()
+                splits_last_checked = date.fromisoformat(last_checked_str)
+        else:
+            splits_last_checked = today - timedelta(days=1)
 
         if splits_last_checked >= today:
             return
@@ -168,10 +171,24 @@ class PartitionedCSVCandlesProvider:
             path = os.path.join(self.CACHE_DIR, symbol)
             shutil.rmtree(path, ignore_errors=True)
 
+        symbol_to_year: dict[str, int] = {}
+        for symbol in splits:
+            keys = self._partition_keys_in_range(date(2010, 1, 1), today, "d")
+            for key in keys:
+                partition_path = self._partition_path(symbol, key, "1d")
+                if os.path.exists(partition_path):
+                    df = await self._cache(symbol, key, "d", "1d")
+                    if not df.empty:
+                        break
+            else:
+                continue
+            symbol_to_year[symbol] = int(df.index.year.min())  # type: ignore
+
+        splits = {key: value for key, value in splits.items() if key in symbol_to_year}
         tasks = [
             asyncio.create_task(self.cache_all_freqs(symbol, year))
             for symbol in splits
-            for year in range(2010, today.year + 1)
+            for year in range(symbol_to_year[symbol], today.year + 1)
         ]
 
         await asyncio.gather(*tasks)

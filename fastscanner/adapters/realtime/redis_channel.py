@@ -111,15 +111,29 @@ class RedisChannel:
                 self._xread_task = None
 
     async def reset(self) -> None:
+        cursor = 0
+        keys_to_delete = []
+
         try:
+            while True:
+                cursor, keys = await self.redis.scan(
+                    cursor=cursor, match="candles_min_*", _type="stream"
+                )
+                keys_to_delete.extend(keys)
 
-            await self.redis.flushdb(asynchronous=True)
-            logger.info("Successfully cleared all Redis data in database 0")
+                if cursor == 0:
+                    break
 
-        except RedisError as e:
-            logger.error(f"Redis error during cleanup: {e}", exc_info=True)
-            raise
+            if len(keys_to_delete) > 0:
+                await self.redis.delete(*keys_to_delete)
+                logger.info(
+                    f"Successfully cleared {len(keys_to_delete)} candles_min_ streams"
+                )
+            else:
+                logger.warning("No candle streams found to clear")
+
         finally:
-            if self.redis:
-                await self.redis.aclose()
-                logger.info("Redis connection closed")
+            if self.redis is None:
+                return
+            await self.redis.aclose()
+            logger.info("Redis connection closed")
