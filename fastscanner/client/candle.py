@@ -6,8 +6,6 @@ from typing import Any, Awaitable, Callable, Protocol
 import websockets
 from pydantic import BaseModel
 
-from .indicators import IndicatorModel
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,24 +54,18 @@ class CandleSubscriptionClient:
         subscription_id: str,
         symbol: str,
         freq: str,
-        indicators: list[IndicatorModel],
+        indicators: list[dict],
         callback: Callable[[CandleMessage], Awaitable[None]],
     ):
         """Subscribe to indicators for a symbol."""
         if not self._websocket:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        # Convert indicator models to params
-        indicator_params = []
-        for indicator in indicators:
-            params = indicator.to_params()
-            indicator_params.append({"type": params.type_, "params": params.params})
-
         request = SubscriptionRequest(
             subscription_id=subscription_id,
             symbol=symbol,
             freq=freq,
-            indicators=indicator_params,
+            indicators=indicators,
         )
 
         await self._websocket.send(request.model_dump_json())

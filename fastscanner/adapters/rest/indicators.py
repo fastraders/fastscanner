@@ -8,6 +8,7 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import pandas as pd
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
 from fastscanner.pkg import config
@@ -82,8 +83,16 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
         self._subscription_id = subscription_id
 
     async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        candle = new_row.to_dict()
+        if (
+            self._websocket.client_state != WebSocketState.CONNECTED
+            or self._websocket.application_state != WebSocketState.CONNECTED
+        ):
+            logger.warning(
+                f"Trying to send message for {symbol} on disconnected websocket"
+            )
+            return new_row
 
+        candle = new_row.to_dict()
         message = IndicatorMessage(
             subscription_id=self._subscription_id,
             symbol=symbol,
