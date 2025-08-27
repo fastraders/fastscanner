@@ -41,6 +41,7 @@ class NATSChannel:
     async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True):
         if flush:
             await self._ensure_connection()
+            logger.info(f"Pushing message to channel {channel_id}: {data}")
             await self.nc.publish(channel_id, json.dumps(data).encode())
         else:
             self._pending_messages.append((channel_id, data))
@@ -52,6 +53,7 @@ class NATSChannel:
         await self._ensure_connection()
 
         for channel_id, data in self._pending_messages:
+            logger.info(f"Flushing message to channel {channel_id}: {data}")
             await self.nc.publish(channel_id, json.dumps(data).encode())
 
         self._pending_messages.clear()
@@ -60,6 +62,7 @@ class NATSChannel:
         async def handler(msg: Msg) -> None:
             try:
                 data = json.loads(msg.data.decode())
+                logger.info(f"Received message on channel {channel_id}: {data}")
                 handlers = self._handlers.get(channel_id, [])
                 for h in handlers:
                     await h.handle(channel_id, data)

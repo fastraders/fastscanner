@@ -9,9 +9,10 @@ import uvloop
 from fastscanner.adapters.realtime.nats_channel import NATSChannel
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.pkg import config
+from fastscanner.pkg.logging import load_logging_config
 
+load_logging_config()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 async def main():
@@ -40,7 +41,8 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe(["*"])
+        # await realtime.subscribe(["*"])
+        await realtime.subscribe(["AAPL", "GOOG", "MSFT", "TSLA", "AMZN"])
 
         while True:
             await asyncio.sleep(5)
