@@ -1369,6 +1369,22 @@ files = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.11.0"
+description = "NATS client for Python"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "nats_py-2.11.0.tar.gz", hash = "sha256:fb1097db8b520bb4c8f5ad51340ca54d9fa54dbfc4ecc81c3625ef80994b6100"},
+]
+
+[package.extras]
+aiohttp = ["aiohttp"]
+fast-parse = ["fast-mail-parser"]
+nkeys = ["nkeys"]
+
+[[package]]
 name = "numpy"
 version = "2.2.4"
 description = "Fundamental package for array computing in Python"
@@ -3108,4 +3124,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "6a9f3c96171f2c1a818eedbf57f6ad58d123c0c4d5c17fe60b6be3f28ef7fc0e"
+content-hash = "e2932dfdb2924d8229fee31bc556498a4941f182d11110be8c2cf2f2289f1ff3"
