@@ -34,7 +34,9 @@ class NATSChannel:
 
     async def _ensure_connection(self):
         if self._nc is None or self._nc.is_closed:
+            logger.info(f"Connecting to NAS Server at {self._servers[0]}")
             self._nc = await nats.connect(servers=self._servers)
+            logger.info("Connection to NAS Succesfull")
 
     async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True):
         if flush:
@@ -97,14 +99,3 @@ class NATSChannel:
 
     async def reset(self):
         self._is_stopped = True
-
-        for subscription in self._subscriptions.values():
-            await subscription.unsubscribe()
-        self._subscriptions.clear()
-
-        if self._nc and not self._nc.is_closed:
-            await self._nc.close()
-            logger.info("NATS connection closed")
-
-        self._handlers.clear()
-        self._pending_messages.clear()

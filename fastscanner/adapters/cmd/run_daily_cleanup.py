@@ -6,6 +6,7 @@ import redis.asyncio as aioredis
 from redis import RedisError
 
 from fastscanner.adapters.cmd.run_daily_collection import collect_daily_data
+from fastscanner.adapters.realtime.nats_channel import NATSChannel
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
@@ -14,13 +15,7 @@ from fastscanner.pkg.logging import load_logging_config
 async def daily_cleanup_job() -> None:
     logger = logging.getLogger(__name__)
 
-    redis_channel = RedisChannel(
-        host=config.REDIS_DB_HOST,
-        port=config.REDIS_DB_PORT,
-        unix_socket_path=config.UNIX_SOCKET_PATH,
-        password=None,
-        db=0,
-    )
+    redis_channel = NATSChannel(servers=[config.NATS_SERVER])
     logger.info("Starting daily cleanup job")
     start_time = time.time()
     await redis_channel.reset()
