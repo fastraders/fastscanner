@@ -60,7 +60,6 @@ class NATSChannel:
         async def handler(msg: Msg) -> None:
             try:
                 data = json.loads(msg.data.decode())
-                logger.info(f"Received message on channel {channel_id}: {data}")
                 handlers = self._handlers.get(channel_id, [])
                 for h in handlers:
                     await h.handle(channel_id, data)
