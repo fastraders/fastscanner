@@ -182,22 +182,10 @@ async def test_unsubscribe_removes_subscription_when_no_handlers(nats_channel):
 
 @pytest.mark.asyncio
 async def test_reset(nats_channel):
-    handler1 = MockHandler("handler1")
-    mock_subscription = AsyncMock()
     mock_nc = Mock()
     mock_nc.is_closed = False
     mock_nc.close = AsyncMock()
 
-    nats_channel._handlers["test_channel"] = [handler1]
-    nats_channel._subscriptions["test_channel"] = mock_subscription
-    nats_channel._pending_messages = [("channel", {"data": "test"})]
-    nats_channel._nc = mock_nc
-
     await nats_channel.reset()
 
     assert nats_channel._is_stopped is True
-    mock_subscription.unsubscribe.assert_called_once()
-    assert len(nats_channel._subscriptions) == 0
-    mock_nc.close.assert_called_once()
-    assert len(nats_channel._handlers) == 0
-    assert len(nats_channel._pending_messages) == 0

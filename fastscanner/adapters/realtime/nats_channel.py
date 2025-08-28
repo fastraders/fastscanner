@@ -72,15 +72,14 @@ class NATSChannel:
         return handler
 
     async def subscribe(self, channel_id: str, handler: ChannelHandler):
-        if channel_id not in self._handlers:
-            self._handlers[channel_id] = []
+        handlers = self._handlers.setdefault(channel_id, [])
+        handler_ids = {h.id() for h in handlers}
 
-        if handler not in self._handlers[channel_id]:
-            self._handlers[channel_id].append(handler)
+        if handler.id() not in handler_ids:
+            handlers.append(handler)
 
         if channel_id not in self._subscriptions:
             await self._ensure_connection()
-
             subscription = await self.nc.subscribe(
                 channel_id, cb=self._message_handler(channel_id)
             )

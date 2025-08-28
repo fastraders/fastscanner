@@ -175,7 +175,7 @@ async def _handle_subscribe(
     subscriptions[request.subscription_id] = (request.symbol, subscription_id)
 
     logger.info(
-        f"Added subscription {request.subscription_id} for symbol {request.symbol}"
+        f"Added subscription {request.subscription_id} for symbol {request.symbol} on worker {os.getpid()}",
     )
 
     return SubscriptionResponse(
