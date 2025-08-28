@@ -110,7 +110,6 @@ class PolygonRealtime:
                 }
                 parsed_msgs.append(record)
                 channel_id = f"candles_min_{msg.symbol}"
-                logger.info(f"Sending candle for {msg.symbol}: {record}")
                 await self._channel.push(channel_id, record, flush=False)
 
             await self._channel.flush()

@@ -93,7 +93,6 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
             return new_row
 
         candle = new_row.to_dict()
-        logger.info(f"Sending candle for {symbol}: {candle}")
         message = IndicatorMessage(
             subscription_id=self._subscription_id,
             symbol=symbol,

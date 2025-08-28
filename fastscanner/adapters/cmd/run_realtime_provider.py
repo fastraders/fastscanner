@@ -41,8 +41,8 @@ async def main():
         )
 
         await realtime.start()
-        # await realtime.subscribe(["*"])
-        await realtime.subscribe(["AAPL", "GOOG", "MSFT", "TSLA", "AMZN"])
+        await realtime.subscribe(["*"])
+        # await realtime.subscribe(["AAPL", "GOOG", "MSFT", "TSLA", "AMZN"])
 
         while True:
             await asyncio.sleep(5)
