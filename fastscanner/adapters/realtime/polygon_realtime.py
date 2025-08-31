@@ -33,6 +33,7 @@ class PolygonRealtime:
             api_key=self._api_key,
             feed=Feed.RealTime,
             market=Market.Stocks,
+            max_reconnects=None,  # Unlimited reconnects.
         )
         self._running = True
         logger.info("Connecting WebSocket")
