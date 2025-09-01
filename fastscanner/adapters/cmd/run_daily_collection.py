@@ -32,7 +32,6 @@ async def _collect_batch(symbols: list[str]) -> None:
         for symbol in symbols
     ]
     completed_tasks = 0
-    start = time.time()
     failed_symbols: list[str] = []
     while len(tasks) > 0:
         done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -41,12 +40,6 @@ async def _collect_batch(symbols: list[str]) -> None:
                 logger.exception(ex)
                 logger.error(f"Error collecting data for {task.get_name()}: {ex}")
                 failed_symbols.append(task.get_name())
-        total_time = time.time() - start
-        # Logs progress every 200 completed tasks
-        if completed_tasks // 200 < (completed_tasks + len(done)) // 200:
-            logger.info(
-                f"Estimated remaining time: {total_time * len(tasks) / completed_tasks:.2f} seconds"
-            )
         completed_tasks += len(done)
     logger.info(
         f"Finished collecting data for {len(symbols) - len(failed_symbols)} symbols"
