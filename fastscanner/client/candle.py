@@ -104,9 +104,8 @@ class CandleSubscriptionClient:
                 await handler(indicator_msg)
             except Exception as e:
                 logger.error(
-                    f"Error in handler for sub {subscription_id}, symbol {indicator_msg.symbol}, candle {indicator_msg.candle}"
+                    f"Error in handler for sub {subscription_id}, symbol {indicator_msg.symbol}, candle {indicator_msg.candle}: {e}"
                 )
-                logger.exception(e)
 
     async def subscribe(
         self,
