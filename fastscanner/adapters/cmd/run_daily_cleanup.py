@@ -15,7 +15,7 @@ from fastscanner.pkg.logging import load_logging_config
 async def daily_cleanup_job() -> None:
     logger = logging.getLogger(__name__)
 
-    redis_channel = NATSChannel(servers=[config.NATS_SERVER])
+    redis_channel = NATSChannel(servers=config.NATS_SERVER)
     logger.info("Starting daily cleanup job")
     start_time = time.time()
     await redis_channel.reset()

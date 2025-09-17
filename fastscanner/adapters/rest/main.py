@@ -50,9 +50,7 @@ class FastscannerApp(FastAPI):
         #     password=None,
         #     db=0,
         # )
-        channel = NATSChannel(
-            servers=[config.NATS_SERVER],
-        )
+        channel = NATSChannel(servers=config.NATS_SERVER)
         self.state.indicators = IndicatorsService(
             candles=candles, fundamentals=fundamental, channel=channel
         )

@@ -25,7 +25,7 @@ async def main():
         #     password=None,
         #     db=0,
         # )
-        channel = NATSChannel(servers=[config.NATS_SERVER])
+        channel = NATSChannel(servers=config.NATS_SERVER)
 
         realtime = PolygonRealtime(
             api_key=config.POLYGON_API_KEY,

@@ -34,7 +34,7 @@ class NATSChannel:
 
     async def _ensure_connection(self):
         if self._nc is None or self._nc.is_closed:
-            logger.info(f"Connecting to NAS Server at {self._servers[0]}")
+            logger.info(f"Connecting to NAS Server at {self._servers}")
             self._nc = await nats.connect(servers=self._servers)
             logger.info("Connection to NAS Succesfull")
 
