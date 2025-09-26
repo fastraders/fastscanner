@@ -1,5 +1,5 @@
 """FastScanner indicators websocket client library."""
 
-from .candle import CandleSubscriptionClient
+from .candle import CandleClient
 
-__all__ = ["CandleSubscriptionClient"]
+__all__ = ["CandleClient"]

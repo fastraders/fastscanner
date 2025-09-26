@@ -1,12 +1,17 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Awaitable, Callable, Protocol
 from uuid import uuid4
 
+import pandas as pd
 import websockets
 from pydantic import BaseModel
+
+from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
+from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
+from fastscanner.pkg import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +36,7 @@ class CandleMessage(BaseModel):
     candle: dict[str, Any]
 
 
-class CandleSubscriptionClient:
+class CandleClient:
     """WebSocket client for consuming candle data with indicators in real-time."""
 
     def __init__(self, url: str, max_connections: int = 10):
@@ -147,3 +152,17 @@ class CandleSubscriptionClient:
                 await ws.close()
             except Exception as e:
                 logger.error(f"Error closing WebSocket: {e}")
+
+    async def get(
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        freq: str,
+    ) -> pd.DataFrame:
+        polygon = PolygonCandlesProvider(
+            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
+        )
+        provider = PartitionedCSVCandlesProvider(polygon)
+        df = await provider.get(symbol, start, end, freq)
+        return df
