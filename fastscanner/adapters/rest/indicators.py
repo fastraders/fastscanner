@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import date, datetime
 from enum import Enum
+from io import StringIO
 from typing import Annotated, Any, Dict, Union
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
@@ -113,37 +114,22 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
 
 @router.post("/calculate", status_code=status.HTTP_200_OK)
 async def calculate(
-    indicators_calculate: list[IndicatorsCalculate],
+    ic: IndicatorsCalculate,
     service: Annotated[IndicatorsService, Depends(get_indicators_service)],
     request: Request,
-) -> list[str]:
-    paths: list[str] = []
-    for ic in indicators_calculate:
-        body = await request.body()
-        body_hash = uuid5(NAMESPACE_DNS, body.decode("utf-8")).hex
-        calculation_id = f"{ic.symbol}_{ic.start}_{ic.end}_{ic.freq}_{body_hash[:6]}"
+) -> str:
+    df = await service.calculate_from_params(
+        ic.symbol,
+        ic.start,
+        ic.end,
+        ic.freq,
+        [Params(i.type, i.params) for i in ic.indicators],
+    )
+    buffer = StringIO()
 
-        path = os.path.join(
-            config.INDICATORS_CALCULATE_RESULTS_DIR,
-            ic.symbol,
-            f"{calculation_id}.csv",
-        )
-        if os.path.exists(path):
-            paths.append(path)
-            continue
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        df = await service.calculate_from_params(
-            ic.symbol,
-            ic.start,
-            ic.end,
-            ic.freq,
-            [Params(i.type, i.params) for i in ic.indicators],
-        )
-
-        df.tz_convert("utc").tz_convert(None).reset_index().to_csv(path, index=False)
-    return paths
+    df.tz_convert("utc").tz_convert(None).reset_index().to_csv(buffer, index=False)
+    buffer.seek(0)
+    return buffer.read()
 
 
 async def _handle_subscribe(

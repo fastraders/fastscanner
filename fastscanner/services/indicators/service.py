@@ -55,6 +55,10 @@ class IndicatorsService:
         freq: str,
         indicators: list[Indicator],
     ) -> pd.DataFrame:
+        df = await self.candles.get(symbol, start, end, freq)
+        if df.empty:
+            return df
+
         for indicator in indicators:
             df = await indicator.extend(symbol, df)
         return df.loc[df.index.date >= start]  # type: ignore

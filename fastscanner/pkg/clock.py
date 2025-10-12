@@ -36,6 +36,10 @@ class ClockRegistry:
     def unset(cls) -> None:
         delattr(cls, "clock")
 
+    @classmethod
+    def is_set(cls) -> bool:
+        return hasattr(cls, "clock")
+
 
 class LocalClock:
     def now(self) -> datetime:

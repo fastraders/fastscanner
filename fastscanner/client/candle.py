@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 from datetime import date, datetime
+from io import StringIO
 from typing import Any, Awaitable, Callable, Protocol
 from uuid import uuid4
 
+import httpx
 import pandas as pd
 import websockets
 from pydantic import BaseModel
@@ -12,6 +14,8 @@ from pydantic import BaseModel
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, LocalClock
+from fastscanner.services.indicators.ports import CandleCol
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +43,9 @@ class CandleMessage(BaseModel):
 class CandleClient:
     """WebSocket client for consuming candle data with indicators in real-time."""
 
-    def __init__(self, url: str, max_connections: int = 10):
-        self.url = url
+    def __init__(self, host: str, port: int, max_connections: int = 10):
+        self._host = host
+        self._port = port
         self._socket_ids: list[str] = []
         self._websockets: dict[str, websockets.ClientConnection] = {}
         self._socket_to_handlers: dict[str, list[str]] = {}
@@ -55,7 +60,8 @@ class CandleClient:
     async def _websocket(self, handler_id: str) -> websockets.ClientConnection:
         if handler_id not in self._handler_to_socket:
             if len(self._socket_ids) < self._max_connections:
-                ws = await websockets.connect(self.url)
+                url = f"ws://{self._host}:{self._port}/api/indicators"
+                ws = await websockets.connect(url)
                 socket_id = str(uuid4())
                 self._websockets[socket_id] = ws
                 self._socket_ids.append(socket_id)
@@ -80,7 +86,8 @@ class CandleClient:
             except websockets.ConnectionClosedError:
                 logger.warning(f"WebSocket {socket_id} closed. Reconnecting...")
                 try:
-                    ws = await websockets.connect(self.url)
+                    url = f"ws://{self._host}:{self._port}/api/indicators"
+                    ws = await websockets.connect(url)
                     self._websockets[socket_id] = ws
                     for handler_id in self._socket_to_handlers.get(socket_id, []):
                         request = self._subscription_requests.get(handler_id)
@@ -159,10 +166,26 @@ class CandleClient:
         start: date,
         end: date,
         freq: str,
+        indicators: list[dict[str, Any]],
     ) -> pd.DataFrame:
-        polygon = PolygonCandlesProvider(
-            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
-        )
-        provider = PartitionedCSVCandlesProvider(polygon)
-        df = await provider.get(symbol, start, end, freq)
+        async with httpx.AsyncClient() as client:
+            params = {
+                "symbol": symbol,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "freq": freq,
+                "indicators": indicators,
+            }
+            url = f"http://{self._host}:{self._port}/api/indicators/calculate"
+            response = await client.post(url, json=params)
+            response.raise_for_status()
+            df = (
+                pd.read_csv(
+                    StringIO(response.json()),
+                    index_col=CandleCol.DATETIME,
+                    parse_dates=[CandleCol.DATETIME],
+                )
+                .tz_localize("utc")
+                .tz_convert(LOCAL_TIMEZONE_STR)
+            )
         return df
