@@ -11,10 +11,7 @@ import pandas as pd
 import websockets
 from pydantic import BaseModel
 
-from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
-from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
-from fastscanner.pkg import config
-from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, LocalClock
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.ports import CandleCol
 
 logger = logging.getLogger(__name__)
