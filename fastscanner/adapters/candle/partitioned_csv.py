@@ -74,13 +74,14 @@ class PartitionedCSVCandlesProvider:
 
         return df.loc[start_dt:end_dt]
 
-    _cache_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
+    _cache_freqs = ["5s", "1min", "1d"]
 
     async def cache_all_freqs(self, symbol: str, year: int) -> None:
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
         start = date(year, 1, 1)
         end = min(date(year, 12, 31), yday)
+        second_range = self._covering_range(start, end, "s")
         minute_range = self._covering_range(start, end, "min")
         hourly_range = self._covering_range(start, end, "h")
         daily_range = self._covering_range(start, end, "d")
@@ -90,19 +91,26 @@ class PartitionedCSVCandlesProvider:
             # )
             return
 
+        second_start = second_range[0]
+        second_end = min(second_range[1], yday)
         minute_start = min(minute_range[0], hourly_range[0])
         minute_end = min(max(minute_range[1], hourly_range[1]), yday)
         day_start = daily_range[0]
         day_end = min(daily_range[1], yday)
 
+        seconds_df = await self._store.get(symbol, second_start, second_end, "1s")
         minute_df = await self._store.get(symbol, minute_start, minute_end, "1min")
         daily_df = await self._store.get(symbol, day_start, day_end, "1d")
 
         for freq in self._cache_freqs:
-            if freq == "1min":
+            if freq == "1s":
+                df = seconds_df
+            elif freq == "1min":
                 df = minute_df
             elif freq == "1d":
                 df = daily_df
+            elif freq.endswith("s"):
+                df = seconds_df.resample(freq).agg(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
             elif freq.endswith("min") or freq.endswith("h"):
                 df = minute_df.resample(freq).agg(CandleCol.RESAMPLE_MAP).dropna()  # type: ignore
             elif freq.endswith("d"):
@@ -270,7 +278,7 @@ class PartitionedCSVCandlesProvider:
             df = df.tz_convert("utc").tz_convert(None).reset_index()
         else:
             df = df.reset_index()
-            df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")
+            df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")  # type: ignore
 
         df.to_csv(partition_path, index=False)
 
@@ -281,7 +289,7 @@ class PartitionedCSVCandlesProvider:
         return self._partition_keys(pd.DatetimeIndex([dt]), unit).iat[0]
 
     def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> "pd.Series[str]":
-        if unit.lower() in ("min", "t"):
+        if unit.lower() in ("s", "min", "t"):
             dt = pd.to_timedelta(index.dayofweek, unit="d")
             return pd.Series(
                 (index - dt).strftime("%Y-%m-%d"), index=index, name="partition_key"
@@ -305,7 +313,7 @@ class PartitionedCSVCandlesProvider:
         )
 
     def _range_from_key(self, key: str, unit: str) -> tuple[date, date]:
-        if unit.lower() in ("min", "t"):
+        if unit.lower() in ("s", "min", "t"):
             return date.fromisoformat(key), date.fromisoformat(key) + timedelta(days=6)
         if unit.lower() in ("h",):
             year, month = key.split("-")

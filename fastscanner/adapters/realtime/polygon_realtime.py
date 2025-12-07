@@ -4,7 +4,13 @@ import traceback
 
 import uvloop
 from polygon import WebSocketClient
-from polygon.websocket.models import EquityAgg, Feed, Market, WebSocketMessage
+from polygon.websocket.models import (
+    EquityAgg,
+    EventType,
+    Feed,
+    Market,
+    WebSocketMessage,
+)
 from websockets import ConnectionClosedError
 
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
@@ -20,7 +26,8 @@ class PolygonRealtime:
         self._api_key = api_key
         self._client: WebSocketClient | None = None
         self._running = False
-        self._symbols: set[str] = set()
+        self._symbols_min: set[str] = set()
+        self._symbols_s: set[str] = set()
         self._channel = channel
         self._ws_task: asyncio.Task | None = None
 
@@ -44,7 +51,7 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        await self.unsubscribe(self._symbols)
+        await self.unsubscribe_min(self._symbols_min)
         try:
             if self._client:
                 await self._client.close()
@@ -56,7 +63,7 @@ class PolygonRealtime:
             self._running = False
             logger.info("WebSocket stopped.")
 
-    async def subscribe(self, symbols: list[str]):
+    async def subscribe_min(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running")
             return
@@ -69,9 +76,23 @@ class PolygonRealtime:
 
         tickers = [f"AM.{symbol}" for symbol in symbols]
         self._client.subscribe(*tickers)
-        self._symbols.update(symbols)
+        self._symbols_min.update(symbols)
 
-    async def unsubscribe(self, symbols: set[str]):
+    async def subscribe_s(self, symbols: set[str]):
+        if not self._running:
+            raise RuntimeError("WebSocket is not running")
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during subscribe.")
+
+        if not symbols:
+            logger.warning("No symbols to subscribe.")
+            return
+
+        tickers = [f"A.{symbol}" for symbol in symbols]
+        self._client.subscribe(*tickers)
+        self._symbols_s.update(symbols)
+
+    async def unsubscribe_min(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
@@ -86,8 +107,26 @@ class PolygonRealtime:
         tickers = [f"AM.{symbol}" for symbol in symbols]
         try:
             self._client.unsubscribe(*tickers)
-            self._symbols.difference_update(symbols)
-            logger.info(f"Unsubscribed from: {tickers}")
+            self._symbols_min.difference_update(symbols)
+        except ConnectionClosedError as e:
+            logger.warning(f"WebSocket connection was already closed: {e}")
+
+    async def unsubscribe_s(self, symbols: set[str]):
+        if not self._running:
+            logger.warning("WebSocket is not running.")
+            return
+
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during unsubscribe.")
+
+        if not symbols:
+            logger.warning("No symbols to unsubscribe.")
+            return
+
+        tickers = [f"A.{symbol}" for symbol in symbols]
+        try:
+            self._client.unsubscribe(*tickers)
+            self._symbols_s.difference_update(symbols)
         except ConnectionClosedError as e:
             logger.warning(f"WebSocket connection was already closed: {e}")
 
@@ -101,6 +140,14 @@ class PolygonRealtime:
                 if msg.start_timestamp is None:
                     continue
 
+                event_type_to_channel = {
+                    EventType.EquityAgg: "candles_s_",
+                    EventType.EquityAggMin: "candles_min_",
+                }
+                if msg.event_type not in event_type_to_channel:
+                    logger.warning(f"Unknown event type: {msg.event_type}")
+                    continue
+
                 record = {
                     "timestamp": msg.start_timestamp,
                     "open": msg.open,
@@ -110,7 +157,7 @@ class PolygonRealtime:
                     "volume": msg.volume,
                 }
                 parsed_msgs.append(record)
-                channel_id = f"candles_min_{msg.symbol}"
+                channel_id = f"{event_type_to_channel[msg.event_type]}{msg.symbol}"
                 await self._channel.push(channel_id, record, flush=False)
 
             await self._channel.flush()
@@ -133,9 +180,9 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe(["AAPL", "MSFT", "GOOGL"])
+        await realtime.subscribe_min({"AAPL", "MSFT", "GOOGL"})
         await asyncio.sleep(300)
-        await realtime.unsubscribe({"MSFT", "GOOGL"})
+        await realtime.unsubscribe_min({"MSFT", "GOOGL"})
         await realtime.stop()
 
     except Exception as e:

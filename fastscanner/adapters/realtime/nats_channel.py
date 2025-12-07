@@ -22,7 +22,6 @@ class NATSChannel:
         self._handlers: dict[str, list[ChannelHandler]] = {}
         self._subscriptions: dict[str, Subscription] = {}
         self._pending_messages: list[tuple[str, dict[Any, Any]]] = []
-        self._is_stopped = False
 
     @property
     def nc(self) -> NATS:
@@ -96,5 +95,4 @@ class NATSChannel:
         else:
             self._handlers[channel_id] = handlers
 
-    async def reset(self):
-        self._is_stopped = True
+    async def reset(self): ...

@@ -52,7 +52,11 @@ class FastscannerApp(FastAPI):
         # )
         channel = NATSChannel(servers=config.NATS_SERVER)
         self.state.indicators = IndicatorsService(
-            candles=candles, fundamentals=fundamental, channel=channel
+            candles=candles,
+            fundamentals=fundamental,
+            channel=channel,
+            symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
+            symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
         )
         self.state.scanner = ScannerService(
             candles=candles, channel=channel, symbols_provider=polygon

@@ -138,7 +138,7 @@ async def main():
         await asyncio.sleep(3)
         symbols = await get_symbols_from_file()  # convert set[str] to list[str]
 
-        await realtime.subscribe(symbols)
+        await realtime.subscribe_min(set(symbols))
 
         logger.info("Benchmark running...\n")
 

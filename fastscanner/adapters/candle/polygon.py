@@ -44,12 +44,14 @@ class PolygonCandlesProvider:
     ) -> pd.DataFrame:
         mult, unit = split_freq(freq)
         unit_mappers = {
+            "s": "second",
             "min": "minute",
             "h": "hour",
             "t": "minute",
             "d": "day",
         }
         max_days_per_unit = {
+            "s": 1,
             "min": 60,
             "t": 60,
             "h": 60,

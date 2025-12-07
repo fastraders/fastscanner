@@ -28,13 +28,26 @@ class CandleBuffer:
     def _expected_ts(self, ts: pd.Timestamp) -> pd.Timestamp:
         return ts.floor(self._freq)
 
+    def _get_base_freq(self, freq: str) -> str:
+        freq = freq.lower()
+        if freq.endswith("s"):
+            return "1s"
+        if freq.endswith("min"):
+            return "1min"
+        if freq.endswith("h"):
+            return "1H"
+        if freq.endswith("d"):
+            return "1D"
+        raise ValueError(f"Unsupported frequency: {freq}")
+
     def add(self, row: pd.Series):
         if not isinstance(row.name, pd.Timestamp):
             raise ValueError("Expected row.name to be a pd.Timestamp")
 
         self._buffer[row.name] = row
         ts = row.name.floor(self._freq)
-        end_ts = ts + pd.Timedelta(self._freq) - pd.Timedelta("1min")
+        base_freq = self._get_base_freq(self._freq)
+        end_ts = ts + pd.Timedelta(self._freq) - pd.Timedelta(base_freq)
         if row.name == end_ts:
             return self.flush()
         if self._timeout_task is None or self._timeout_task.done():

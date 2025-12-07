@@ -15,6 +15,12 @@ REDIS_DB_HOST = "localhost"
 INDICATORS_CALCULATE_RESULTS_DIR = "output/indicator_results"
 UNIX_SOCKET_PATH = os.environ.get("REDIS_UNIX_SOCKET", "/tmp/redis-server.sock")
 NATS_SERVER = os.environ.get("NATS_SERVER", "nats://localhost:4222").split(",")
+NATS_SYMBOL_SUBSCRIBE_CHANNEL = os.environ.get(
+    "NATS_SYMBOL_SUBSCRIBE_CHANNEL", "symbol_subscribe"
+)
+NATS_SYMBOL_UNSUBSCRIBE_CHANNEL = os.environ.get(
+    "NATS_SYMBOL_UNSUBSCRIBE_CHANNEL", "symbol_unsubscribe"
+)
 
 
 DATA_BASE_DIR = os.environ["DATA_BASE_DIR"]
