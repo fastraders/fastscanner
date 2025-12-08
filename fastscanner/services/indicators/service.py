@@ -150,7 +150,9 @@ class CandleChannelHandler:
 
     @property
     def _candle_timeout(self) -> float:
-        return 5
+        if self._freq.endswith("s"):
+            return 7.2
+        return 10
 
     async def _handle(self, row: pd.Series) -> None:
         for ind in self._indicators:
