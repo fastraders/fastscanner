@@ -127,6 +127,19 @@ class IndicatorsService:
         )
         await self.channel.unsubscribe(stream_key, subscription_id)
 
+    async def stop(self):
+        for sub_id, channel in self._subscription_to_channel.items():
+            _, unit, symbol = channel.split("_")
+            await self.channel.unsubscribe(channel, sub_id)
+            await self.channel.push(
+                self._symbols_unsubscribe_channel,
+                {
+                    "symbol": symbol,
+                    "subscriber_id": sub_id,
+                    "unit": unit,
+                },
+            )
+
 
 class SubscriptionHandler:
     async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
@@ -151,7 +164,7 @@ class CandleChannelHandler:
     @property
     def _candle_timeout(self) -> float:
         if self._freq.endswith("s"):
-            return 7.2
+            return 3
         return 10
 
     async def _handle(self, row: pd.Series) -> None:
@@ -169,7 +182,7 @@ class CandleChannelHandler:
         new_row = pd.Series(data, name=ts)
         if self._freq == "1min":
             return await self._handle(new_row)
-        agg = self._buffer.add(new_row)
+        agg = await self._buffer.add(new_row)
         if agg is None:
             return
         await self._handle(agg)

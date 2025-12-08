@@ -20,37 +20,39 @@ class SymbolSubscriberManager:
             "s": {},
             "min": {},
         }
-        self._lock = asyncio.Lock()
 
-    async def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
-        async with self._lock:
-            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
-                logger.info(
-                    f"Sending subscribe request for symbol {symbol} to Polygon."
-                )
-                self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
-                unit_to_func = {
-                    "s": self._polygon.subscribe_s,
-                    "min": self._polygon.subscribe_min,
-                }
-                await unit_to_func[unit](set([symbol]))
-                logger.info(f"Subscribed to symbol {symbol} successfully.")
-                return
-            self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
+    def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
+        if symbol not in self._unit_to_symbol_to_subscribers[unit]:
+            logger.info(f"Sending subscribe request for symbol {symbol} to Polygon.")
+            self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
+            unit_to_func = {
+                "s": self._polygon.subscribe_s,
+                "min": self._polygon.subscribe_min,
+            }
+            unit_to_func[unit](set([symbol]))
+            logger.info(f"Subscribed to symbol {symbol} successfully.")
+            return
+        self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
 
-    async def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
-        async with self._lock:
-            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
-                return
-            self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
-            if not self._unit_to_symbol_to_subscribers[unit][symbol]:
-                logger.info(f"No more subscribers for symbol {symbol}, unsubscribing.")
-                unit_to_func = {
-                    "s": self._polygon.unsubscribe_s,
-                    "min": self._polygon.unsubscribe_min,
-                }
-                del self._unit_to_symbol_to_subscribers[unit][symbol]
-                await unit_to_func[unit](set([symbol]))
+    def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
+        if symbol not in self._unit_to_symbol_to_subscribers[unit]:
+            return
+        self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
+        if not self._unit_to_symbol_to_subscribers[unit][symbol]:
+            logger.info(f"No more subscribers for symbol {symbol}, unsubscribing.")
+            unit_to_func = {
+                "s": self._polygon.unsubscribe_s,
+                "min": self._polygon.unsubscribe_min,
+            }
+            del self._unit_to_symbol_to_subscribers[unit][symbol]
+            unit_to_func[unit](set([symbol]))
+
+    def unsubscribe_all(self) -> None:
+        symbols_min = self._unit_to_symbol_to_subscribers.get("min", {}).keys()
+        symbols_s = self._unit_to_symbol_to_subscribers.get("s", {}).keys()
+
+        self._polygon.unsubscribe_min(set(symbols_min))
+        self._polygon.unsubscribe_s(set(symbols_s))
 
 
 class SymbolSubscriber:
@@ -67,7 +69,7 @@ class SymbolSubscriber:
         logger.info(
             f"Subscribing to symbol: {symbol} with subscriber ID: {subscriber_id} and unit: {unit}"
         )
-        await self._manager.subscribe(symbol, subscriber_id, unit)
+        self._manager.subscribe(symbol, subscriber_id, unit)
 
     def id(self) -> str:
         return "symbol_subscriber"
@@ -78,6 +80,9 @@ class SymbolUnsubscriber:
         self._manager = manager
 
     async def handle(self, channel_id: str, data: dict):
+        if data.get("symbol") == "__ALL__":
+            return self._manager.unsubscribe_all()
+
         if "symbol" not in data or "subscriber_id" not in data:
             logger.error(f"Invalid unsubscribe message data {data}")
             return
@@ -85,7 +90,7 @@ class SymbolUnsubscriber:
         subscriber_id = data["subscriber_id"]
         unit = data["unit"]
         logger.info(f"Unsubscribing from symbol: {symbol}")
-        await self._manager.unsubscribe(symbol, subscriber_id, unit)
+        self._manager.unsubscribe(symbol, subscriber_id, unit)
 
     def id(self) -> str:
         return "symbol_unsubscriber"

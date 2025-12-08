@@ -73,7 +73,7 @@ class ScannerChannelHandler:
             )
             await self._handler.handle(self._symbol, new_row, passed)
             return
-        agg = self._buffer.add(row)
+        agg = await self._buffer.add(row)
         if agg is None:
             return
         await self._handle(agg)

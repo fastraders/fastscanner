@@ -51,8 +51,8 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        await self.unsubscribe_min(self._symbols_min)
-        await self.unsubscribe_s(self._symbols_s)
+        self.unsubscribe_min(self._symbols_min)
+        self.unsubscribe_s(self._symbols_s)
         try:
             if self._client:
                 await self._client.close()
@@ -64,7 +64,7 @@ class PolygonRealtime:
             self._running = False
             logger.info("WebSocket stopped.")
 
-    async def subscribe_min(self, symbols: set[str]):
+    def subscribe_min(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running")
             return
@@ -80,7 +80,7 @@ class PolygonRealtime:
         self._client.subscribe(*tickers)
         self._symbols_min.update(symbols)
 
-    async def subscribe_s(self, symbols: set[str]):
+    def subscribe_s(self, symbols: set[str]):
         if not self._running:
             raise RuntimeError("WebSocket is not running")
         if self._client is None:
@@ -95,7 +95,7 @@ class PolygonRealtime:
         self._client.subscribe(*tickers)
         self._symbols_s.update(symbols)
 
-    async def unsubscribe_min(self, symbols: set[str]):
+    def unsubscribe_min(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
@@ -109,13 +109,10 @@ class PolygonRealtime:
 
         symbols = symbols.intersection(self._symbols_min)
         tickers = [f"AM.{symbol}" for symbol in symbols]
-        try:
-            self._client.unsubscribe(*tickers)
-        except ConnectionClosedError as e:
-            logger.warning(f"WebSocket connection was already closed: {e}")
+        self._client.unsubscribe(*tickers)
         self._symbols_min.difference_update(symbols)
 
-    async def unsubscribe_s(self, symbols: set[str]):
+    def unsubscribe_s(self, symbols: set[str]):
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
@@ -129,10 +126,7 @@ class PolygonRealtime:
 
         symbols = symbols.intersection(self._symbols_s)
         tickers = [f"A.{symbol}" for symbol in symbols]
-        try:
-            self._client.unsubscribe(*tickers)
-        except ConnectionClosedError as e:
-            logger.warning(f"WebSocket connection was already closed: {e}")
+        self._client.unsubscribe(*tickers)
         self._symbols_s.difference_update(symbols)
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
@@ -187,9 +181,9 @@ async def main():
         )
 
         await realtime.start()
-        await realtime.subscribe_min({"AAPL", "MSFT", "GOOGL"})
+        realtime.subscribe_min({"AAPL", "MSFT", "GOOGL"})
         await asyncio.sleep(300)
-        await realtime.unsubscribe_min({"MSFT", "GOOGL"})
+        realtime.unsubscribe_min({"MSFT", "GOOGL"})
         await realtime.stop()
 
     except Exception as e:

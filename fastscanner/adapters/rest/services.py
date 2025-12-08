@@ -5,12 +5,12 @@ from fastscanner.services.scanners.service import ScannerService
 
 
 def get_indicators_service(request: Request) -> IndicatorsService:
-    return request.app.indicators
+    return request.state.indicators
 
 
 def get_indicators_service_ws(websocket: WebSocket) -> IndicatorsService:
-    return websocket.app.indicators
+    return websocket.state.indicators
 
 
 def get_scanner_service(request: Request) -> ScannerService:
-    return request.app.scanner
+    return request.state.scanner

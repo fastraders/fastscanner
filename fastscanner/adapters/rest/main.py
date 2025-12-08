@@ -1,5 +1,6 @@
 import multiprocessing
-import sys
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, TypedDict
 
 import uvicorn
 from fastapi import APIRouter, FastAPI
@@ -23,55 +24,47 @@ from .indicators import router as indicators_router
 from .scanner import router as scanner_router
 
 
-class FastscannerApp(FastAPI):
-    @property
-    def indicators(self) -> IndicatorsService:
-        return self.state.indicators
+class State(TypedDict):
+    indicators: IndicatorsService
+    scanner: ScannerService
 
-    @property
-    def scanner(self) -> ScannerService:
-        return self.state.scanner
 
-    def startup(self) -> None:
-        ClockRegistry.set(LocalClock())
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[State]:
+    ClockRegistry.set(LocalClock())
 
-        polygon = PolygonCandlesProvider(
-            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
-        )
-        candles = PartitionedCSVCandlesProvider(polygon)
-        fundamental = EODHDFundamentalStore(
-            config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY
-        )
-        holidays = ExchangeCalendarsPublicHolidaysStore()
-        # channel = RedisChannel(
-        #     unix_socket_path=config.UNIX_SOCKET_PATH,
-        #     host=config.REDIS_DB_HOST,
-        #     port=config.REDIS_DB_PORT,
-        #     password=None,
-        #     db=0,
-        # )
-        channel = NATSChannel(servers=config.NATS_SERVER)
-        self.state.indicators = IndicatorsService(
-            candles=candles,
-            fundamentals=fundamental,
-            channel=channel,
-            symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
-            symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
-        )
-        self.state.scanner = ScannerService(
-            candles=candles, channel=channel, symbols_provider=polygon
-        )
-        ApplicationRegistry.init(candles, fundamental, holidays)
+    polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
+    candles = PartitionedCSVCandlesProvider(polygon)
+    fundamental = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
+    holidays = ExchangeCalendarsPublicHolidaysStore()
+    channel = NATSChannel(servers=config.NATS_SERVER)
+    indicators_service = IndicatorsService(
+        candles=candles,
+        fundamentals=fundamental,
+        channel=channel,
+        symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
+        symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
+    )
+    scanner_service = ScannerService(
+        candles=candles, channel=channel, symbols_provider=polygon
+    )
+    ApplicationRegistry.init(candles, fundamental, holidays)
+
+    yield {
+        "indicators": indicators_service,
+        "scanner": scanner_service,
+    }
+
+    await indicators_service.stop()
 
 
 load_logging_config()
-app = FastscannerApp(docs_url="/api/docs", redoc_url="/api/redoc")
+app = FastAPI(docs_url="/api/docs", redoc_url="/api/redoc", lifespan=lifespan)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(indicators_router)
 api_router.include_router(scanner_router)
 app.include_router(api_router)
-app.startup()
 
 if __name__ == "__main__":
     uvicorn.run(
