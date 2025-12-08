@@ -52,6 +52,7 @@ class PolygonRealtime:
             logger.warning("WebSocket is not running.")
             return
         await self.unsubscribe_min(self._symbols_min)
+        await self.unsubscribe_s(self._symbols_s)
         try:
             if self._client:
                 await self._client.close()
@@ -70,6 +71,7 @@ class PolygonRealtime:
         if self._client is None:
             raise RuntimeError("WebSocketClient is None during subscribe.")
 
+        symbols = symbols.difference(self._symbols_min)
         if not symbols:
             logger.warning("No symbols to subscribe.")
             return
@@ -84,6 +86,7 @@ class PolygonRealtime:
         if self._client is None:
             raise RuntimeError("WebSocketClient is None during subscribe.")
 
+        symbols = symbols.difference(self._symbols_s)
         if not symbols:
             logger.warning("No symbols to subscribe.")
             return
@@ -104,12 +107,13 @@ class PolygonRealtime:
             logger.warning("No symbols to unsubscribe.")
             return
 
+        symbols = symbols.intersection(self._symbols_min)
         tickers = [f"AM.{symbol}" for symbol in symbols]
         try:
             self._client.unsubscribe(*tickers)
-            self._symbols_min.difference_update(symbols)
         except ConnectionClosedError as e:
             logger.warning(f"WebSocket connection was already closed: {e}")
+        self._symbols_min.difference_update(symbols)
 
     async def unsubscribe_s(self, symbols: set[str]):
         if not self._running:
@@ -123,12 +127,13 @@ class PolygonRealtime:
             logger.warning("No symbols to unsubscribe.")
             return
 
+        symbols = symbols.intersection(self._symbols_s)
         tickers = [f"A.{symbol}" for symbol in symbols]
         try:
             self._client.unsubscribe(*tickers)
-            self._symbols_s.difference_update(symbols)
         except ConnectionClosedError as e:
             logger.warning(f"WebSocket connection was already closed: {e}")
+        self._symbols_s.difference_update(symbols)
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
         parsed_msgs: list[dict] = []

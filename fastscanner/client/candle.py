@@ -65,9 +65,7 @@ class CandleClient:
                 task = asyncio.create_task(self._listen_ws(socket_id))
                 self._tasks.append(task)
             else:
-                socket_id = self._socket_ids[
-                    self._curr_socket_idx % self._max_connections
-                ]
+                socket_id = self._socket_ids[self._curr_socket_idx]
                 ws = self._websockets[socket_id]
             self._curr_socket_idx = (self._curr_socket_idx + 1) % self._max_connections
             self._handler_to_socket[handler_id] = socket_id
