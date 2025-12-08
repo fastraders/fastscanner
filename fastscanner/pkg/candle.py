@@ -24,6 +24,7 @@ class CandleBuffer:
         self._lock = asyncio.Lock()
         self._timeout_task: asyncio.Task | None = None
         self._timeout_handler = timeout_handler
+        self._latest_ts: pd.Timestamp | None = None
 
     def _expected_ts(self, ts: pd.Timestamp) -> pd.Timestamp:
         return ts.floor(self._freq)
@@ -43,9 +44,11 @@ class CandleBuffer:
     def add(self, row: pd.Series):
         if not isinstance(row.name, pd.Timestamp):
             raise ValueError("Expected row.name to be a pd.Timestamp")
+        ts = row.name.floor(self._freq)
+        if self._latest_ts is not None and ts < self._latest_ts:
+            return None
 
         self._buffer[row.name] = row
-        ts = row.name.floor(self._freq)
         base_freq = self._get_base_freq(self._freq)
         end_ts = ts + pd.Timedelta(self._freq) - pd.Timedelta(base_freq)
         if row.name == end_ts:
@@ -84,4 +87,5 @@ class CandleBuffer:
             name=ts,
         )
         self._buffer.clear()
+        self._latest_ts = ts
         return agg

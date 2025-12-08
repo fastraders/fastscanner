@@ -16,16 +16,19 @@ logger = logging.getLogger(__name__)
 class SymbolSubscriberManager:
     def __init__(self, polygon: PolygonRealtime) -> None:
         self._polygon = polygon
-        self._symbol_to_subscribers: dict[str, set[str]] = {}
+        self._unit_to_symbol_to_subscribers: dict[str, dict[str, set[str]]] = {
+            "s": {},
+            "min": {},
+        }
         self._lock = asyncio.Lock()
 
     async def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
         async with self._lock:
-            if symbol not in self._symbol_to_subscribers:
+            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
                 logger.info(
                     f"Sending subscribe request for symbol {symbol} to Polygon."
                 )
-                self._symbol_to_subscribers[symbol] = {subscriber_id}
+                self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
                 unit_to_func = {
                     "s": self._polygon.subscribe_s,
                     "min": self._polygon.subscribe_min,
@@ -33,20 +36,20 @@ class SymbolSubscriberManager:
                 await unit_to_func[unit](set([symbol]))
                 logger.info(f"Subscribed to symbol {symbol} successfully.")
                 return
-            self._symbol_to_subscribers[symbol].add(subscriber_id)
+            self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
 
     async def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
         async with self._lock:
-            if symbol not in self._symbol_to_subscribers:
+            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
                 return
-            self._symbol_to_subscribers[symbol].discard(subscriber_id)
-            if not self._symbol_to_subscribers[symbol]:
+            self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
+            if not self._unit_to_symbol_to_subscribers[unit][symbol]:
                 logger.info(f"No more subscribers for symbol {symbol}, unsubscribing.")
                 unit_to_func = {
                     "s": self._polygon.unsubscribe_s,
                     "min": self._polygon.unsubscribe_min,
                 }
-                del self._symbol_to_subscribers[symbol]
+                del self._unit_to_symbol_to_subscribers[unit][symbol]
                 await unit_to_func[unit](set([symbol]))
 
 
