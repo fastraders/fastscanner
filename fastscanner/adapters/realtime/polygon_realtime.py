@@ -143,6 +143,8 @@ class PolygonRealtime:
                 event_type_to_channel = {
                     EventType.EquityAgg: "candles_s_",
                     EventType.EquityAggMin: "candles_min_",
+                    EventType.EquityAgg.value: "candles_s_",
+                    EventType.EquityAggMin.value: "candles_min_",
                 }
                 if msg.event_type not in event_type_to_channel:
                     logger.warning(f"Unknown event type: {msg.event_type}")
