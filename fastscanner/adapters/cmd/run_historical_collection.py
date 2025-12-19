@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 async def _collect(
     symbol: str, candles: PartitionedCSVCandlesProvider, now: datetime
 ) -> None:
+    # for year in range(2025, now.today().year + 1):
     for year in range(2018, now.today().year + 1):
         await candles.cache_all_freqs(symbol, year)
         logger.info(f"Collected data for {symbol} in {year}")
@@ -85,7 +86,41 @@ async def run_data_collect():
     ClockRegistry.set(FixedClock(now))
 
     all_symbols = await polygon.all_symbols()
-    # all_symbols = all_symbols[:100]
+    # all_symbols = ["AMCI"]
+    # all_symbols = [
+    #     "AMCI",
+    #     "VMAR",
+    #     "RDAC",
+    #     "IGC",
+    #     "NAKA",
+    #     "GANX",
+    #     "UGRO",
+    #     "AMST",
+    #     "PBM",
+    #     "MGRX",
+    #     "WYFI",
+    #     "SMX",
+    #     "AGAE",
+    #     "SOPA",
+    #     "NRXS",
+    #     "LHAI",
+    #     "INAB",
+    #     "GMM",
+    #     "AIRE",
+    #     "CGC",
+    #     "MOBX",
+    #     "BTBT",
+    #     "BGL",
+    #     "FOLD",
+    #     "VCIG",
+    #     "SGBX",
+    #     "PLTR",
+    #     "AIIO",
+    #     "VSTD",
+    #     "CYPH",
+    #     "ORCL",
+    #     "SRXH",
+    # ]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [

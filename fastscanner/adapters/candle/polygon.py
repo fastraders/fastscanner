@@ -3,7 +3,7 @@ import io
 import json
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from urllib.parse import urljoin
 
 import httpx
@@ -47,14 +47,12 @@ class PolygonCandlesProvider:
             "s": "second",
             "min": "minute",
             "h": "hour",
-            "t": "minute",
             "d": "day",
         }
-        max_days_per_unit = {
-            "s": 1,
-            "min": 60,
-            "t": 60,
-            "h": 60,
+        max_days_per_unit: dict[str, float] = {
+            "s": 0.5,
+            "min": 30,
+            "h": 30,
             "d": 50000,
         }
         max_days = max_days_per_unit[unit]
@@ -64,14 +62,18 @@ class PolygonCandlesProvider:
                 f"End date {end} is in the future. Please provide a valid end date."
             )
 
-        curr_start = start
-        curr_end = min(end, start + timedelta(days=max_days))
+        inc = round(max_days * 24 * 60 * 60 * 1000) - 1
+        curr_start = round(pd.Timestamp(start, tz=self.tz).timestamp() * 1000)
+        curr_end = curr_start + inc
+        end_ts = round(
+            pd.Timestamp(end + timedelta(days=1), tz=self.tz).timestamp() * 1000 - 1
+        )
         dfs: list[pd.DataFrame] = []
 
-        while curr_start <= end:
+        while curr_start <= end_ts:
             url = urljoin(
                 self._base_url,
-                f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start.isoformat()}/{curr_end.isoformat()}",
+                f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start}/{curr_end}",
             )
             try:
                 response = await async_retry_request(
@@ -86,8 +88,8 @@ class PolygonCandlesProvider:
                     headers={"Accept": "text/csv"},
                 )
                 if response.status_code == 404:
-                    curr_start = curr_end + timedelta(days=1)
-                    curr_end = min(end, curr_start + timedelta(days=max_days))
+                    curr_start = curr_end + 1
+                    curr_end = min(end_ts, curr_start + inc)
                     continue
 
                 response.raise_for_status()
@@ -101,8 +103,8 @@ class PolygonCandlesProvider:
                 logger.warning(
                     f"No data returned for {symbol} between {curr_start} and {curr_end}. Skipping this interval."
                 )
-                curr_start = curr_end + timedelta(days=1)
-                curr_end = min(end, curr_start + timedelta(days=max_days))
+                curr_start = curr_end + 1
+                curr_end = min(end_ts, curr_start + inc)
                 continue
 
             df[CandleCol.DATETIME] = pd.to_datetime(df.loc[:, "t"], unit="ms")
@@ -126,8 +128,8 @@ class PolygonCandlesProvider:
             if not df.empty:
                 dfs.append(df)
 
-            curr_start = curr_end + timedelta(days=1)
-            curr_end = min(end, curr_start + timedelta(days=max_days))
+            curr_start = curr_end + 1
+            curr_end = min(end_ts, curr_start + inc)
 
         if not dfs:
             return pd.DataFrame(

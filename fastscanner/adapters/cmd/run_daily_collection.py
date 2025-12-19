@@ -70,7 +70,7 @@ async def collect_daily_data(only_active: bool = False) -> None:
     else:
         all_symbols = await provider.all_symbols()
     # all_symbols = all_symbols[:100]
-    # all_symbols = ["NDRA"]
+    # all_symbols = ["AMCI"]
 
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
