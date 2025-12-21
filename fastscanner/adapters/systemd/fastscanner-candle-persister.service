@@ -1,0 +1,26 @@
+[Unit]
+Description=Fastscanner Candle Persister
+After=network-online.target ntp.service
+
+[Service]
+WorkingDirectory=/home/mmoheeka/Projects/fastscanner
+PrivateTmp=true
+Type=simple
+ExecStart=/home/mmoheeka/.local/bin/poetry run python -m fastscanner.adapters.cmd.run_candle_persister
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# The nats-server uses SIGUSR2 to trigger Lame Duck Mode (LDM) shutdown
+# https://docs.nats.io/running-a-nats-service/nats_admin/lame_duck_mode
+ExecStop=/bin/kill -s SIGUSR2  $MAINPID
+
+# This should be `lame_duck_duration` + some buffer to finish the shutdown.
+# By default, `lame_duck_duration` is 2 mins.
+TimeoutStopSec=150
+
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+[Install]
+WantedBy=multi-user.target

@@ -16,10 +16,10 @@ pyarrow="^19.0.1"
 fastapi = {extras = ["standard"], version = "^0.116.1"}
 exchange-calendars= "^4.10"
 redis="^5.2.1"
-polygon-api-client= "^1.15.3"
 polars = "^1.31.0"
 uvloop = "^0.21.0"
 nats-py = "^2.11.0"
+massive = "^2.0.2"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"

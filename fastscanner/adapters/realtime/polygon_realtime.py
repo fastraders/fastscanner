@@ -3,8 +3,8 @@ import logging
 import traceback
 
 import uvloop
-from polygon import WebSocketClient
-from polygon.websocket.models import (
+from massive import WebSocketClient
+from massive.websocket.models import (
     EquityAgg,
     EventType,
     Feed,
