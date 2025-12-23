@@ -12,13 +12,13 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
-from fastscanner.services.indicators.ports import CandleCol, CandleStore
+from fastscanner.services.indicators.ports import (
+    CandleCol,
+    CandleStore,
+    CandleStoreWithSplits,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class CandleStoreWithSplits(CandleStore, Protocol):
-    async def splits(self, start: date, end: date) -> dict[str, date]: ...
 
 
 class PartitionedCSVCandlesProvider:

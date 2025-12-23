@@ -13,7 +13,7 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE, ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
-from fastscanner.services.indicators.ports import CandleCol, CandleStore
+from fastscanner.services.indicators.ports import CandleCol, CandleStore, SplitsProvider
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -354,6 +354,9 @@ async def check_integrity(
     all_issues: list[IntegrityIssue] = []
     issues_by_type: dict[str, int] = defaultdict(int)
 
+    splits = await polygon.splits(check_date, check_date)
+    symbols = [symbol for symbol in symbols if symbol not in splits]
+
     for symbol in symbols:
         try:
             issues = await checker.check_symbol(symbol, check_date, freqs)
@@ -374,20 +377,20 @@ def _log_summary(
     issues_by_type: dict[str, int],
 ) -> None:
     symbols_with_issues = {issue.symbol for issue in all_issues}
-    logger.info(f"\n{'='*80}")
+    logger.info(f"{'='*80}")
     logger.info(f"INTEGRITY CHECK SUMMARY")
     logger.info(f"{'='*80}")
     logger.info(f"Date: {check_date}")
     logger.info(f"Symbols checked: {len(symbols)}")
-    logger.info(f"Symbols with issues:")
+    logger.info(f"Symbols with issues: {len(symbols_with_issues)}")
     logger.info(f"Frequencies checked: {freqs}")
-    logger.info(f"Total issues found: {len(symbols_with_issues)}")
-    logger.info(f"\nIssues by type:")
+    logger.info(f"Total issues found: {len(all_issues)}")
+    logger.info(f"Issues by type:")
     for issue_type, count in sorted(issues_by_type.items()):
         logger.info(f"  {issue_type}: {count}")
 
     if all_issues:
-        logger.info(f"\n{'='*80}")
+        logger.info(f"{'='*80}")
         logger.info(f"DETAILED ISSUES")
         logger.info(f"{'='*80}")
         for issue in all_issues:
