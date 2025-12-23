@@ -12,11 +12,21 @@ from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesPro
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE, ClockRegistry, FixedClock, LocalClock
-from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.ports import CandleCol, CandleStore, SplitsProvider
 
-load_logging_config()
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class SimpleFormatter(logging.Formatter):
+    def format(self, record):
+        return record.getMessage()
+
+
+handler = logging.StreamHandler()
+handler.setFormatter(SimpleFormatter())
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 class IntegrityIssue:
@@ -35,7 +45,7 @@ class IntegrityIssue:
         self.details = details
 
     def __str__(self) -> str:
-        return f"[{self.symbol}][{self.freq}][{self.date}] {self.issue_type}: {self.details}"
+        return f"[{self.symbol}][{self.freq}] {self.issue_type}: {self.details}"
 
 
 class CandleIntegrityChecker:

@@ -1,9 +1,7 @@
 import logging
 import logging.config
-import os
 
 import yaml
-from dotenv import load_dotenv
 
 
 def load_logging_config():
