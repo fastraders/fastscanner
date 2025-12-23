@@ -354,7 +354,11 @@ async def check_integrity(
     all_issues: list[IntegrityIssue] = []
     issues_by_type: dict[str, int] = defaultdict(int)
 
-    splits = await polygon.splits(check_date, check_date)
+    splits = await polygon.splits(check_date, ClockRegistry.clock.today())
+    logger.info(
+        f"Found {len(splits)} splits on {check_date}, excluding affected symbols"
+    )
+    logger.info(f"Affected symbols: {', '.join(splits.keys())}")
     symbols = [symbol for symbol in symbols if symbol not in splits]
 
     for symbol in symbols:
