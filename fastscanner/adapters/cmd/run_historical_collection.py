@@ -86,41 +86,6 @@ async def run_data_collect():
     ClockRegistry.set(FixedClock(now))
 
     all_symbols = await polygon.all_symbols()
-    # all_symbols = ["AMCI"]
-    # all_symbols = [
-    #     "AMCI",
-    #     "VMAR",
-    #     "RDAC",
-    #     "IGC",
-    #     "NAKA",
-    #     "GANX",
-    #     "UGRO",
-    #     "AMST",
-    #     "PBM",
-    #     "MGRX",
-    #     "WYFI",
-    #     "SMX",
-    #     "AGAE",
-    #     "SOPA",
-    #     "NRXS",
-    #     "LHAI",
-    #     "INAB",
-    #     "GMM",
-    #     "AIRE",
-    #     "CGC",
-    #     "MOBX",
-    #     "BTBT",
-    #     "BGL",
-    #     "FOLD",
-    #     "VCIG",
-    #     "SGBX",
-    #     "PLTR",
-    #     "AIIO",
-    #     "VSTD",
-    #     "CYPH",
-    #     "ORCL",
-    #     "SRXH",
-    # ]
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [
