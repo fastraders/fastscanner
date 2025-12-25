@@ -113,13 +113,18 @@ class PolygonCandlesFromTradesCollector:
         return sorted(downloaded_dates)
 
     async def _collect_latest_files(self) -> list[date]:
-        last_year = max(os.listdir(self._base_trades_dir))
+        yday = ClockRegistry.clock.today() - timedelta(days=1)
+        curr_years = os.listdir(self._base_trades_dir)
+        if len(curr_years) > 0:
+            last_year = max(curr_years)
+        else:
+            last_year = str(yday.year)
+            os.mkdir(os.path.join(self._base_trades_dir, last_year))
         current_files = [
             fname
-            for fname in os.listdir(os.path.join(self._base_candles_dir, last_year))
+            for fname in os.listdir(os.path.join(self._base_trades_dir, last_year))
             if fname.endswith(".csv.gz")
         ]
-        yday = ClockRegistry.clock.today() - timedelta(days=1)
         if len(current_files) > 0:
             last_date = date.fromisoformat(max(current_files).replace(".csv.gz", ""))
             start = last_date + timedelta(days=1)
@@ -127,9 +132,7 @@ class PolygonCandlesFromTradesCollector:
             start = yday
         return await self._collect_files(start, yday)
 
-    _collect_freqs = ["5s"]
-
-    def _process_date(self, date_: date):
+    def _process_date(self, date_: date, freqs: list[str]) -> None:
         local_file_path = self._file_path(date_)
         if not os.path.exists(local_file_path):
             return
@@ -155,7 +158,7 @@ class PolygonCandlesFromTradesCollector:
                 .alias("datetime")
             )
             lf = lf.sort(["datetime", "sequence_number"])
-            for freq in self._collect_freqs:
+            for freq in freqs:
                 _partition_path = lambda ctx: os.path.join(
                     self._base_candles_dir,
                     ctx.keys[0].hive_name().split("=")[1],
@@ -190,6 +193,7 @@ class PolygonCandlesFromTradesCollector:
         self,
         year: int,
         month: int,
+        freqs: list[str],
     ):
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
@@ -201,20 +205,23 @@ class PolygonCandlesFromTradesCollector:
         client = self._client
         self._client = None
         with multiprocessing.Pool(processes=self._max_concurrency) as pool:
-            pool.map(
+            pool.starmap(
                 self._process_date,
-                [start + timedelta(days=i) for i in range((end - start).days + 1)],
+                [
+                    (start + timedelta(days=i), freqs)
+                    for i in range((end - start).days + 1)
+                ],
             )
         self._client = client
 
-    async def collect_latest(self):
+    async def collect_latest(self, freqs: list[str]) -> None:
         downloaded_dates = await self._collect_latest_files()
 
         client = self._client
         self._client = None
         with multiprocessing.Pool(processes=self._max_concurrency) as pool:
-            pool.map(
+            pool.starmap(
                 self._process_date,
-                downloaded_dates,
+                [(date_, freqs) for date_ in downloaded_dates],
             )
         self._client = client

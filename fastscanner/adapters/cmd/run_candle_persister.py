@@ -136,7 +136,7 @@ class CandlePersister:
 
 class CandlePersistenceManager:
     UNIT_TO_FREQS: dict[str, list[str]] = {
-        "s": ["1s", "5s"],
+        "s": ["5s"],
         "min": ["1min"],
     }
 
