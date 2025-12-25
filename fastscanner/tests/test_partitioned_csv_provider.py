@@ -371,7 +371,7 @@ async def test_midnight_expiration_skips_days(tmp_path):
     store = MockStoreWithDelay()
     provider = PartitionedCSVCandlesProvider(store)
 
-    await provider.collect_expired_data("AAPL")
+    await provider.collect_expired_data("AAPL", ["1min"])
 
     assert len(store.calls) > 0, "No calls made to store"
 

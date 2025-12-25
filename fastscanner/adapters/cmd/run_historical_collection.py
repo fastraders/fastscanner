@@ -21,8 +21,11 @@ async def _collect(
     symbol: str, candles: PartitionedCSVCandlesProvider, now: datetime
 ) -> None:
     # for year in range(2025, now.today().year + 1):
-    for year in range(2018, now.today().year + 1):
-        await candles.cache_all_freqs(symbol, year)
+    start_year = 2018
+    end_year = 2018
+    freqs = ["1min", "2min", "1d"]
+    for year in range(start_year, end_year + 1):
+        await candles.cache_all_freqs(symbol, year, freqs)
         logger.info(f"Collected data for {symbol} in {year}")
 
     logger.info(f"Finished data collection for {symbol}")

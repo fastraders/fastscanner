@@ -3,11 +3,13 @@ import asyncio
 import logging
 import math
 import multiprocessing
+import os
 import time
 from datetime import date, timedelta
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
+from fastscanner.adapters.candle.polygon_trades import PolygonCandlesFromTradesCollector
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
@@ -28,7 +30,9 @@ async def _collect_batch(symbols: list[str]) -> None:
 
     logger.info(f"Collecting daily data for {len(symbols)} symbols")
     tasks = [
-        asyncio.create_task(candles.collect_expired_data(symbol), name=symbol)
+        asyncio.create_task(
+            candles.collect_expired_data(symbol, ["1min", "2min", "1d"]), name=symbol
+        )
         for symbol in symbols
     ]
     completed_tasks = 0
@@ -64,7 +68,9 @@ async def collect_daily_data(only_active: bool = False) -> None:
     )
     partitioned_provider = PartitionedCSVCandlesProvider(provider)
 
-    await partitioned_provider.collect_splits()
+    collect_from = 2018
+    await partitioned_provider.collect_splits(collect_from, ["1min", "2min", "1d"])
+
     if only_active:
         all_symbols = await provider.active_symbols()
     else:
@@ -81,6 +87,15 @@ async def collect_daily_data(only_active: bool = False) -> None:
     with multiprocessing.Pool(n_workers) as pool:
         pool.map(_run_batch, batches)
 
+    collector = PolygonCandlesFromTradesCollector(
+        base_url=config.MASSIVE_FILES_BASE_URL,
+        base_trades_dir=config.TRADES_DATA_DIR,
+        base_candles_dir=os.path.join(config.DATA_BASE_DIR, "data", "candles"),
+        aws_access_key=config.MASSIVE_FILES_ACCESS_KEY,
+        aws_secret_key=config.MASSIVE_FILES_SECRET_KEY,
+        max_concurrency=10,
+    )
+    await collector.collect_latest(["5s"])
     logger.info("Data collection completed for all symbols")
 
 

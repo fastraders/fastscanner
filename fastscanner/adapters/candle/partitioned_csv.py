@@ -74,9 +74,7 @@ class PartitionedCSVCandlesProvider:
 
         return df.loc[start_dt:end_dt]
 
-    _cache_freqs = ["1min", "2min", "1d"]
-
-    async def cache_all_freqs(self, symbol: str, year: int) -> None:
+    async def cache_all_freqs(self, symbol: str, year: int, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
         start = date(year, 1, 1)
@@ -98,7 +96,7 @@ class PartitionedCSVCandlesProvider:
         minute_df = await self._store.get(symbol, minute_start, minute_end, "1min")
         daily_df = await self._store.get(symbol, day_start, day_end, "1d")
 
-        for freq in self._cache_freqs:
+        for freq in freqs:
             if freq == "1min":
                 df = minute_df
             elif freq == "1d":
@@ -124,15 +122,16 @@ class PartitionedCSVCandlesProvider:
                 self._save_cache(symbol, key, freq, sub_df)
                 self._mark_expiration(symbol, key, unit, today)
 
-    async def collect_expired_data(self, symbol: str) -> None:
+    async def collect_expired_data(self, symbol: str, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
+
         grouped_by_unit: dict[str, str] = {}
         # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
         unit_to_freqs: dict[str, list[str]] = {}
-        for freq in self._cache_freqs:
+        for freq in freqs:
             _, unit = split_freq(freq)
             unit_to_freqs.setdefault(unit, []).append(freq)
         for exp_key, exp_date in expirations.items():
@@ -154,7 +153,7 @@ class PartitionedCSVCandlesProvider:
                     symbol, start_date, yday, freq, today, _log_cache_miss=False
                 )
 
-    async def collect_splits(self) -> None:
+    async def collect_splits(self, from_year: int, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
         last_checked_splits_path = os.path.join(
             self.CACHE_DIR, "last_checked_splits.txt"
@@ -183,7 +182,7 @@ class PartitionedCSVCandlesProvider:
 
         symbol_to_year: dict[str, int] = {}
         for symbol in splits:
-            keys = self._partition_keys_in_range(date(2010, 1, 1), today, "d")
+            keys = self._partition_keys_in_range(date(from_year, 1, 1), today, "d")
             for key in keys:
                 partition_path = self._partition_path(symbol, key, "1d")
                 if os.path.exists(partition_path):
@@ -198,7 +197,7 @@ class PartitionedCSVCandlesProvider:
 
         splits = {key: value for key, value in splits.items() if key in symbol_to_year}
         tasks = [
-            asyncio.create_task(self.cache_all_freqs(symbol, year))
+            asyncio.create_task(self.cache_all_freqs(symbol, year, freqs))
             for symbol in splits
             for year in range(symbol_to_year[symbol], today.year + 1)
         ]

@@ -28,6 +28,7 @@ async def run():
     start_t = time()
     start_year = 2018
     end_year = 2018
+    freqs = ["5s"]
 
     yday = ClockRegistry.clock.today() - timedelta(days=1)
     end_month = yday.month if end_year == yday.year else 12
@@ -37,7 +38,7 @@ async def run():
         month_limit = end_month if year == end_year else 12
         for month in range(1, month_limit + 1):
             logger.info(f"Collecting historical seconds for {year}-{month:02d}")
-            await collector.collect(year, month)
+            await collector.collect(year, month, freqs)
             curr_months += 1
             end_t = time()
             logger.info(
