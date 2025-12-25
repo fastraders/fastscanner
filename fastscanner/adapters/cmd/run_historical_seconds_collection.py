@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os.path
+from datetime import timedelta
 from time import time
 
 from fastscanner.adapters.candle.polygon_trades import PolygonCandlesFromTradesCollector
@@ -25,13 +26,11 @@ async def run():
     )
     logger.info("Starting historical seconds collection")
     start_t = time()
-    # today = ClockRegistry.clock.today()
-    # start_year = 2025
-    # end_year = today.year
-    # end_month = today.month
-    start_year = 2005
-    end_year = 2005
-    end_month = 12
+    start_year = 2018
+    end_year = 2018
+
+    yday = ClockRegistry.clock.today() - timedelta(days=1)
+    end_month = yday.month if end_year == yday.year else 12
     total_months = (end_year - start_year) * 12 + end_month
     curr_months = 0
     for year in range(start_year, end_year + 1):

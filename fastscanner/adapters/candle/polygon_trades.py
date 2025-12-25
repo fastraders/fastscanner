@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from time import time as pytime
 
 import boto3
+import botocore.config
 import botocore.exceptions
 import polars as pl
 from mypy_boto3_s3.service_resource import S3ServiceResource
@@ -48,6 +49,7 @@ class PolygonCandlesFromTradesCollector:
                 aws_access_key_id=self._aws_access_key,
                 aws_secret_access_key=self._aws_secret_key,
                 endpoint_url=self._base_url,
+                config=botocore.config.Config(max_pool_connections=100),
             )
         return self._client
 
@@ -196,27 +198,23 @@ class PolygonCandlesFromTradesCollector:
         end = min(date(year, month, monthdays), yday)
         await self._collect_files(start, end)
 
-        # for i in range((end - start).days + 1):
-        #     self._process_date(start + timedelta(days=i))
-        #     ## TODO: DELETE
-        #     logger.info(
-        #         f"Processed trades for {(start + timedelta(days=i)).isoformat()}"
-        #     )
+        client = self._client
         self._client = None
         with multiprocessing.Pool(processes=self._max_concurrency) as pool:
             pool.map(
                 self._process_date,
                 [start + timedelta(days=i) for i in range((end - start).days + 1)],
             )
+        self._client = client
 
     async def collect_latest(self):
         downloaded_dates = await self._collect_latest_files()
 
-        # for date_ in downloaded_dates:
-        #     self._process_date(date_)
+        client = self._client
         self._client = None
         with multiprocessing.Pool(processes=self._max_concurrency) as pool:
             pool.map(
                 self._process_date,
                 downloaded_dates,
             )
+        self._client = client
