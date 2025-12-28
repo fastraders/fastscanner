@@ -150,7 +150,24 @@ class PolygonCandlesFromTradesCollector:
                         f_out.write(decompressed_data)
                     f_out.write(decompressor.flush())
 
-            lf = pl.scan_csv(uncompressed_path)
+            lf = pl.scan_csv(
+                uncompressed_path,
+                schema={
+                    "ticker": pl.String,
+                    "conditions": pl.String,
+                    "correction": pl.Int64,
+                    "exchange": pl.Int64,
+                    "id": pl.String,
+                    "participant_timestamp": pl.Int64,
+                    "price": pl.Float64,
+                    "sequence_number": pl.Int64,
+                    "sip_timestamp": pl.Int64,
+                    "size": pl.Int64,
+                    "tape": pl.Int64,
+                    "trf_id": pl.Int64,
+                    "trf_timestamp": pl.Int64,
+                },
+            )
             lf = lf.with_columns(
                 pl.from_epoch("sip_timestamp", time_unit="ns")
                 .dt.replace_time_zone("UTC")
