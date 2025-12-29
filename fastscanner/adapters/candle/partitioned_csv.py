@@ -82,11 +82,6 @@ class PartitionedCSVCandlesProvider:
         minute_range = self._covering_range(start, end, "min")
         hourly_range = self._covering_range(start, end, "h")
         daily_range = self._covering_range(start, end, "d")
-        if self._is_all_freqs_cached(symbol, year, today):
-            # logger.info(
-            #     f"Cache for {symbol} ({year}) already exists. Skipping cache creation."
-            # )
-            return
 
         minute_start = min(minute_range[0], hourly_range[0])
         minute_end = min(max(minute_range[1], hourly_range[1]), yday)

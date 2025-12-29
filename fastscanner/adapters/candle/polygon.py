@@ -83,7 +83,7 @@ class PolygonCandlesProvider:
                     params={
                         "apiKey": self._api_key,
                         "limit": 50000,
-                        # "adjusted": "true",
+                        "adjusted": False,
                     },
                     headers={"Accept": "text/csv"},
                 )
