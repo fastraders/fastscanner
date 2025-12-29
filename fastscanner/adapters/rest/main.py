@@ -5,6 +5,7 @@ from typing import AsyncIterator, TypedDict
 import uvicorn
 from fastapi import APIRouter, FastAPI
 
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
@@ -34,7 +35,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     ClockRegistry.set(LocalClock())
 
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
-    candles = PartitionedCSVCandlesProvider(polygon)
+    candles = MassiveAdjustedCandlesProvider(
+        PartitionedCSVCandlesProvider(polygon),
+        base_dir=config.DATA_BASE_DIR,
+        api_key=config.POLYGON_API_KEY,
+        base_url=config.POLYGON_BASE_URL,
+    )
     fundamental = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
     holidays = ExchangeCalendarsPublicHolidaysStore()
     channel = NATSChannel(servers=config.NATS_SERVER)

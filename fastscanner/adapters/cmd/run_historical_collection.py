@@ -7,6 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
@@ -25,7 +26,7 @@ async def _collect(
     end_year = 2018
     freqs = ["1min", "2min", "1d"]
     for year in range(start_year, end_year + 1):
-        await candles.cache_all_freqs(symbol, year, freqs)
+        await candles.collect(symbol, year, freqs)
         logger.info(f"Collected data for {symbol} in {year}")
 
     logger.info(f"Finished data collection for {symbol}")
@@ -84,7 +85,13 @@ def _run_batch(batch: tuple[list[str], datetime]) -> None:
 
 async def run_data_collect():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
-    candles = PartitionedCSVCandlesProvider(polygon)
+    adjusted_provider = MassiveAdjustedCandlesProvider(
+        polygon,
+        base_dir=config.DATA_BASE_DIR,
+        api_key=config.POLYGON_API_KEY,
+        base_url=config.POLYGON_BASE_URL,
+    )
+    await adjusted_provider.collect_all_splits()
     now = LocalClock().now()
     ClockRegistry.set(FixedClock(now))
 
@@ -98,8 +105,6 @@ async def run_data_collect():
 
     with multiprocessing.Pool(n_workers) as pool:
         pool.map(_run_batch, batches)
-
-    candles.mark_splits_checked(now.date())
 
 
 if __name__ == "__main__":

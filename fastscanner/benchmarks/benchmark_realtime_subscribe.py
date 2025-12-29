@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 
 import pandas as pd
+import uvloop
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
@@ -114,7 +115,11 @@ async def main():
     ApplicationRegistry.init(candles, fundamentals, holidays)
 
     service = IndicatorsService(
-        candles=candles, fundamentals=fundamentals, channel=redis_channel
+        candles=candles,
+        fundamentals=fundamentals,
+        channel=redis_channel,
+        symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
+        symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
     )
 
     symbols = await polygon.all_symbols()

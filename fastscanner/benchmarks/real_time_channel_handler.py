@@ -61,6 +61,8 @@ async def main():
         candles=candles,
         fundamentals=fundamentals,
         channel=redis_channel,
+        symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
+        symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
     )
     ApplicationRegistry.init(candles, fundamentals, holidays)
     ClockRegistry.set(LocalClock())

@@ -105,7 +105,13 @@ async def _run_async(
         config.EOD_HD_API_KEY,
         max_concurrent_requests=5,
     )
-    indicator_service = IndicatorsService(candles, fundamentals, VoidChannel())
+    indicator_service = IndicatorsService(
+        candles,
+        fundamentals,
+        VoidChannel(),
+        config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
+        config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
+    )
 
     ApplicationRegistry.init(candles, fundamentals, holidays)
     ApplicationRegistry.set_indicators(indicator_service)

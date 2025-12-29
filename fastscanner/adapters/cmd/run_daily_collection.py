@@ -7,6 +7,7 @@ import os
 import time
 from datetime import date, timedelta
 
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.candle.polygon_trades import PolygonCandlesFromTradesCollector
@@ -66,17 +67,20 @@ async def collect_daily_data(only_active: bool = False) -> None:
         max_requests_per_sec=20,
         max_concurrent_requests=20,
     )
-    partitioned_provider = PartitionedCSVCandlesProvider(provider)
-
-    collect_from = 2018
-    await partitioned_provider.collect_splits(collect_from, ["1min", "2min", "1d"])
+    adjusted_provider = MassiveAdjustedCandlesProvider(
+        provider,
+        base_dir=config.DATA_BASE_DIR,
+        api_key=config.POLYGON_API_KEY,
+        base_url=config.POLYGON_BASE_URL,
+    )
+    await adjusted_provider.collect_latest_splits()
 
     if only_active:
         all_symbols = await provider.active_symbols()
     else:
         all_symbols = await provider.all_symbols()
     # all_symbols = all_symbols[:100]
-    # all_symbols = ["SOPA", "RDAC"]
+    all_symbols = ["SOPA", "RDAC", "APVO"]
 
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)

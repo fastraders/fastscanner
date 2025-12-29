@@ -322,9 +322,6 @@ class MockStoreWithDelay:
         )
         return df
 
-    async def splits(self, start, end):
-        return {}
-
 
 class MockStoreReturningData:
     def __init__(self):
@@ -345,15 +342,11 @@ class MockStoreReturningData:
         ).set_index(CandleCol.DATETIME)
         return df
 
-    async def splits(self, start, end):
-        return {}
-
 
 def setup_cache_env(tmp_path):
     cache_dir = tmp_path
     PartitionedCSVCandlesProvider.CACHE_DIR = str(cache_dir)
     os.makedirs(cache_dir / "AAPL", exist_ok=True)
-    (cache_dir / "last_checked_splits.txt").write_text("2019-12-31")
 
 
 @pytest.mark.asyncio

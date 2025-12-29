@@ -7,7 +7,6 @@ from itertools import product
 import pandas as pd
 import uvloop
 
-from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config

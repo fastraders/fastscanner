@@ -11,13 +11,6 @@ class CandleStore(Protocol):
     ) -> pd.DataFrame: ...
 
 
-class SplitsProvider(Protocol):
-    async def splits(self, start: date, end: date) -> dict[str, date]: ...
-
-
-class CandleStoreWithSplits(CandleStore, SplitsProvider, Protocol): ...
-
-
 class FundamentalDataStore(Protocol):
     async def get(self, symbol: str) -> "FundamentalData": ...
 

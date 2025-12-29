@@ -12,11 +12,7 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
-from fastscanner.services.indicators.ports import (
-    CandleCol,
-    CandleStore,
-    CandleStoreWithSplits,
-)
+from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +21,7 @@ class PartitionedCSVCandlesProvider:
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "candles")
     tz: str = LOCAL_TIMEZONE_STR
 
-    def __init__(self, store: CandleStoreWithSplits):
+    def __init__(self, store: CandleStore):
         self._store = store
 
     async def get(
@@ -74,7 +70,7 @@ class PartitionedCSVCandlesProvider:
 
         return df.loc[start_dt:end_dt]
 
-    async def cache_all_freqs(self, symbol: str, year: int, freqs: list[str]) -> None:
+    async def collect(self, symbol: str, year: int, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
         start = date(year, 1, 1)
@@ -147,62 +143,6 @@ class PartitionedCSVCandlesProvider:
                 await self.get(
                     symbol, start_date, yday, freq, today, _log_cache_miss=False
                 )
-
-    async def collect_splits(self, from_year: int, freqs: list[str]) -> None:
-        today = ClockRegistry.clock.today()
-        last_checked_splits_path = os.path.join(
-            self.CACHE_DIR, "last_checked_splits.txt"
-        )
-
-        if os.path.exists(last_checked_splits_path):
-            with open(last_checked_splits_path, "r") as f:
-                last_checked_str = f.read().strip()
-                splits_last_checked = date.fromisoformat(last_checked_str)
-        else:
-            splits_last_checked = today - timedelta(days=1)
-
-        if splits_last_checked >= today:
-            return
-
-        splits = await self._store.splits(
-            splits_last_checked + timedelta(days=1), today
-        )
-
-        for symbol, _ in splits.items():
-            logger.info(
-                f"Found splits for {symbol} since {splits_last_checked}. Expiring cache."
-            )
-            path = os.path.join(self.CACHE_DIR, symbol)
-            shutil.rmtree(path, ignore_errors=True)
-
-        symbol_to_year: dict[str, int] = {}
-        for symbol in splits:
-            keys = self._partition_keys_in_range(date(from_year, 1, 1), today, "d")
-            for key in keys:
-                partition_path = self._partition_path(symbol, key, "1d")
-                if os.path.exists(partition_path):
-                    df = await self._cache(
-                        symbol, key, "d", "1d", _log_cache_miss=False
-                    )
-                    if not df.empty:
-                        break
-            else:
-                continue
-            symbol_to_year[symbol] = int(df.index.year.min())  # type: ignore
-
-        splits = {key: value for key, value in splits.items() if key in symbol_to_year}
-        tasks = [
-            asyncio.create_task(self.cache_all_freqs(symbol, year, freqs))
-            for symbol in splits
-            for year in range(symbol_to_year[symbol], today.year + 1)
-        ]
-
-        await asyncio.gather(*tasks)
-        self.mark_splits_checked(today)
-
-    def mark_splits_checked(self, date_: date):
-        with open(os.path.join(self.CACHE_DIR, "last_checked_splits.txt"), "w") as f:
-            f.write(date_.isoformat())
 
     def _is_all_freqs_cached(self, symbol: str, year: int, today: date) -> bool:
         key = f"{year}"

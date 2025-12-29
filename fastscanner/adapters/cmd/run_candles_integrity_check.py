@@ -8,11 +8,12 @@ from typing import Any
 
 import pandas as pd
 
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE, ClockRegistry, FixedClock, LocalClock
-from fastscanner.services.indicators.ports import CandleCol, CandleStore, SplitsProvider
+from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -338,12 +339,6 @@ async def check_integrity(
     check_date: date | None = None,
     freqs: list[str] | None = None,
 ) -> None:
-    polygon = PolygonCandlesProvider(
-        config.POLYGON_BASE_URL,
-        config.POLYGON_API_KEY,
-        max_requests_per_sec=2,
-        max_concurrent_requests=2,
-    )
     if check_date is None:
         check_date = ClockRegistry.clock.today() - timedelta(days=1)
     if freqs is None:
@@ -353,18 +348,23 @@ async def check_integrity(
         if not symbols:
             logger.warning(f"No symbols with realtime data found for {check_date}")
             return
-        splits = await polygon.splits(check_date, ClockRegistry.clock.today())
-        logger.info(
-            f"Found {len(splits)} splits on {check_date}, excluding affected symbols"
-        )
-        logger.info(f"Affected symbols: {', '.join(splits.keys())}")
-        symbols = [symbol for symbol in symbols if symbol not in splits]
 
     logger.info(
         f"Starting integrity check for {len(symbols)} symbols on {check_date} for freqs: {freqs}"
     )
 
-    provider = PartitionedCSVCandlesProvider(polygon)
+    polygon = PolygonCandlesProvider(
+        config.POLYGON_BASE_URL,
+        config.POLYGON_API_KEY,
+        max_requests_per_sec=2,
+        max_concurrent_requests=2,
+    )
+    provider = MassiveAdjustedCandlesProvider(
+        PartitionedCSVCandlesProvider(polygon),
+        base_dir=config.DATA_BASE_DIR,
+        api_key=config.POLYGON_API_KEY,
+        base_url=config.POLYGON_BASE_URL,
+    )
     checker = CandleIntegrityChecker(provider)
 
     all_issues: list[IntegrityIssue] = []

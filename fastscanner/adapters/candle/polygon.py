@@ -64,10 +64,10 @@ class PolygonCandlesProvider:
 
         inc = round(max_days * 24 * 60 * 60 * 1000) - 1
         curr_start = round(pd.Timestamp(start, tz=self.tz).timestamp() * 1000)
-        curr_end = curr_start + inc
         end_ts = round(
             pd.Timestamp(end + timedelta(days=1), tz=self.tz).timestamp() * 1000 - 1
         )
+        curr_end = min(curr_start + inc, end_ts)
         dfs: list[pd.DataFrame] = []
 
         while curr_start <= end_ts:
@@ -148,41 +148,6 @@ class PolygonCandlesProvider:
             async with self._rate_limit:
                 async with httpx.AsyncClient() as client:
                     return await self._fetch(client, symbol, start, end, freq)
-
-    async def splits(self, start: date, end: date) -> dict[str, date]:
-        async with httpx.AsyncClient() as client:
-            url = urljoin(self._base_url, "v3/reference/splits")
-            params = {
-                "apiKey": self._api_key,
-                "limit": 1000,
-                "order": "asc",
-                "sort": "execution_date",
-                "execution_date.gte": start.isoformat(),
-                "execution_date.lte": end.isoformat(),
-            }
-            splits: dict[str, date] = {}
-            while True:
-                response = await async_retry_request(
-                    client,
-                    "GET",
-                    url,
-                    params=params,
-                )
-                response.raise_for_status()
-                data = response.json()
-                if len(data.get("results", [])) == 0:
-                    break
-                for item in data["results"]:
-                    ticker = item["ticker"]
-                    execution_date = date.fromisoformat(item["execution_date"])
-                    splits[ticker] = execution_date
-
-                if data.get("next_url") is None:
-                    break
-                url = f'{data["next_url"]}&apiKey={self._api_key}'
-                params = None
-
-        return splits
 
     async def _all_symbols(self, **filter) -> list[str]:
         symbols: list[str] = []
