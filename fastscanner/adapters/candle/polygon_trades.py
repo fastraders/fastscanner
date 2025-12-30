@@ -222,7 +222,9 @@ class PolygonCandlesFromTradesCollector:
 
         client = self._client
         self._client = None
-        with multiprocessing.Pool(processes=self._max_concurrency) as pool:
+        with multiprocessing.get_context("spawn").Pool(
+            processes=self._max_concurrency
+        ) as pool:
             pool.starmap(
                 self._process_date,
                 [
@@ -237,7 +239,9 @@ class PolygonCandlesFromTradesCollector:
 
         client = self._client
         self._client = None
-        with multiprocessing.Pool(processes=self._max_concurrency) as pool:
+        with multiprocessing.get_context("spawn").Pool(
+            processes=self._max_concurrency
+        ) as pool:
             pool.starmap(
                 self._process_date,
                 [(date_, freqs) for date_ in downloaded_dates],
