@@ -26,11 +26,10 @@ class CandlePersister:
         self._client = client
         self._candle_buffers: dict[tuple[str, str], list[dict]] = defaultdict(list)
         self._buffer_dates: dict[tuple[str, str], date | None] = {}
+        self._id_suffix = str(uuid4())[:8]
 
-    @staticmethod
-    def _generate_subscription_id(symbol: str, freq: str) -> str:
-        random_suffix = str(uuid4())[:8]
-        return f"persister_{symbol}_{freq}_{random_suffix}"
+    def _subscription_id(self, symbol: str, freq: str) -> str:
+        return f"persister_{symbol}_{freq}_{self._id_suffix}"
 
     @staticmethod
     def _parse_subscription_id(subscription_id: str) -> tuple[str, str]:
@@ -71,7 +70,7 @@ class CandlePersister:
             await self._flush_buffer(symbol, freq)
 
     async def subscribe(self, symbol: str, freq: str) -> None:
-        subscription_id = self._generate_subscription_id(symbol, freq)
+        subscription_id = self._subscription_id(symbol, freq)
         await self._client.subscribe(
             subscription_id=subscription_id,
             symbol=symbol,
@@ -82,7 +81,7 @@ class CandlePersister:
         logger.info(f"Subscribed to candles for {symbol} ({freq})")
 
     async def unsubscribe(self, symbol: str, freq: str) -> None:
-        subscription_id = self._generate_subscription_id(symbol, freq)
+        subscription_id = self._subscription_id(symbol, freq)
         await self._client.unsubscribe(subscription_id)
         await self._flush_buffer(symbol, freq)
         logger.info(f"Unsubscribed from candles for {symbol} ({freq})")

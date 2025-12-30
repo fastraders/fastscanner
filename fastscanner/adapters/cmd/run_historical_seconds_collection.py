@@ -22,12 +22,12 @@ async def run():
         base_candles_dir=os.path.join(config.DATA_BASE_DIR, "data", "candles"),
         aws_access_key=config.MASSIVE_FILES_ACCESS_KEY,
         aws_secret_key=config.MASSIVE_FILES_SECRET_KEY,
-        max_concurrency=10,
+        max_concurrency=12,
     )
     logger.info("Starting historical seconds collection")
     start_t = time()
-    start_year = 2018
-    end_year = 2018
+    start_year = 2025
+    end_year = 2025
     freqs = ["5s"]
 
     yday = ClockRegistry.clock.today() - timedelta(days=1)

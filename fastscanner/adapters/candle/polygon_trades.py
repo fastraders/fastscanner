@@ -205,6 +205,7 @@ class PolygonCandlesFromTradesCollector:
                 )
         finally:
             os.remove(uncompressed_path)
+            os.remove(local_file_path)
 
     async def collect(
         self,
