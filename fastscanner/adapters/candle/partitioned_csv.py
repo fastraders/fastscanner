@@ -305,7 +305,7 @@ class PartitionedCSVCandlesProvider:
     def _expiration_key(self, key: str, unit: str) -> str:
         return f"{key}_{unit}"
 
-    def _load_expirations(self, symbol):
+    def _load_expirations(self, symbol: str):
         if not hasattr(self, "_expirations"):
             self._expirations = {}
 

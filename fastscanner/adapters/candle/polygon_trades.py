@@ -177,7 +177,6 @@ class PolygonCandlesFromTradesCollector:
             lf = lf.sort(["datetime", "sequence_number"])
             for freq in freqs:
                 _partition_path = lambda ctx: os.path.join(
-                    self._base_candles_dir,
                     ctx.keys[0].hive_name().split("=")[1],
                     freq,
                     f"{date_.isoformat()}.csv",
