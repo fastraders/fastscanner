@@ -118,6 +118,13 @@ class PartitionedCSVCandlesProvider:
         yday = today - timedelta(days=1)
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
+        ## TODO: DELETE AFTER SOME TIME
+        expirations = {
+            k: v for k, v in expirations.items() if k.rsplit("_", 1)[1] != "s"
+        }
+        with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json"), "w") as f:
+            json.dump({key: value.isoformat() for key, value in expirations.items()}, f)
+        ## END TODO
 
         grouped_by_unit: dict[str, str] = {}
         # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
