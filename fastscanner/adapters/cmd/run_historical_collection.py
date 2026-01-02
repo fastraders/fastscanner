@@ -84,6 +84,8 @@ def _run_batch(batch: tuple[list[str], datetime]) -> None:
 
 
 async def run_data_collect():
+    now = LocalClock().now()
+    ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     adjusted_provider = MassiveAdjustedCandlesProvider(
         polygon,
