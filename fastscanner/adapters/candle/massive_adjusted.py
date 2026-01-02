@@ -46,6 +46,8 @@ class MassiveAdjustedCandlesProvider:
                     Split(
                         execution_date=Date.fromisoformat(s["execution_date"]),
                         historical_adjustment_factor=s["historical_adjustment_factor"],
+                        split_from=s["split_from"],
+                        split_to=s["split_to"],
                     )
                     for s in splits
                 ]
@@ -84,6 +86,8 @@ class MassiveAdjustedCandlesProvider:
                             historical_adjustment_factor=item[
                                 "historical_adjustment_factor"
                             ],
+                            split_from=item["split_from"],
+                            split_to=item["split_to"],
                         )
                     )
 
@@ -128,6 +132,8 @@ class MassiveAdjustedCandlesProvider:
                         {
                             "execution_date": s.execution_date.isoformat(),
                             "historical_adjustment_factor": s.historical_adjustment_factor,
+                            "split_from": s.split_from,
+                            "split_to": s.split_to,
                         }
                         for s in splits
                     ]
@@ -172,6 +178,8 @@ class MassiveAdjustedCandlesProvider:
 class Split:
     execution_date: Date
     historical_adjustment_factor: float
+    split_from: int
+    split_to: int
 
     def execution_ts(self) -> pd.Timestamp:
         return pd.Timestamp(self.execution_date, tz=LOCAL_TIMEZONE_STR)
