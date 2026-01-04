@@ -162,10 +162,13 @@ class CandlePersistenceManager:
         if symbol not in self._unit_to_symbol_to_subscribers[unit]:
             return
         self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
-        if not self._unit_to_symbol_to_subscribers[unit][symbol]:
-            freqs = self.UNIT_TO_FREQS[unit]
+        persister_subscription_id = self._persister._subscription_id(symbol, unit)
+        subscribers = self._unit_to_symbol_to_subscribers[unit][symbol]
+        freqs = self.UNIT_TO_FREQS[unit]
+        if subscribers == {persister_subscription_id}:
             for freq in freqs:
                 await self._persister.unsubscribe(symbol, freq)
+        if len(subscribers) == 0:
             del self._unit_to_symbol_to_subscribers[unit][symbol]
             logger.info(
                 f"No more subscribers for {symbol} ({unit}), unsubscribed from freqs: {freqs}"

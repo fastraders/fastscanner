@@ -7,10 +7,9 @@ import os
 import time
 from datetime import date, timedelta
 
-from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCollector
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
-from fastscanner.adapters.candle.polygon_trades import PolygonCandlesFromTradesCollector
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
@@ -67,8 +66,7 @@ async def collect_daily_data(only_active: bool = False) -> None:
         max_requests_per_sec=20,
         max_concurrent_requests=20,
     )
-    adjusted_provider = MassiveAdjustedCandlesProvider(
-        provider,
+    adjusted_provider = MassiveAdjustedCollector(
         base_dir=config.DATA_BASE_DIR,
         api_key=config.POLYGON_API_KEY,
         base_url=config.POLYGON_BASE_URL,
@@ -91,15 +89,15 @@ async def collect_daily_data(only_active: bool = False) -> None:
     with multiprocessing.Pool(n_workers) as pool:
         pool.map(_run_batch, batches)
 
-    collector = PolygonCandlesFromTradesCollector(
-        base_url=config.MASSIVE_FILES_BASE_URL,
-        base_trades_dir=config.TRADES_DATA_DIR,
-        base_candles_dir=os.path.join(config.DATA_BASE_DIR, "data", "candles"),
-        aws_access_key=config.MASSIVE_FILES_ACCESS_KEY,
-        aws_secret_key=config.MASSIVE_FILES_SECRET_KEY,
-        max_concurrency=10,
-    )
-    await collector.collect_latest(["5s"])
+    # collector = PolygonCandlesFromTradesCollector(
+    #     base_url=config.MASSIVE_FILES_BASE_URL,
+    #     base_trades_dir=config.TRADES_DATA_DIR,
+    #     base_candles_dir=os.path.join(config.DATA_BASE_DIR, "data", "candles"),
+    #     aws_access_key=config.MASSIVE_FILES_ACCESS_KEY,
+    #     aws_secret_key=config.MASSIVE_FILES_SECRET_KEY,
+    #     max_concurrency=10,
+    # )
+    # await collector.collect_latest(["5s"])
     logger.info("Data collection completed for all symbols")
 
 

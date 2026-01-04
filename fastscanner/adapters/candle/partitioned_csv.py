@@ -2,11 +2,8 @@ import asyncio
 import json
 import logging
 import os
-import shutil
-import zoneinfo
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
-from typing import Protocol
 
 import pandas as pd
 
@@ -14,15 +11,18 @@ from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
+from .massive_adjusted import MassiveAdjustedMixin
+
 logger = logging.getLogger(__name__)
 
 
-class PartitionedCSVCandlesProvider:
+class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     CACHE_DIR = os.path.join(config.DATA_BASE_DIR, "data", "candles")
     tz: str = LOCAL_TIMEZONE_STR
 
     def __init__(self, store: CandleStore):
         self._store = store
+        self._base_dir = self.CACHE_DIR
 
     async def get(
         self,
@@ -30,6 +30,7 @@ class PartitionedCSVCandlesProvider:
         start: date,
         end: date,
         freq: str,
+        adjusted: bool = True,
         _today: date | None = None,
         _log_cache_miss: bool = True,
     ) -> pd.DataFrame:
@@ -67,8 +68,11 @@ class PartitionedCSVCandlesProvider:
 
         start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
         end_dt = pd.Timestamp(datetime.combine(end, time(23, 59, 59)), tz=self.tz)
+        df = df.loc[start_dt:end_dt]
 
-        return df.loc[start_dt:end_dt]
+        if adjusted:
+            df = self.adjust(symbol, df, to=ClockRegistry.clock.today())
+        return df
 
     async def collect(self, symbol: str, year: int, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
@@ -84,8 +88,12 @@ class PartitionedCSVCandlesProvider:
         day_start = daily_range[0]
         day_end = min(daily_range[1], yday)
 
-        minute_df = await self._store.get(symbol, minute_start, minute_end, "1min")
-        daily_df = await self._store.get(symbol, day_start, day_end, "1d")
+        minute_df = await self._store.get(
+            symbol, minute_start, minute_end, "1min", adjusted=False
+        )
+        daily_df = await self._store.get(
+            symbol, day_start, day_end, "1d", adjusted=False
+        )
 
         for freq in freqs:
             if freq == "1min":
@@ -148,7 +156,13 @@ class PartitionedCSVCandlesProvider:
             start_date, _ = self._range_from_key(partition_key, unit)
             for freq in freqs:
                 await self.get(
-                    symbol, start_date, yday, freq, today, _log_cache_miss=False
+                    symbol,
+                    start_date,
+                    yday,
+                    freq,
+                    adjusted=False,
+                    _today=today,
+                    _log_cache_miss=False,
                 )
 
     def _is_all_freqs_cached(self, symbol: str, year: int, today: date) -> bool:
@@ -196,7 +210,7 @@ class PartitionedCSVCandlesProvider:
         start, end = self._range_from_key(key, unit)
         yday = today - timedelta(days=1)
         end = min(end, yday)
-        df = (await self._store.get(symbol, start, end, freq)).dropna()
+        df = (await self._store.get(symbol, start, end, freq, adjusted=False)).dropna()
         self._save_cache(symbol, key, freq, df)
         self._mark_expiration(symbol, key, unit, today)
         return df

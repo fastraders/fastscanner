@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
+from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCollector
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
@@ -87,17 +87,16 @@ async def run_data_collect():
     now = LocalClock().now()
     ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
-    adjusted_provider = MassiveAdjustedCandlesProvider(
-        polygon,
+    collector = MassiveAdjustedCollector(
         base_dir=config.DATA_BASE_DIR,
         api_key=config.POLYGON_API_KEY,
         base_url=config.POLYGON_BASE_URL,
     )
-    await adjusted_provider.collect_all_splits()
-    now = LocalClock().now()
-    ClockRegistry.set(FixedClock(now))
+    await collector.collect_all_splits()
 
     all_symbols = await polygon.all_symbols()
+    # all_symbols = all_symbols[:10]
+
     n_workers = multiprocessing.cpu_count()
     batch_size = math.ceil(len(all_symbols) / n_workers)
     batches = [

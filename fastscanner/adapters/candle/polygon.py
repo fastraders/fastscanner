@@ -15,10 +15,12 @@ from fastscanner.pkg.http import MaxRetryError, async_retry_request
 from fastscanner.pkg.ratelimit import RateLimiter
 from fastscanner.services.indicators.ports import CandleCol
 
+from .massive_adjusted import MassiveAdjustedMixin
+
 logger = logging.getLogger(__name__)
 
 
-class PolygonCandlesProvider:
+class PolygonCandlesProvider(MassiveAdjustedMixin):
     tz: str = LOCAL_TIMEZONE_STR
     columns = list(CandleCol.RESAMPLE_MAP.keys())
 
@@ -33,6 +35,7 @@ class PolygonCandlesProvider:
         self._api_key = api_key
         self._rate_limit = RateLimiter(max_requests_per_sec)
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self._base_dir = os.path.join(config.DATA_BASE_DIR, "data", "candles")
 
     async def _fetch(
         self,
@@ -143,11 +146,16 @@ class PolygonCandlesProvider:
             df = df.tz_localize("utc").tz_convert(self.tz)
         return df
 
-    async def get(self, symbol: str, start: date, end: date, freq: str) -> pd.DataFrame:
+    async def get(
+        self, symbol: str, start: date, end: date, freq: str, adjusted: bool = True
+    ) -> pd.DataFrame:
         async with self._semaphore:
             async with self._rate_limit:
                 async with httpx.AsyncClient() as client:
-                    return await self._fetch(client, symbol, start, end, freq)
+                    df = await self._fetch(client, symbol, start, end, freq)
+                    if adjusted:
+                        df = self.adjust(symbol, df, to=ClockRegistry.clock.today())
+                    return df
 
     async def _all_symbols(self, **filter) -> list[str]:
         symbols: list[str] = []

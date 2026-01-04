@@ -8,7 +8,6 @@ from typing import Any
 
 import pandas as pd
 
-from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCandlesProvider
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
@@ -139,12 +138,14 @@ class CandleIntegrityChecker:
         try:
             if realtime_df.empty:
                 source_df = await self._provider.get(
-                    symbol, check_date, check_date, freq
+                    symbol, check_date, check_date, freq, adjusted=False
                 )
             else:
                 start_time = realtime_df.index.min().date()
                 end_time = realtime_df.index.max().date()
-                source_df = await self._provider.get(symbol, start_time, end_time, freq)
+                source_df = await self._provider.get(
+                    symbol, start_time, end_time, freq, adjusted=False
+                )
                 start_ts = realtime_df.index.min()
                 end_ts = realtime_df.index.max()
                 source_df = source_df.loc[start_ts:end_ts]
@@ -359,12 +360,7 @@ async def check_integrity(
         max_requests_per_sec=2,
         max_concurrent_requests=2,
     )
-    provider = MassiveAdjustedCandlesProvider(
-        PartitionedCSVCandlesProvider(polygon),
-        base_dir=config.DATA_BASE_DIR,
-        api_key=config.POLYGON_API_KEY,
-        base_url=config.POLYGON_BASE_URL,
-    )
+    provider = PartitionedCSVCandlesProvider(polygon)
     checker = CandleIntegrityChecker(provider)
 
     all_issues: list[IntegrityIssue] = []

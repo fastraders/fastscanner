@@ -3,6 +3,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import date as Date
+from typing import Awaitable, Callable
 from urllib.parse import urljoin
 
 import httpx
@@ -16,19 +17,20 @@ from fastscanner.services.indicators.ports import CandleStore
 logger = logging.getLogger(__name__)
 
 
-class MassiveAdjustedCandlesProvider:
-    def __init__(
-        self,
-        store: CandleStore,
-        base_dir: str,
-        api_key: str,
-        base_url: str,
-    ) -> None:
-        self._store = store
-        self._splits_cache: dict[str, list[Split]] | None = None
-        self._base_dir = os.path.join(base_dir, "data")
-        self._api_key = api_key
-        self._base_url = base_url
+@dataclass
+class Split:
+    execution_date: Date
+    historical_adjustment_factor: float
+    split_from: int
+    split_to: int
+
+    def execution_ts(self) -> pd.Timestamp:
+        return pd.Timestamp(self.execution_date, tz=LOCAL_TIMEZONE_STR)
+
+
+class _MassiveSplitsLoader:
+    _base_dir: str
+    _splits_cache: dict[str, list[Split]] | None = None
 
     @property
     def splits(self) -> "dict[str, list[Split]]":
@@ -53,6 +55,18 @@ class MassiveAdjustedCandlesProvider:
                 ]
                 for symbol, splits in json.load(f).items()
             }
+
+
+class MassiveAdjustedCollector(_MassiveSplitsLoader):
+    def __init__(
+        self,
+        base_dir: str,
+        api_key: str,
+        base_url: str,
+    ) -> None:
+        self._base_dir = base_dir
+        self._api_key = api_key
+        self._base_url = base_url
 
     async def _fetch_splits(
         self, extra_params: dict | None = None
@@ -142,20 +156,15 @@ class MassiveAdjustedCandlesProvider:
                 f,
             )
 
-    async def get(self, symbol: str, start: Date, end: Date, freq: str) -> pd.DataFrame:
-        df = await self._store.get(symbol, start, end, freq)
-        if df.empty:
-            return df
 
+class MassiveAdjustedMixin(_MassiveSplitsLoader):
+    get: Callable[[str, Date, Date, str], Awaitable[pd.DataFrame]]
+
+    def adjust(self, symbol: str, df: pd.DataFrame, to: Date) -> pd.DataFrame:
         min_date = df.index.min().date()
-        max_date = df.index.max().date()
-        splits: list[Split] = []
-        for split in self.splits.get(symbol, []):
-            if min_date <= split.execution_date:
-                splits.append(split)
-            # Only needs splits up to the first date after max_date
-            if split.execution_date > max_date:
-                break
+        splits: list[Split] = [
+            s for s in self.splits.get(symbol, []) if min_date <= s.execution_date <= to
+        ]
         if len(splits) == 0:
             return df
 
@@ -163,23 +172,12 @@ class MassiveAdjustedCandlesProvider:
         assert isinstance(df.index, pd.DatetimeIndex)
         price_cols = [C.OPEN, C.HIGH, C.LOW, C.CLOSE]
         indexer = df.index < prev_split.execution_ts()
-        df.loc[indexer, price_cols] *= prev_split.historical_adjustment_factor
+        df.loc[indexer, price_cols] *= prev_split.split_from / prev_split.split_to
 
         for split in splits[1:]:
             ts = split.execution_ts()
-            indexer = (df.index >= ts) & (df.index < ts)
-            df.loc[indexer, price_cols] *= split.historical_adjustment_factor
+            indexer = df.index < ts
+            df.loc[indexer, price_cols] *= split.split_from / split.split_to
             prev_split = split
 
         return df
-
-
-@dataclass
-class Split:
-    execution_date: Date
-    historical_adjustment_factor: float
-    split_from: int
-    split_to: int
-
-    def execution_ts(self) -> pd.Timestamp:
-        return pd.Timestamp(self.execution_date, tz=LOCAL_TIMEZONE_STR)

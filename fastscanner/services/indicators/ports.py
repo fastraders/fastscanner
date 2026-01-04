@@ -7,7 +7,7 @@ import pandas as pd
 
 class CandleStore(Protocol):
     async def get(
-        self, symbol: str, start: date, end: date, freq: str
+        self, symbol: str, start: date, end: date, freq: str, adjusted: bool = True
     ) -> pd.DataFrame: ...
 
 

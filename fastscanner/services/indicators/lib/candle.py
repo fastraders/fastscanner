@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal
 import numpy as np
 import pandas as pd
 
-from fastscanner.pkg.clock import split_freq
+from fastscanner.pkg.clock import ClockRegistry, split_freq
 from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
     PrevDayIndicator,

@@ -4,7 +4,7 @@ import math
 import multiprocessing
 import os
 import time as time_count
-from datetime import date, time
+from datetime import date, datetime, time
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
-from fastscanner.pkg.clock import ClockRegistry, LocalClock
+from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.lib import Indicator
 from fastscanner.services.indicators.lib.candle import PositionInRangeIndicator
@@ -91,7 +91,8 @@ async def _run_async(
     end_date: date,
     freq: str,
 ):
-    ClockRegistry.set(LocalClock())
+    # We set the clock to a fixed date to ensure that adjustments are done correctly
+    ClockRegistry.set(FixedClock(datetime.combine(end_date, time(23, 59, 59))))
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
