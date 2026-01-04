@@ -22,7 +22,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
 
     def __init__(self, store: CandleStore):
         self._store = store
-        self._base_dir = self.CACHE_DIR
+        self._base_dir = config.DATA_BASE_DIR
 
     async def get(
         self,

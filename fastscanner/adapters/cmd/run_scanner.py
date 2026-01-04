@@ -4,7 +4,7 @@ import math
 import multiprocessing
 import os
 import time as time_count
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 
@@ -92,7 +92,9 @@ async def _run_async(
     freq: str,
 ):
     # We set the clock to a fixed date to ensure that adjustments are done correctly
-    ClockRegistry.set(FixedClock(datetime.combine(end_date, time(23, 59, 59))))
+    ClockRegistry.set(
+        FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
+    )
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
@@ -177,8 +179,8 @@ async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
     all_symbols = await polygon.all_symbols()
-    # all_symbols = ["AADI"]
-    start_date = date(2020, 1, 1)
+    # all_symbols = ["A", "AA", "AABB", "AACT", "AADI", "AAGC", "AAGH", "AAGR", "AAL", "AAM", "AMAL", "AMAT", "AMBA", "AMBC", "AMBI", "AMBK", "AMBP", "AMBS", "AMBZ", "AMC", "AMCR", "AWAW", "AWCA", "AWH", "AWI", "AWIN", "AWK", "AWON", "AWR", "AWRE", "AWSL", "AWX", "AX", "AXCG", "AXDX", "BPYPM", "BPYPN", "BPYPO", "BQ", "BQST", "BR", "BRAC", "BRAG", "BRAV", "BRBL", "BRBR", "BRBS", "BRC", "BRCC", "CGC", "CGEM", "CGEN", "CGIP", "CSBB", "CSBR", "CSCI", "CSCO", "CSDX", "CSGH", "CSGP", "CSGS", "CSHX", "CSIQ", "CSL", "CSLI", "CSLM", "CSLR", "CSOC", "DRTS", "DRUG", "DRVN", "EUSP", "EVBN", "EVC", "EVCM", "EVER", "EVEX", "EVFM", "EVGN", "EVGO", "EVGR", "EVH", "EVI", "EVIO", "EVKG", "EVLI", "EVLO", "EVLV", "FTDR", "FTEG", "FTEK", "FTEL", "FTFI", "FTFT", "GRWG", "GRYEF", "GRYP", "GS", "GSAC", "GSAT", "GSBC", "GSBD", "GSBX", "GSDC", "GSDT", "GSFD", "GSFI", "GSHD", "HWAL", "HWBK", "HWC", "HWCPZ", "JAKK", "JAMF", "JAMN", "MGIC", "MGIH", "MGLD", "MGM", "MGNI", "MGNX", "MGOL", "MGPI", "MGRC", "MGRM", "MGRX", "MGSD", "MGTI", "NECB", "NEE", "NEFB", "NEGG", "NEHC", "NEM", "NEN", "NEO", "NEOG", "NEOM", "NEON", "NEOV", "NEP", "NEPH", "ODC", "ODD", "ODFL", "ODP", "RAHGF", "RAIL", "RAKR", "RAMP", "RAND", "RANI", "RAPP", "RAPT", "RARE", "SBNC", "SBNY", "SPBV", "SPCB", "SPCE", "SPCO", "TETE", "UCSO", "UCTT", "UDMY", "UDR", "WCC", "WCCP", "WCFB", "WCHD", "WCIG", "WCN"] # fmt: skip
+    start_date = date(2024, 12, 20)
     end_date = date(2024, 12, 31)
     freq = "1min"
     # scanner = ATRGapDownScanner(
