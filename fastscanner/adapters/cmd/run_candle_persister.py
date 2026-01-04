@@ -135,7 +135,7 @@ class CandlePersister:
 
 class CandlePersistenceManager:
     UNIT_TO_FREQS: dict[str, list[str]] = {
-        "s": ["5s"],
+        "s": [],
         "min": ["1min"],
     }
 
@@ -166,6 +166,9 @@ class CandlePersistenceManager:
         subscribers = self._unit_to_symbol_to_subscribers[unit][symbol]
         freqs = self.UNIT_TO_FREQS[unit]
         if subscribers == {persister_subscription_id}:
+            logger.info(
+                f"Only persister subscriber left for {symbol} ({unit}), unsubscribing from freqs: {freqs}"
+            )
             for freq in freqs:
                 await self._persister.unsubscribe(symbol, freq)
         if len(subscribers) == 0:
