@@ -12,28 +12,37 @@ if TYPE_CHECKING:
 
 
 class PrevDayIndicator:
-    def __init__(self, candle_col: str):
+    def __init__(self, candle_col: str, n_days_offset: int = 1):
         self._candle_col = candle_col
         self._prev_day: dict[str, float] = {}
         self._last_date: dict[str, date] = {}
+        self._n_days_offset = n_days_offset
 
     @classmethod
     def type(cls):
         return "prev_day"
 
     def column_name(self):
-        return f"prev_day_{self._candle_col}"
+        if self._n_days_offset == 1:
+            return f"prev_day_{self._candle_col}"
+        return f"prev_{self._n_days_offset}day_{self._candle_col}"
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        start_date = lookback_days(df.index[0].date(), 1)
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+        start_date = lookback_days(df.index[0].date(), self._n_days_offset)
         end_date = df.index[-1].date() - timedelta(days=1)
 
         daily = await ApplicationRegistry.candles.get(
             symbol, start_date, end_date, "1d"
         )
         daily = daily.set_index(daily.index.date)  # type: ignore
+        # This line is very important because sometimes the end date doesn't have a candle.
         daily.loc[df.index[-1].date(), self._candle_col] = pd.NA
-        daily = daily.shift(1).rename(columns={self._candle_col: self.column_name()})
+        daily = daily.shift(self._n_days_offset).rename(
+            columns={self._candle_col: self.column_name()}
+        )
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(daily[[self.column_name()]], on="date")
@@ -43,10 +52,11 @@ class PrevDayIndicator:
         assert isinstance(new_row.name, datetime)
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            yday = lookback_days(new_date, 1)
-            close = await ApplicationRegistry.candles.get(symbol, yday, yday, "1d")
-            if not close.empty:
-                self._prev_day[symbol] = close[self._candle_col].values[0]
+            start = lookback_days(new_date, self._n_days_offset)
+            candles = await ApplicationRegistry.candles.get(symbol, start, start, "1d")
+            self._prev_day.pop(symbol, None)
+            if not candles.empty:
+                self._prev_day[symbol] = candles[self._candle_col].values[0]
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._prev_day.get(symbol, pd.NA)
@@ -67,6 +77,10 @@ class DailyGapIndicator:
         return "daily_gap"
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+
         start_date = lookback_days(df.index[0].date(), 1)
         end_date = df.index[-1].date()
 
@@ -246,6 +260,9 @@ class ADRIndicator:
         return f"adr_{self._period}"
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
         assert isinstance(df.index, pd.DatetimeIndex)
         start = lookback_days(df.index[0].date(), self._period + 1)
         end = df.index[-1].date() - timedelta(days=1)
@@ -261,7 +278,7 @@ class ADRIndicator:
             .set_axis(daily_df.index.date)  # type: ignore
             .rename(self.column_name())
         )
-        adr[df.index[-1].date()] = pd.NA
+        adr[df.index[-1].date()] = pd.NA  # type: ignore
         adr = adr.shift(1)
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(adr, on="date")
@@ -294,6 +311,9 @@ class ADVIndicator:
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         assert isinstance(df.index, pd.DatetimeIndex)
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
         start = lookback_days(df.index[0].date(), self._period + 1)
         end = df.index[-1].date() - timedelta(days=1)
         df_daily = await ApplicationRegistry.candles.get(symbol, start, end, "1d")
@@ -308,7 +328,7 @@ class ADVIndicator:
             .mean()
             .rename(self.column_name())
         )
-        daily_vol[df.index[-1].date()] = pd.NA
+        daily_vol.loc[df.index[-1].date()] = pd.NA  # type: ignore
         daily_vol = daily_vol.shift(1)
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(daily_vol, on="date")
@@ -323,3 +343,37 @@ class ADVIndicator:
             self._last_value[symbol] = new_row[self.column_name()]
         new_row[self.column_name()] = self._last_value[symbol]
         return new_row
+
+
+class PrevAllDayIndicator:
+    def __init__(self, candle_col: str):
+        self._candle_col = candle_col
+        self._prev_value: dict[str, float] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "prev_allday"
+
+    def column_name(self):
+        return f"prev_allday_{self._candle_col}"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+
+        start_date = lookback_days(df.index[0].date(), 1)
+        end_date = df.index[-1].date() - timedelta(days=1)
+
+        candles = await ApplicationRegistry.candles.get(
+            symbol, start_date, end_date, "1min"
+        )
+        daily = candles.resample("1d").agg(C.RESAMPLE_MAP).dropna()  # type: ignore
+        daily = daily.set_index(daily.index.date)  # type: ignore
+        daily.loc[df.index[-1].date(), self._candle_col] = pd.NA
+        daily = daily.shift(1).rename(columns={self._candle_col: self.column_name()})
+
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df.join(daily[[self.column_name()]], on="date")
+        return df.drop(columns=["date"])

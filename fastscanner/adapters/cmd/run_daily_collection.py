@@ -67,7 +67,7 @@ async def collect_daily_data(only_active: bool = False) -> None:
         max_concurrent_requests=20,
     )
     adjusted_provider = MassiveAdjustedCollector(
-        base_dir=config.DATA_BASE_DIR,
+        base_dir=os.path.join(config.DATA_BASE_DIR, "data"),
         api_key=config.POLYGON_API_KEY,
         base_url=config.POLYGON_BASE_URL,
     )

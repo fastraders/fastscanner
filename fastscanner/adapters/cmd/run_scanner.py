@@ -31,6 +31,7 @@ from fastscanner.services.indicators.lib.fundamental import (
 )
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
+from fastscanner.services.scanners.lib.day2 import Day2GapScanner
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import (
     ATRParabolicDownScanner,
@@ -180,9 +181,9 @@ async def run_scanner():
 
     all_symbols = await polygon.all_symbols()
     # all_symbols = ["A", "AA", "AABB", "AACT", "AADI", "AAGC", "AAGH", "AAGR", "AAL", "AAM", "AMAL", "AMAT", "AMBA", "AMBC", "AMBI", "AMBK", "AMBP", "AMBS", "AMBZ", "AMC", "AMCR", "AWAW", "AWCA", "AWH", "AWI", "AWIN", "AWK", "AWON", "AWR", "AWRE", "AWSL", "AWX", "AX", "AXCG", "AXDX", "BPYPM", "BPYPN", "BPYPO", "BQ", "BQST", "BR", "BRAC", "BRAG", "BRAV", "BRBL", "BRBR", "BRBS", "BRC", "BRCC", "CGC", "CGEM", "CGEN", "CGIP", "CSBB", "CSBR", "CSCI", "CSCO", "CSDX", "CSGH", "CSGP", "CSGS", "CSHX", "CSIQ", "CSL", "CSLI", "CSLM", "CSLR", "CSOC", "DRTS", "DRUG", "DRVN", "EUSP", "EVBN", "EVC", "EVCM", "EVER", "EVEX", "EVFM", "EVGN", "EVGO", "EVGR", "EVH", "EVI", "EVIO", "EVKG", "EVLI", "EVLO", "EVLV", "FTDR", "FTEG", "FTEK", "FTEL", "FTFI", "FTFT", "GRWG", "GRYEF", "GRYP", "GS", "GSAC", "GSAT", "GSBC", "GSBD", "GSBX", "GSDC", "GSDT", "GSFD", "GSFI", "GSHD", "HWAL", "HWBK", "HWC", "HWCPZ", "JAKK", "JAMF", "JAMN", "MGIC", "MGIH", "MGLD", "MGM", "MGNI", "MGNX", "MGOL", "MGPI", "MGRC", "MGRM", "MGRX", "MGSD", "MGTI", "NECB", "NEE", "NEFB", "NEGG", "NEHC", "NEM", "NEN", "NEO", "NEOG", "NEOM", "NEON", "NEOV", "NEP", "NEPH", "ODC", "ODD", "ODFL", "ODP", "RAHGF", "RAIL", "RAKR", "RAMP", "RAND", "RANI", "RAPP", "RAPT", "RARE", "SBNC", "SBNY", "SPBV", "SPCB", "SPCE", "SPCO", "TETE", "UCSO", "UCTT", "UDMY", "UDR", "WCC", "WCCP", "WCFB", "WCHD", "WCIG", "WCN"] # fmt: skip
-    start_date = date(2024, 12, 20)
-    end_date = date(2024, 12, 31)
-    freq = "1min"
+    start_date = date(2025, 12, 20)
+    end_date = date(2025, 12, 31)
+    freq = "1d"
     # scanner = ATRGapDownScanner(
     #     min_adv=1_000_000,
     #     min_adr=0.005,
@@ -215,15 +216,23 @@ async def run_scanner():
     #     n_days=5,
     #     include_null_market_cap=True,
     # )
-    scanner = SmallCapUpScanner(
-        min_volume=10_000,
-        min_gap=0.10,
-        min_price=0.3,
+    # scanner = SmallCapUpScanner(
+    #     min_volume=10_000,
+    #     min_gap=0.10,
+    #     min_price=0.3,
+    #     min_market_cap=100_000,
+    #     max_market_cap=100_000_000,
+    #     include_null_market_cap=True,
+    #     start_time=time(4, 00),
+    #     end_time=time(12, 00),
+    # )
+    scanner = Day2GapScanner(
+        min_adv=0,
+        min_adr=0,
+        min_gap=0.05,
         min_market_cap=100_000,
-        max_market_cap=100_000_000,
+        max_market_cap=1_000_000_000,
         include_null_market_cap=True,
-        start_time=time(4, 00),
-        end_time=time(12, 00),
     )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1

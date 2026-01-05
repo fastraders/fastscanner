@@ -2,6 +2,7 @@ import asyncio
 import logging
 import math
 import multiprocessing
+import os
 import time
 from datetime import datetime
 
@@ -88,7 +89,7 @@ async def run_data_collect():
     ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     collector = MassiveAdjustedCollector(
-        base_dir=config.DATA_BASE_DIR,
+        base_dir=os.path.join(config.DATA_BASE_DIR, "data"),
         api_key=config.POLYGON_API_KEY,
         base_url=config.POLYGON_BASE_URL,
     )

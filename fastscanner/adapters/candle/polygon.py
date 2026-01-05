@@ -35,7 +35,7 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
         self._api_key = api_key
         self._rate_limit = RateLimiter(max_requests_per_sec)
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
-        self._base_dir = os.path.join(config.DATA_BASE_DIR, "data", "candles")
+        self._base_dir = os.path.join(config.DATA_BASE_DIR, "data")
 
     async def _fetch(
         self,

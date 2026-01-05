@@ -161,6 +161,9 @@ class MassiveAdjustedMixin(_MassiveSplitsLoader):
     get: Callable[[str, Date, Date, str], Awaitable[pd.DataFrame]]
 
     def adjust(self, symbol: str, df: pd.DataFrame, to: Date) -> pd.DataFrame:
+        if df.empty:
+            return df
+
         min_date = df.index.min().date()
         splits: list[Split] = [
             s for s in self.splits.get(symbol, []) if min_date <= s.execution_date <= to
