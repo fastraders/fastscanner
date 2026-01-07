@@ -10,6 +10,7 @@ from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
+logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
