@@ -202,41 +202,49 @@ async def websocket_realtime_indicators(
     await websocket.accept()
     subscriptions: dict[str, tuple[str, str]] = {}
 
+    data = ""
     try:
         while True:
-            data = await websocket.receive_text()
+            try:
+                data = await websocket.receive_text()
 
-            # Parse request and determine action
-            request_data = json.loads(data)
-            action = request_data.get("action")
+                # Parse request and determine action
+                request_data = json.loads(data)
+                action = request_data.get("action")
 
-            if action == ActionType.SUBSCRIBE:
-                request = SubscriptionRequest.model_validate_json(data)
-                response = await _handle_subscribe(
-                    request, websocket, service, subscriptions
-                )
-                await websocket.send_text(response.model_dump_json())
+                if action == ActionType.SUBSCRIBE:
+                    request = SubscriptionRequest.model_validate_json(data)
+                    response = await _handle_subscribe(
+                        request, websocket, service, subscriptions
+                    )
+                    await websocket.send_text(response.model_dump_json())
 
-            elif action == ActionType.UNSUBSCRIBE:
-                request = UnsubscriptionRequest.model_validate_json(data)
-                response = await _handle_unsubscribe(request, service, subscriptions)
-                await websocket.send_text(response.model_dump_json())
+                elif action == ActionType.UNSUBSCRIBE:
+                    request = UnsubscriptionRequest.model_validate_json(data)
+                    response = await _handle_unsubscribe(
+                        request, service, subscriptions
+                    )
+                    await websocket.send_text(response.model_dump_json())
 
-            else:
-                response = SubscriptionResponse(
-                    status=StatusType.ERROR,
-                    subscription_id="",
-                    message=f"Unknown action: {action}",
-                )
-                await websocket.send_text(response.model_dump_json())
+                else:
+                    response = SubscriptionResponse(
+                        status=StatusType.ERROR,
+                        subscription_id="",
+                        message=f"Unknown action: {action}",
+                    )
+                    await websocket.send_text(response.model_dump_json())
 
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
-    except Exception as e:
-        logger.exception(e)
+            except WebSocketDisconnect:
+                logger.info("WebSocket disconnected")
+                break
+            except Exception as e:
+                logger.error(f"Error processing WebSocket message: {data}")
+                logger.exception(e)
     finally:
-        # Unsubscribe all active subscriptions
-        for subscription_id, (symbol, service_subscription_id) in subscriptions.items():
+        for subscription_id, (
+            symbol,
+            service_subscription_id,
+        ) in subscriptions.items():
             try:
                 await service.unsubscribe_realtime(symbol, service_subscription_id)
                 logger.info(f"Cleaned up subscription {subscription_id}")
