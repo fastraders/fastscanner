@@ -69,7 +69,9 @@ class MockChannel:
 
 
 class MockCandleStore:
-    async def get(self, symbol, start, end, freq):
+    async def get(
+        self, symbol, start, end, freq, adjusted: bool = False
+    ) -> pd.DataFrame:
         return pd.DataFrame()
 
 
@@ -102,7 +104,9 @@ def indicators_service():
     candles = MockCandleStore()
     fundamentals = MockFundamentalDataStore()
     channel = MockChannel()
-    service = IndicatorsService(candles, fundamentals, channel)
+    service = IndicatorsService(
+        candles, fundamentals, channel, "test_subscribe", "test_unsubscribe"
+    )
 
     yield service, channel
 

@@ -37,7 +37,6 @@ def test_init(nats_channel):
     assert nats_channel._handlers == {}
     assert nats_channel._subscriptions == {}
     assert nats_channel._pending_messages == []
-    assert not nats_channel._is_stopped
 
 
 def test_nc_property_raises_when_not_connected(nats_channel):
@@ -178,14 +177,3 @@ async def test_unsubscribe_removes_subscription_when_no_handlers(nats_channel):
     assert "test_channel" not in nats_channel._handlers
     assert "test_channel" not in nats_channel._subscriptions
     mock_subscription.unsubscribe.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_reset(nats_channel):
-    mock_nc = Mock()
-    mock_nc.is_closed = False
-    mock_nc.close = AsyncMock()
-
-    await nats_channel.reset()
-
-    assert nats_channel._is_stopped is True

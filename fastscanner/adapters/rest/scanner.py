@@ -1,46 +1,20 @@
 import logging
-from datetime import datetime, time, date
-from typing import Any, Dict, List
+from datetime import datetime, time
+from typing import Any, Dict
 
 import pandas as pd
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
-from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
-from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.adapters.rest.services import get_scanner_service
-from fastscanner.pkg import config
-from fastscanner.pkg.clock import ClockRegistry, LocalClock
-from fastscanner.services.scanners.ports import ScannerParams, SymbolsProvider
-from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
+from fastscanner.services.scanners.ports import ScannerParams
+from fastscanner.services.scanners.service import ScannerService
+
+from .models import ScannerRequest, ScannerResponse, ScanRequest, ScanResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/scanners", tags=["scanner"])
-
-
-class ScannerRequest(BaseModel):
-    type: str
-    params: Dict[str, Any]
-
-
-class ScannerResponse(BaseModel):
-    scanner_id: str
-
-
-class ScanRequest(BaseModel):
-    start: date
-    end: date
-    freq: str
-    type: str
-    params: Dict[str, Any]
-
-
-class ScanResponse(BaseModel):
-    results: List[Dict[str, Any]]
-    total_symbols: int
-    scanner_type: str
 
 
 class ScannerMessage(BaseModel):
@@ -105,7 +79,6 @@ async def websocket_realtime_scanner(
     websocket: WebSocket, service: ScannerService = Depends(get_scanner_service)
 ):
     await websocket.accept()
-    scanner_id = None
 
     data = await websocket.receive_text()
     scanner_request = ScannerRequest.model_validate_json(data)
@@ -133,13 +106,35 @@ async def websocket_realtime_scanner(
             logger.info(f"Unsubscribed scanner {scanner_id}")
 
 
-@router.post("")
+@router.post("/{scanner_type}/scans")
 async def scan(
     request: ScanRequest, service: ScannerService = Depends(get_scanner_service)
 ) -> ScanResponse:
 
     result = await service.scan_all(
         scanner_type=request.type,
+        params=request.params,
+        start=request.start,
+        end=request.end,
+        freq=request.freq,
+    )
+
+    return ScanResponse(
+        results=result.results,
+        total_symbols=result.total_symbols,
+        scanner_type=result.scanner_type,
+    )
+
+
+@router.post("/{scanner_type}/scans")
+async def scan_type(
+    scanner_type: str,
+    request: ScanRequest,
+    service: ScannerService = Depends(get_scanner_service),
+) -> ScanResponse:
+
+    result = await service.scan_all(
+        scanner_type=scanner_type,
         params=request.params,
         start=request.start,
         end=request.end,

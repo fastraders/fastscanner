@@ -19,6 +19,8 @@ class ScanAllResult:
 
 
 class Scanner(Protocol):
+    def id(self) -> str: ...
+
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -27,14 +29,19 @@ class Scanner(Protocol):
         """
         ...
 
-    async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
+    @classmethod
+    def type(cls) -> str: ...
 
+
+class ScannerRealtime(Protocol):
     def id(self) -> str: ...
 
     @classmethod
     def type(cls) -> str: ...
+
+    async def scan_realtime(
+        self, symbol: str, new_row: pd.Series, freq: str
+    ) -> tuple[pd.Series, bool]: ...
 
 
 class SymbolsProvider(Protocol):

@@ -259,7 +259,7 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
     dummy_df["datetime"] = dummy_df.index
     provider._store.get = AsyncMock(return_value=dummy_df)
 
-    await provider.collect_expired_data(symbol)
+    await provider.collect_expired_data(symbol, ["1min", "1h", "1d"])
 
     calls = provider._store.get.call_args_list
 
@@ -272,7 +272,7 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
 
     assert all(isinstance(sd, date) for sd in called_start_dates)
 
-    expected_freqs = ["1min", "2min", "3min", "5min", "10min", "15min", "1h", "1d"]
+    expected_freqs = ["1min", "1h", "1d"]
     assert set(called_freqs) == set(expected_freqs)
 
     for call in calls:
@@ -313,7 +313,7 @@ class MockStoreWithDelay:
     def __init__(self):
         self.calls = []
 
-    async def get(self, symbol, start, end, freq):
+    async def get(self, symbol, start, end, freq, adjusted: bool = False):
         self.calls.append((symbol, start, end, freq))
         time.sleep(0.2)
 

@@ -415,10 +415,6 @@ class DailyATRParabolicUpScanner:
 
         return daily_df[daily_df["signal"] > self._atr_multiplier]
 
-    async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
-
 
 class DailyATRParabolicDownScanner:
     def __init__(
@@ -491,7 +487,3 @@ class DailyATRParabolicDownScanner:
         ) / daily_df[daily_atr.column_name()]
 
         return daily_df[daily_df["signal"] > self._atr_multiplier]
-
-    async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...

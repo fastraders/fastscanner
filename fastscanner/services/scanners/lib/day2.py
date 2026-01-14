@@ -4,6 +4,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
@@ -31,6 +32,8 @@ class Day2GapScanner:
         min_adv: float,
         min_adr: float,
         min_gap: float,
+        min_retrace: float,
+        min_price: float,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
         include_null_market_cap: bool = False,
@@ -39,6 +42,8 @@ class Day2GapScanner:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._min_gap = min_gap
+        self._min_retrace = min_retrace
+        self._min_price = min_price
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
@@ -66,9 +71,10 @@ class Day2GapScanner:
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
             lookback_days(start, 1),
-            end,
+            lookback_days(end, 1),
             "1d",
         )
+        daily_df.loc[pd.Timestamp(end, tz=LOCAL_TIMEZONE_STR), :] = pd.NA
         daily_df = daily_df.shift(1)
         daily_df = daily_df.loc[daily_df.index.date >= start]  # type: ignore
         if daily_df.empty:
@@ -81,6 +87,9 @@ class Day2GapScanner:
         daily_df = await prev_2day_close.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
 
+        daily_df = daily_df[
+            daily_df[prev_all_day_close.column_name()] >= self._min_price
+        ]
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
         daily_df = filter_by_market_cap(
@@ -103,8 +112,7 @@ class Day2GapScanner:
             - daily_df[prev_2day_close.column_name()]
         ) / daily_df[prev_2day_close.column_name()]
 
-        return daily_df[daily_df[signal_col] > self._min_gap]
-
-    async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
-    ) -> tuple[pd.Series, bool]: ...
+        return daily_df[
+            (daily_df[signal_col] > self._min_gap)
+            & (daily_df["retrace"] > self._min_retrace)
+        ]

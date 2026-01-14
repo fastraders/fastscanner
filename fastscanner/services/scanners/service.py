@@ -15,6 +15,7 @@ from fastscanner.services.scanners.ports import (
     ScanAllResult,
     Scanner,
     ScannerParams,
+    ScannerRealtime,
     SymbolsProvider,
 )
 
@@ -33,7 +34,7 @@ class ScannerChannelHandler:
     def __init__(
         self,
         symbol: str,
-        scanner: Scanner,
+        scanner: ScannerRealtime,
         handler: SubscriptionHandler,
         freq: str,
     ):
@@ -89,7 +90,11 @@ class ScannerService:
         self._handlers: dict[str, list[ScannerChannelHandler]] = {}
 
     async def _subscribe_symbol(
-        self, symbol: str, scanner: Scanner, handler: SubscriptionHandler, freq: str
+        self,
+        symbol: str,
+        scanner: ScannerRealtime,
+        handler: SubscriptionHandler,
+        freq: str,
     ) -> ScannerChannelHandler:
         stream_key = f"candles_min_{symbol}"
         sch = ScannerChannelHandler(symbol, scanner, handler, freq)
@@ -102,7 +107,7 @@ class ScannerService:
         handler: SubscriptionHandler,
         freq: str,
     ) -> str:
-        scanner = ScannersLibrary.instance().get(params.type_, params.params)
+        scanner = ScannersLibrary.instance().get_realtime(params.type_, params.params)
         scanner_id = scanner.id()
         handler.set_scanner_id(scanner_id)
         symbols = await self._symbols_provider.active_symbols()
@@ -148,10 +153,16 @@ class ScannerService:
         scan_results = await asyncio.gather(*scan_tasks, return_exceptions=True)
 
         for symbol, result in zip(symbols, scan_results):
+            if isinstance(result, Exception):
+                logger.exception(result)
+                logger.error(
+                    f"Error scanning symbol {symbol} for scanner {scanner_type} between {start} and {end}"
+                )
+                continue
             if isinstance(result, pd.DataFrame) and not result.empty:
                 logger.info(f"Scanner found results for symbol {symbol}")
                 result = result.reset_index()
-                result["symbols"] = symbol
+                result["symbol"] = symbol
                 symbol_results = result.to_dict(orient="records")
                 all_results.extend(symbol_results)
 

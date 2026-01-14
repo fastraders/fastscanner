@@ -158,14 +158,16 @@ class CandleChannelHandler:
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
+        self._timeout_seconds = 2.8
+        self._timeout_minutes = 10.0
         self._buffer = CandleBuffer(symbol, freq, self._handle, self._candle_timeout)
         self._buffer_lock = asyncio.Lock()
 
     @property
     def _candle_timeout(self) -> float:
         if self._freq.endswith("s"):
-            return 2.8
-        return 10
+            return self._timeout_seconds
+        return self._timeout_minutes
 
     async def _handle(self, row: pd.Series) -> None:
         for ind in self._indicators:

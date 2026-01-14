@@ -93,6 +93,8 @@ class MassiveAdjustedCollector(_MassiveSplitsLoader):
                 if len(data.get("results", [])) == 0:
                     break
                 for item in data["results"]:
+                    if "historical_adjustment_factor" not in item:
+                        continue
                     ticker = item["ticker"]
                     splits.setdefault(ticker, []).append(
                         Split(

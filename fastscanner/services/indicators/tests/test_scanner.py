@@ -55,7 +55,11 @@ def candles():
     )
 
     indicators_service = IndicatorsService(
-        candles=candle_store, fundamentals=fundamental_store, channel=MockChannel()
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        channel=MockChannel(),
+        symbols_subscribe_channel="test_subscribe",
+        symbols_unsubscribe_channel="test_unsubscribe",
     )
     ApplicationRegistry.set_indicators(indicators_service)
 
