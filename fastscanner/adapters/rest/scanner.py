@@ -121,28 +121,5 @@ async def scan(
 
     return ScanResponse(
         results=result.results,
-        total_symbols=result.total_symbols,
-        scanner_type=result.scanner_type,
-    )
-
-
-@router.post("/{scanner_type}/scans")
-async def scan_type(
-    scanner_type: str,
-    request: ScanRequest,
-    service: ScannerService = Depends(get_scanner_service),
-) -> ScanResponse:
-
-    result = await service.scan_all(
-        scanner_type=scanner_type,
-        params=request.params,
-        start=request.start,
-        end=request.end,
-        freq=request.freq,
-    )
-
-    return ScanResponse(
-        results=result.results,
-        total_symbols=result.total_symbols,
         scanner_type=result.scanner_type,
     )

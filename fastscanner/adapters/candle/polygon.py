@@ -191,21 +191,10 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
 
     async def all_symbols(self) -> list[str]:
         symbols: list[str] = []
-        symbols_path = os.path.join(
-            config.DATA_BASE_DIR, "data", "polygon_symbols.json"
-        )
-
-        if os.path.exists(symbols_path):
-            with open(symbols_path, "r") as f:
-                return json.load(f)
-
         symbols = await self._all_symbols(active=True)
         symbols.extend(await self._all_symbols(active=False))
         symbols = sorted(set(symbols))
 
-        os.makedirs(os.path.dirname(symbols_path), exist_ok=True)
-        with open(symbols_path, "w") as f:
-            json.dump(list(symbols), f)
         return symbols
 
     async def active_symbols(self, exchanges: list[str] | None = None) -> list[str]:

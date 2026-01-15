@@ -23,5 +23,4 @@ class ScanRequest(BaseModel):
 
 class ScanResponse(BaseModel):
     results: List[Dict[str, Any]]
-    total_symbols: int
     scanner_type: str

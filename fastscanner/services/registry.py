@@ -32,3 +32,11 @@ class ApplicationRegistry:
         del cls.candles
         del cls.fundamentals
         del cls.holidays
+
+    @classmethod
+    def params_for_init(cls) -> dict:
+        return {
+            "candles": cls.candles,
+            "fundamentals": cls.fundamentals,
+            "holidays": cls.holidays,
+        }

@@ -14,7 +14,6 @@ class ScannerParams:
 @dataclass
 class ScanAllResult:
     results: list[dict[str, Any]]
-    total_symbols: int
     scanner_type: str
 
 
