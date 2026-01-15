@@ -146,73 +146,71 @@ class ScannerService:
     ) -> ScanAllResult:
         scanner = ScannersLibrary.instance().get(scanner_type, params)
         symbols = await self._symbols_provider.active_symbols()
-        all_results = await asyncio.to_thread(
-            self._scan, scanner, symbols, start, end, freq
-        )
+        all_results = await asyncio.to_thread(_scan, scanner, symbols, start, end, freq)
         return ScanAllResult(results=all_results, scanner_type=scanner_type)
 
-    def _scan(
-        self,
-        scanner: Scanner,
-        symbols: list[str],
-        start_date: date,
-        end_date: date,
-        freq: str,
-    ) -> list[dict]:
-        n_workers = multiprocessing.cpu_count() // 2
-        batch_size = math.ceil(len(symbols) / n_workers)
-        registry_params = ApplicationRegistry.params_for_init()
-        batches = [
-            (
-                scanner,
-                symbols[i : i + batch_size],
-                start_date,
-                end_date,
-                freq,
-                registry_params,
-            )
-            for i in range(0, len(symbols), batch_size)
-        ]
 
-        with multiprocessing.Pool(n_workers) as pool:
-            results = pool.map(self._run_scanner_worker, batches)
-            results = [item for sublist in results for item in sublist]
-            return results
-
-    def _run_scanner_worker(
-        self,
-        args: tuple[Scanner, list[str], date, date, str, dict],
-    ) -> list[dict]:
-        return asyncio.run(self._run_async_scan(*args))
-
-    async def _run_async_scan(
-        self,
-        scanner: Scanner,
-        symbols: list[str],
-        start_date: date,
-        end_date: date,
-        freq: str,
-        registry_params: dict,
-    ) -> list[dict]:
-        ApplicationRegistry.init(**registry_params)
-        ClockRegistry.set(
-            FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
+def _scan(
+    scanner: Scanner,
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+    freq: str,
+) -> list[dict]:
+    n_workers = multiprocessing.cpu_count() // 2
+    batch_size = math.ceil(len(symbols) / n_workers)
+    registry_params = ApplicationRegistry.params_for_init()
+    batches = [
+        (
+            scanner,
+            symbols[i : i + batch_size],
+            start_date,
+            end_date,
+            freq,
+            registry_params,
         )
-        all_results: list[dict] = []
-        for symbol in symbols:
-            df = await scanner.scan(
-                symbol=symbol,
-                start=start_date,
-                end=end_date,
-                freq=freq,
-            )
-            if df.empty:
-                continue
+        for i in range(0, len(symbols), batch_size)
+    ]
 
-            df.loc[:, "date"] = df.index.date  # type: ignore
-            df = df.reset_index().groupby("date").first(skipna=False)
-            df["symbol"] = symbol
-            symbol_results = df.to_dict(orient="records")
-            all_results.extend(symbol_results)
+    with multiprocessing.Pool(n_workers) as pool:
+        results = pool.map(_run_scanner_worker, batches)
+        results = [item for sublist in results for item in sublist]
+        return results
 
-        return all_results
+
+def _run_scanner_worker(
+    args: tuple[Scanner, list[str], date, date, str, dict],
+) -> list[dict]:
+    return asyncio.run(_run_async_scan(*args))
+
+
+async def _run_async_scan(
+    scanner: Scanner,
+    symbols: list[str],
+    start_date: date,
+    end_date: date,
+    freq: str,
+    registry_params: dict,
+) -> list[dict]:
+    ApplicationRegistry.init(**registry_params)
+    ClockRegistry.set(
+        FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
+    )
+    all_results: list[dict] = []
+    for symbol in symbols:
+        df = await scanner.scan(
+            symbol=symbol,
+            start=start_date,
+            end=end_date,
+            freq=freq,
+        )
+        if df.empty:
+            continue
+
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df.reset_index().groupby("date").first(skipna=False)
+        df["symbol"] = symbol
+        symbol_results = df.to_dict(orient="records")
+        all_results.extend(symbol_results)
+
+    return all_results
