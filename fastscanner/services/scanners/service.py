@@ -146,31 +146,25 @@ class ScannerService:
         symbols = await self._symbols_provider.active_symbols()
         all_results = []
 
-        scan_tasks = [
-            self._scan_symbol(scanner, symbol, start, end, freq) for symbol in symbols
-        ]
-
-        scan_results = await asyncio.gather(*scan_tasks, return_exceptions=True)
-
-        for symbol, result in zip(symbols, scan_results):
-            if isinstance(result, Exception):
-                logger.exception(result)
+        for symbol in symbols:
+            try:
+                df = await scanner.scan(symbol, start, end, freq)
+            except Exception as e:
+                logger.exception(e)
                 logger.error(
                     f"Error scanning symbol {symbol} for scanner {scanner_type} between {start} and {end}"
                 )
                 continue
-            if isinstance(result, pd.DataFrame) and not result.empty:
-                logger.info(f"Scanner found results for symbol {symbol}")
-                result = result.reset_index()
-                result["symbol"] = symbol
-                symbol_results = result.to_dict(orient="records")
-                all_results.extend(symbol_results)
+            if df.empty:
+                continue
+            logger.info(
+                f"Scanner {scanner_type} found results for symbol {symbol} between {start} and {end}"
+            )
+            df = df.reset_index()
+            df["symbol"] = symbol
+            symbol_results = df.to_dict(orient="records")
+            all_results.extend(symbol_results)
 
         return ScanAllResult(
             results=all_results, total_symbols=len(symbols), scanner_type=scanner_type
         )
-
-    async def _scan_symbol(
-        self, scanner: Scanner, symbol: str, start: date, end: date, freq: str
-    ) -> pd.DataFrame:
-        return await scanner.scan(symbol, start, end, freq)
