@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from fastscanner.adapters.rest.services import get_scanner_service
+from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService
 
@@ -33,9 +34,7 @@ class WebSocketScannerHandler:
         if not passed:
             return new_row
 
-        scan_time = datetime.now().strftime("%H:%M")
         candle = new_row.to_dict()
-
         scan_time = new_row.name.strftime("%H:%M")  # type: ignore
         message = ScannerMessage(
             symbol=symbol,

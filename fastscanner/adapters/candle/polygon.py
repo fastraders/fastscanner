@@ -47,13 +47,13 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
     ) -> pd.DataFrame:
         mult, unit = split_freq(freq)
         unit_mappers = {
-            "s": "second",
+            # "s": "second",
             "min": "minute",
             "h": "hour",
             "d": "day",
         }
         max_days_per_unit: dict[str, float] = {
-            "s": 0.5,
+            # "s": 0.5,
             "min": 30,
             "h": 30,
             "d": 50000,
@@ -65,18 +65,14 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                 f"End date {end} is in the future. Please provide a valid end date."
             )
 
-        inc = round(max_days * 24 * 60 * 60 * 1000) - 1
-        curr_start = round(pd.Timestamp(start, tz=self.tz).timestamp() * 1000)
-        end_ts = round(
-            pd.Timestamp(end + timedelta(days=1), tz=self.tz).timestamp() * 1000 - 1
-        )
-        curr_end = min(curr_start + inc, end_ts)
+        curr_start = start
+        curr_end = min(curr_start + timedelta(days=max_days), end)
         dfs: list[pd.DataFrame] = []
 
-        while curr_start <= end_ts:
+        while curr_start <= end:
             url = urljoin(
                 self._base_url,
-                f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start}/{curr_end}",
+                f"v2/aggs/ticker/{symbol}/range/{mult}/{unit_mappers[unit]}/{curr_start.isoformat()}/{curr_end.isoformat()}",
             )
             try:
                 response = await async_retry_request(
@@ -91,8 +87,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                     headers={"Accept": "text/csv"},
                 )
                 if response.status_code == 404:
-                    curr_start = curr_end + 1
-                    curr_end = min(end_ts, curr_start + inc)
+                    curr_start = curr_end + timedelta(days=1)
+                    curr_end = min(end, curr_start + timedelta(days=max_days))
                     continue
 
                 response.raise_for_status()
@@ -106,8 +102,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                 logger.warning(
                     f"No data returned for {symbol} between {curr_start} and {curr_end}. Skipping this interval."
                 )
-                curr_start = curr_end + 1
-                curr_end = min(end_ts, curr_start + inc)
+                curr_start = curr_end + timedelta(days=1)
+                curr_end = min(end, curr_start + timedelta(days=max_days))
                 continue
 
             df[CandleCol.DATETIME] = pd.to_datetime(df.loc[:, "t"], unit="ms")
@@ -131,8 +127,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
             if not df.empty:
                 dfs.append(df)
 
-            curr_start = curr_end + 1
-            curr_end = min(end_ts, curr_start + inc)
+            curr_start = curr_end + timedelta(days=1)
+            curr_end = min(end, curr_start + timedelta(days=max_days))
 
         if not dfs:
             return pd.DataFrame(

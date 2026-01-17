@@ -158,12 +158,6 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                     _log_cache_miss=False,
                 )
 
-    def _is_all_freqs_cached(self, symbol: str, year: int, today: date) -> bool:
-        key = f"{year}"
-        return os.path.exists(
-            self._partition_path(symbol, key, "1d")
-        ) and not self._is_expired(symbol, key, "d", today)
-
     async def _cache(
         self,
         symbol: str,
