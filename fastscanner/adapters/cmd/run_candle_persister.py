@@ -146,7 +146,14 @@ class CandlePersistenceManager:
             "min": {},
         }
 
+    @staticmethod
+    def _is_persister_subscription(subscriber_id: str) -> bool:
+        return subscriber_id.startswith("persister_")
+
     async def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
+        if self._is_persister_subscription(subscriber_id):
+            return
+
         if symbol not in self._unit_to_symbol_to_subscribers[unit]:
             self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
             freqs = self.UNIT_TO_FREQS[unit]
@@ -159,6 +166,9 @@ class CandlePersistenceManager:
         self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
 
     async def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
+        if self._is_persister_subscription(subscriber_id):
+            return
+
         if symbol not in self._unit_to_symbol_to_subscribers[unit]:
             return
         self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
@@ -170,17 +180,13 @@ class CandlePersistenceManager:
         logger.info(
             f"Unsubscribed subscriber {subscriber_id} from {symbol} ({unit}). Remaining subscribers: {subscribers}. Persister subscriptions: {persister_subscriptions}"
         )
-        if len(subscribers) == 1:
-            logger.info(
-                f"Only persister subscriber left for {symbol} ({unit}), unsubscribing from freqs: {freqs}"
-            )
-            for freq in freqs:
-                await self._persister.unsubscribe(symbol, freq)
         if len(subscribers) == 0:
             del self._unit_to_symbol_to_subscribers[unit][symbol]
             logger.info(
-                f"No more subscribers for {symbol} ({unit}), unsubscribed from freqs: {freqs}"
+                f"No more subscribers for {symbol} ({unit}), unsubscribing from freqs: {freqs}"
             )
+            for freq in freqs:
+                await self._persister.unsubscribe(symbol, freq)
 
 
 class SubscribeHandler:

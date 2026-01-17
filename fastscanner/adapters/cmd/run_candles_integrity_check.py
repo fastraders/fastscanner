@@ -44,8 +44,19 @@ class IntegrityIssue:
         self.issue_type = issue_type
         self.details = details
 
+    def _reduced_details(self) -> dict[str, Any]:
+        reduced = {}
+        for key, value in self.details.items():
+            if isinstance(value, list) and len(value) > 20:
+                reduced[key] = value[:20] + ["..."]
+            else:
+                reduced[key] = value
+        return reduced
+
     def __str__(self) -> str:
-        return f"[{self.symbol}][{self.freq}] {self.issue_type}: {self.details}"
+        return (
+            f"[{self.symbol}][{self.freq}] {self.issue_type}: {self._reduced_details()}"
+        )
 
 
 class CandleIntegrityChecker:

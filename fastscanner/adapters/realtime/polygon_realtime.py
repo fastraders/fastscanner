@@ -26,8 +26,6 @@ class PolygonRealtime:
         self._api_key = api_key
         self._client: WebSocketClient | None = None
         self._running = False
-        self._symbols_min: set[str] = set()
-        self._symbols_s: set[str] = set()
         self._channel = channel
         self._ws_task: asyncio.Task | None = None
 
@@ -51,8 +49,6 @@ class PolygonRealtime:
         if not self._running:
             logger.warning("WebSocket is not running.")
             return
-        self.unsubscribe_min(self._symbols_min)
-        self.unsubscribe_s(self._symbols_s)
         try:
             if self._client:
                 await self._client.close()
@@ -64,21 +60,21 @@ class PolygonRealtime:
             self._running = False
             logger.info("WebSocket stopped.")
 
+    def subscribe_all(self):
+        if not self._running:
+            raise RuntimeError("WebSocket is not running")
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during subscribe.")
+        self._client.subscribe("AM.*")
+
     def subscribe_min(self, symbols: set[str]):
         if not self._running:
-            logger.warning("WebSocket is not running")
-            return
+            raise RuntimeError("WebSocket is not running")
         if self._client is None:
             raise RuntimeError("WebSocketClient is None during subscribe.")
 
-        symbols = symbols.difference(self._symbols_min)
-        if not symbols:
-            logger.warning("No symbols to subscribe.")
-            return
-
         tickers = [f"AM.{symbol}" for symbol in symbols]
         self._client.subscribe(*tickers)
-        self._symbols_min.update(symbols)
 
     def subscribe_s(self, symbols: set[str]):
         if not self._running:
@@ -86,14 +82,8 @@ class PolygonRealtime:
         if self._client is None:
             raise RuntimeError("WebSocketClient is None during subscribe.")
 
-        symbols = symbols.difference(self._symbols_s)
-        if not symbols:
-            logger.warning("No symbols to subscribe.")
-            return
-
         tickers = [f"A.{symbol}" for symbol in symbols]
         self._client.subscribe(*tickers)
-        self._symbols_s.update(symbols)
 
     def unsubscribe_min(self, symbols: set[str]):
         if not self._running:
@@ -107,10 +97,8 @@ class PolygonRealtime:
             logger.warning("No symbols to unsubscribe.")
             return
 
-        symbols = symbols.intersection(self._symbols_min)
         tickers = [f"AM.{symbol}" for symbol in symbols]
         self._client.unsubscribe(*tickers)
-        self._symbols_min.difference_update(symbols)
 
     def unsubscribe_s(self, symbols: set[str]):
         if not self._running:
@@ -124,10 +112,25 @@ class PolygonRealtime:
             logger.warning("No symbols to unsubscribe.")
             return
 
-        symbols = symbols.intersection(self._symbols_s)
         tickers = [f"A.{symbol}" for symbol in symbols]
         self._client.unsubscribe(*tickers)
-        self._symbols_s.difference_update(symbols)
+
+    def unsubscribe_all(self):
+        if not self._running:
+            logger.warning("WebSocket is not running.")
+            return
+
+        if self._client is None:
+            raise RuntimeError("WebSocketClient is None during unsubscribe.")
+
+        self._client.unsubscribe_all()
+
+    _event_type_to_channel = {
+        EventType.EquityAgg: "candles_s_",
+        EventType.EquityAggMin: "candles_min_",
+        EventType.EquityAgg.value: "candles_s_",
+        EventType.EquityAggMin.value: "candles_min_",
+    }
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):
         parsed_msgs: list[dict] = []
@@ -139,13 +142,7 @@ class PolygonRealtime:
                 if msg.start_timestamp is None:
                     continue
 
-                event_type_to_channel = {
-                    EventType.EquityAgg: "candles_s_",
-                    EventType.EquityAggMin: "candles_min_",
-                    EventType.EquityAgg.value: "candles_s_",
-                    EventType.EquityAggMin.value: "candles_min_",
-                }
-                if msg.event_type not in event_type_to_channel:
+                if msg.event_type not in self._event_type_to_channel:
                     logger.warning(f"Unknown event type: {msg.event_type}")
                     continue
 
@@ -158,7 +155,9 @@ class PolygonRealtime:
                     "volume": msg.volume,
                 }
                 parsed_msgs.append(record)
-                channel_id = f"{event_type_to_channel[msg.event_type]}{msg.symbol}"
+                channel_id = (
+                    f"{self._event_type_to_channel[msg.event_type]}{msg.symbol}"
+                )
                 await self._channel.push(channel_id, record, flush=False)
 
             await self._channel.flush()
