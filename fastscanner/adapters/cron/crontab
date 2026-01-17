@@ -1,0 +1,2 @@
+0 2 * * * cd {PATH_TO_HOME}/Projects/fastscanner && {PATH_TO_HOME}/.local/bin/poetry run python -m fastscanner.adapters.cmd.run_daily_collection >> /var/log/fastscanner/daily-collection.log 2>> /var/log/fastscanner/daily-collection.error
+0 1 * * * cd {PATH_TO_HOME}/Projects/fastscanner && {PATH_TO_HOME}/.local/bin/poetry run python -m fastscanner.adapters.cmd.run_daily_fundamental_collection >> /var/log/fastscanner/daily-fundamental-collection.log 2>> /var/log/fastscanner/daily-fundamental-collection.error
