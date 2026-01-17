@@ -145,48 +145,50 @@ class CandlePersistenceManager:
             "s": {},
             "min": {},
         }
+        self._lock = asyncio.Lock()
 
     @staticmethod
     def _is_persister_subscription(subscriber_id: str) -> bool:
         return subscriber_id.startswith("persister_")
 
     async def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
-        if self._is_persister_subscription(subscriber_id):
-            return
+        async with self._lock:
+            if self._is_persister_subscription(subscriber_id):
+                return
 
-        if symbol not in self._unit_to_symbol_to_subscribers[unit]:
-            self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
-            freqs = self.UNIT_TO_FREQS[unit]
-            for freq in freqs:
-                await self._persister.subscribe(symbol, freq)
-            logger.info(
-                f"First subscriber for {symbol} ({unit}), subscribed to freqs: {freqs}"
-            )
-            return
-        self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
+            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
+                freqs = self.UNIT_TO_FREQS[unit]
+                for freq in freqs:
+                    await self._persister.subscribe(symbol, freq)
+                self._unit_to_symbol_to_subscribers[unit][symbol] = {subscriber_id}
+                logger.info(
+                    f"First subscriber for {symbol} ({unit}), subscribed to freqs: {freqs}"
+                )
+                return
+            self._unit_to_symbol_to_subscribers[unit][symbol].add(subscriber_id)
 
     async def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
-        if self._is_persister_subscription(subscriber_id):
-            return
-
-        if symbol not in self._unit_to_symbol_to_subscribers[unit]:
-            return
-        self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
-        freqs = self.UNIT_TO_FREQS[unit]
-        persister_subscriptions = set(
-            self._persister._subscription_id(symbol, freq) for freq in freqs
-        )
-        subscribers = self._unit_to_symbol_to_subscribers[unit][symbol]
-        logger.info(
-            f"Unsubscribed subscriber {subscriber_id} from {symbol} ({unit}). Remaining subscribers: {subscribers}. Persister subscriptions: {persister_subscriptions}"
-        )
-        if len(subscribers) == 0:
-            del self._unit_to_symbol_to_subscribers[unit][symbol]
-            logger.info(
-                f"No more subscribers for {symbol} ({unit}), unsubscribing from freqs: {freqs}"
+        async with self._lock:
+            if self._is_persister_subscription(subscriber_id):
+                return
+            if symbol not in self._unit_to_symbol_to_subscribers[unit]:
+                return
+            self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
+            freqs = self.UNIT_TO_FREQS[unit]
+            persister_subscriptions = set(
+                self._persister._subscription_id(symbol, freq) for freq in freqs
             )
-            for freq in freqs:
-                await self._persister.unsubscribe(symbol, freq)
+            subscribers = self._unit_to_symbol_to_subscribers[unit][symbol]
+            logger.info(
+                f"Unsubscribed subscriber {subscriber_id} from {symbol} ({unit}). Remaining subscribers: {subscribers}. Persister subscriptions: {persister_subscriptions}"
+            )
+            if len(subscribers) == 0:
+                del self._unit_to_symbol_to_subscribers[unit][symbol]
+                logger.info(
+                    f"No more subscribers for {symbol} ({unit}), unsubscribing from freqs: {freqs}"
+                )
+                for freq in freqs:
+                    await self._persister.unsubscribe(symbol, freq)
 
 
 class SubscribeHandler:

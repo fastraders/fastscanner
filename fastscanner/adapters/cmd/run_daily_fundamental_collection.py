@@ -32,7 +32,7 @@ async def run_data_collect(only_active: bool = False) -> None:
     total_symbols = len(all_symbols)
 
     ref_day = date(2026, 1, 1)
-    batch_size = 2000
+    batch_size = 3000
     n_batches = math.ceil(len(all_symbols) / batch_size)
     batch_offset = (today - ref_day).days % n_batches
     all_symbols = all_symbols[
