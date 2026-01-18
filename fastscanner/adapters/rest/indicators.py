@@ -148,6 +148,7 @@ async def _handle_subscribe(
             freq=request.freq,
             indicators=indicators_params,
             handler=handler,
+            _send_events=not _is_persister_subscription(request.subscription_id),
         )
     except Exception as e:
         logger.exception(e)
@@ -182,7 +183,11 @@ async def _handle_unsubscribe(
             message="Subscription not found",
         )
     symbol, service_subscription_id = subscriptions[request.subscription_id]
-    await service.unsubscribe_realtime(symbol, service_subscription_id)
+    await service.unsubscribe_realtime(
+        symbol,
+        service_subscription_id,
+        _send_events=not _is_persister_subscription(request.subscription_id),
+    )
     del subscriptions[request.subscription_id]
 
     logger.info(f"Removed subscription {request.subscription_id}")
@@ -246,7 +251,15 @@ async def websocket_realtime_indicators(
             service_subscription_id,
         ) in subscriptions.items():
             try:
-                await service.unsubscribe_realtime(symbol, service_subscription_id)
+                await service.unsubscribe_realtime(
+                    symbol,
+                    service_subscription_id,
+                    _send_events=not _is_persister_subscription(subscription_id),
+                )
                 logger.info(f"Cleaned up subscription {subscription_id}")
             except Exception as e:
                 logger.exception(e)
+
+
+def _is_persister_subscription(subscription_id: str) -> bool:
+    return subscription_id.startswith("persister_")

@@ -74,6 +74,7 @@ class IndicatorsService:
         freq: str,
         indicators: list[IndicatorParams],
         handler: "SubscriptionHandler",
+        _send_events: bool = True,
     ) -> str:
         """
         Redis -> RedisChannel -> For all subscribers, compute the indicators -> SubscriptionHandler
@@ -96,35 +97,43 @@ class IndicatorsService:
         }
         stream_key = f"{unit_to_channel[unit]}{symbol}"
         sub_handler = CandleChannelHandler(symbol, indicator_instances, handler, freq)
-        # Sends the signal to the channel writer to subscribe to a symbol
-        await self.channel.push(
-            self._symbols_subscribe_channel,
-            {
-                "symbol": symbol,
-                "subscriber_id": sub_handler.id(),
-                "unit": unit,
-            },
-        )
+        # Skip sending subscribe signal for persister subscriptions to avoid cycles.
+        if _send_events:
+            await self.channel.push(
+                self._symbols_subscribe_channel,
+                {
+                    "symbol": symbol,
+                    "subscriber_id": sub_handler.id(),
+                    "unit": unit,
+                },
+            )
         self._subscription_to_channel[sub_handler.id()] = stream_key
         # Configures the handler to receive messages from the channel
         await self.channel.subscribe(stream_key, sub_handler)
         return sub_handler.id()
 
-    async def unsubscribe_realtime(self, symbol: str, subscription_id: str):
+    async def unsubscribe_realtime(
+        self,
+        symbol: str,
+        subscription_id: str,
+        _send_events: bool = True,
+    ) -> None:
         """
         Unsubscribe from real-time updates for a specific symbol and frequency.
         """
         stream_key = self._subscription_to_channel.get(subscription_id)
         if stream_key is None:
             return
-        await self.channel.push(
-            self._symbols_unsubscribe_channel,
-            {
-                "symbol": symbol,
-                "subscriber_id": subscription_id,
-                "unit": stream_key.split("_")[1],
-            },
-        )
+        # Skip sending unsubscribe signal for persister subscriptions to avoid cycles.
+        if _send_events:
+            await self.channel.push(
+                self._symbols_unsubscribe_channel,
+                {
+                    "symbol": symbol,
+                    "subscriber_id": subscription_id,
+                    "unit": stream_key.split("_")[1],
+                },
+            )
         await self.channel.unsubscribe(stream_key, subscription_id)
 
     async def stop(self):

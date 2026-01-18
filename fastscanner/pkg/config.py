@@ -36,3 +36,6 @@ NATS_SYMBOL_UNSUBSCRIBE_CHANNEL = os.environ.get(
 # Data cache directory
 DATA_BASE_DIR = os.environ["DATA_BASE_DIR"]
 TRADES_DATA_DIR = os.environ["TRADES_DATA_DIR"]
+
+# Others
+PERSISTER_SUBSCRIPTION_PREFIX = "persister_"

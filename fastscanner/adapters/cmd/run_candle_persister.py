@@ -29,12 +29,16 @@ class CandlePersister:
         self._id_suffix = str(uuid4())[:8]
 
     def _subscription_id(self, symbol: str, freq: str) -> str:
-        return f"persister_{symbol}_{freq}_{self._id_suffix}"
+        return (
+            f"{config.PERSISTER_SUBSCRIPTION_PREFIX}{symbol}_{freq}_{self._id_suffix}"
+        )
 
     @staticmethod
     def _parse_subscription_id(subscription_id: str) -> tuple[str, str]:
         parts = subscription_id.split("_")
-        if len(parts) < 4 or parts[0] != "persister":
+        if len(parts) < 4 or not subscription_id.startswith(
+            config.PERSISTER_SUBSCRIPTION_PREFIX
+        ):
             raise ValueError(f"Invalid subscription_id format: {subscription_id}")
         symbol = parts[1]
         freq = parts[2]
@@ -147,15 +151,8 @@ class CandlePersistenceManager:
         }
         self._lock = asyncio.Lock()
 
-    @staticmethod
-    def _is_persister_subscription(subscriber_id: str) -> bool:
-        return subscriber_id.startswith("persister_")
-
     async def subscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
         async with self._lock:
-            if self._is_persister_subscription(subscriber_id):
-                return
-
             if symbol not in self._unit_to_symbol_to_subscribers[unit]:
                 freqs = self.UNIT_TO_FREQS[unit]
                 for freq in freqs:
@@ -169,18 +166,13 @@ class CandlePersistenceManager:
 
     async def unsubscribe(self, symbol: str, subscriber_id: str, unit: str) -> None:
         async with self._lock:
-            if self._is_persister_subscription(subscriber_id):
-                return
             if symbol not in self._unit_to_symbol_to_subscribers[unit]:
                 return
             self._unit_to_symbol_to_subscribers[unit][symbol].discard(subscriber_id)
             freqs = self.UNIT_TO_FREQS[unit]
-            persister_subscriptions = set(
-                self._persister._subscription_id(symbol, freq) for freq in freqs
-            )
             subscribers = self._unit_to_symbol_to_subscribers[unit][symbol]
             logger.info(
-                f"Unsubscribed subscriber {subscriber_id} from {symbol} ({unit}). Remaining subscribers: {subscribers}. Persister subscriptions: {persister_subscriptions}"
+                f"Unsubscribed subscriber {subscriber_id} from {symbol} ({unit}). Remaining subscribers: {subscribers}."
             )
             if len(subscribers) == 0:
                 del self._unit_to_symbol_to_subscribers[unit][symbol]
