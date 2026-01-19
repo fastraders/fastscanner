@@ -1,9 +1,17 @@
 import uuid
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
 
+from fastscanner.adapters.rest.main import app
+from fastscanner.adapters.rest.scanner import get_scanner_service
+from fastscanner.pkg.clock import ClockRegistry, FixedClock
+from fastscanner.services.indicators.ports import CandleCol, FundamentalData
+from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib import ScannersLibrary
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
@@ -77,7 +85,9 @@ class MockChannel:
 
 
 class MockCandleStore:
-    async def get(self, symbol, start, end, freq):
+    async def get(
+        self, symbol, start, end, freq, adjusted: bool = True
+    ) -> pd.DataFrame:
         return pd.DataFrame()
 
 
@@ -97,14 +107,17 @@ class MockSubscriptionHandler(SubscriptionHandler):
 
 
 @pytest.fixture
-def scanner_service():
+def scanner_service(candles):
     library = ScannersLibrary()
     library.register(DummyScanner)
+    library.register_realtime(DummyScanner)
 
     original_instance = ScannersLibrary.instance
     ScannersLibrary.instance = lambda: library
 
-    candles = MockCandleStore()
+    ClockRegistry.set(
+        FixedClock(datetime(2022, 1, 1, 9, 30, tzinfo=ZoneInfo("America/New_York")))
+    )
     channel = MockChannel()
     symbols_provider = MockSymbolsProvider()
     service = ScannerService(candles, channel, symbols_provider)
@@ -122,3 +135,69 @@ def scanner_params():
 @pytest.fixture
 def subscription_handler():
     return MockSubscriptionHandler()
+
+
+@pytest.fixture
+def client(scanner_service):
+    ClockRegistry.set(
+        FixedClock(datetime(2022, 1, 1, 9, 30, tzinfo=ZoneInfo("America/New_York")))
+    )
+    service, channel = scanner_service
+    app.dependency_overrides[get_scanner_service] = lambda: service
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+class CandleStoreTest:
+    def __init__(self):
+        self._data = {}
+
+    def set_data(self, symbol, data):
+        self._data[symbol] = data
+
+    async def get(self, symbol, start, end, freq, adjusted: bool = True):
+        if symbol not in self._data:
+            return pd.DataFrame(index=pd.DatetimeIndex([]), columns=[CandleCol.COLUMNS])
+        df = self._data[symbol]
+        return df[
+            (df.index.date >= start_date) & (df.index.date <= end_date)  # type: ignore
+        ]
+
+
+class MockFundamentalDataStore:
+    async def get(self, symbol):
+        date_index = pd.date_range(start="2023-01-01", periods=3, freq="D").date
+        return FundamentalData(
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            pd.Series([1000000000.0, 1000000000.0, 1000000000.0], index=date_index),
+            pd.DatetimeIndex([]),
+            None,
+            None,
+            None,
+            None,
+        )
+
+
+class MockPublicHolidaysStore:
+    def get(self):
+        return set()
+
+
+@pytest.fixture
+def candles():
+    candle_store = CandleStoreTest()
+    fundamental_store = MockFundamentalDataStore()
+    holiday_store = MockPublicHolidaysStore()
+
+    ApplicationRegistry.init(
+        candles=candle_store, fundamentals=fundamental_store, holidays=holiday_store
+    )
+
+    yield candle_store
+    ApplicationRegistry.reset()

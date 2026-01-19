@@ -4,6 +4,7 @@ import pytest
 from fastscanner.services.indicators.ports import (
     CandleCol,
     CandleStore,
+    FundamentalData,
     FundamentalDataStore,
     PublicHolidaysStore,
 )
@@ -26,20 +27,26 @@ class CandleStoreTest(CandleStore):
         ]
 
 
-class MockFundamentalData:
-    def __init__(self):
+class MockFundamentalDataStore:
+    async def get(self, symbol):
         date_index = pd.date_range(start="2023-01-01", periods=3, freq="D").date
-        self.historical_market_cap = pd.Series(
-            [1000000000, 1000000000, 1000000000], index=date_index
+        return FundamentalData(
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            pd.Series([1000000000.0, 1000000000.0, 1000000000.0], index=date_index),
+            pd.DatetimeIndex([]),
+            None,
+            None,
+            None,
+            None,
         )
 
 
-class MockFundamentalDataStore(FundamentalDataStore):
-    async def get(self, symbol):
-        return MockFundamentalData()
-
-
-class MockPublicHolidaysStore(PublicHolidaysStore):
+class MockPublicHolidaysStore:
     def get(self):
         return set()
 

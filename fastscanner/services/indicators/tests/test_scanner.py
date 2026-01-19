@@ -1,5 +1,5 @@
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, Protocol
 
 import pandas as pd
 import pytest
@@ -22,7 +22,7 @@ from fastscanner.services.scanners.lib.range_gap import (
     LowRangeGapDownScanner,
 )
 from fastscanner.services.scanners.lib.smallcap import SmallCapUpScanner
-from fastscanner.services.scanners.ports import Scanner
+from fastscanner.services.scanners.ports import Scanner, ScannerRealtime
 
 
 class MockChannel:
@@ -107,7 +107,9 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
     complete_data = pd.concat([daily_data, intraday_data])
     candles.set_data(symbol, complete_data)
 
-    scanners: list[Scanner] = [
+    class FullScanner(Scanner, ScannerRealtime, Protocol): ...
+
+    scanners: list[FullScanner] = [
         ATRGapDownScanner(
             min_adv=500_000,
             min_adr=0.05,
