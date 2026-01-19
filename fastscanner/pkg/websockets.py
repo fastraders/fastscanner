@@ -68,12 +68,9 @@ class WebSocketSubscriber(ABC):
                 async with self._websocket_available:
                     url = f"ws://{self._host}:{self._port}{self._endpoint}"
                     ws = await websockets.connect(url)
-
-                    for handler_id in self._socket_to_handlers.get(socket_id, []):
-                        message = self._subscription_messages.get(handler_id)
-                        if message is None:
-                            continue
-                        await ws.send(message)
+                    if not is_new:
+                        for message in self._subscription_messages.values():
+                            await ws.send(message)
 
                     self._websockets[socket_id] = ws
                     if is_new:
@@ -138,6 +135,7 @@ class WebSocketSubscriber(ABC):
             handler_id,
             message,
         )
+        self._subscription_messages.pop(handler_id, None)
         socket_id = self._handler_to_socket.pop(handler_id, None)
         if socket_id is not None:
             handlers = self._socket_to_handlers.get(socket_id, [])
@@ -154,7 +152,7 @@ class WebSocketSubscriber(ABC):
             try:
                 await ws.send(message)
                 return
-            except websockets.ConnectionClosedError:
+            except websockets.ConnectionClosed:
                 if attempt >= self._MAX_SEND_RETRIES - 1:
                     logger.error(
                         f"Failed to send message for {handler_id} after {self._MAX_SEND_RETRIES} attempts"
