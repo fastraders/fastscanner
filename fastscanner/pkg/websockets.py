@@ -16,7 +16,9 @@ class WebSocketSubscriber(ABC):
     _POISON_PILL = ("STOP", False)
     _MAX_SEND_RETRIES = 3
 
-    def __init__(self, host: str, port: int, endpoint: str, max_connections: int = 10):
+    def __init__(
+        self, host: str, port: int, endpoint: str, max_connections: int | None = 10
+    ):
         self._host = host
         self._port = port
         self._endpoint = endpoint
@@ -38,7 +40,10 @@ class WebSocketSubscriber(ABC):
         async with self._websocket_available:
             if handler_id in self._handler_to_socket:
                 socket_id = self._handler_to_socket[handler_id]
-            elif len(self._socket_ids) < self._max_connections:
+            elif (
+                self._max_connections is None
+                or len(self._socket_ids) < self._max_connections
+            ):
                 socket_id = str(uuid4())
                 self._socket_ids.append(socket_id)
                 self._handler_to_socket[handler_id] = socket_id

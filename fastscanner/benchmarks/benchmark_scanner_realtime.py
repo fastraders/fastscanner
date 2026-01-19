@@ -55,9 +55,6 @@ class BenchmarkScannerHandler:
         total_messages += 1
         return new_row
 
-    def set_scanner_id(self, scanner_id: str):
-        pass
-
 
 async def monitor_batch_timeout():
     global batch_start_time, last_received_time, total_messages

@@ -1,6 +1,8 @@
+import json
 import logging
 from datetime import datetime, time
 from typing import Any, Dict
+from uuid import uuid4
 
 import pandas as pd
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -11,24 +13,25 @@ from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService
 
-from .models import ScannerRequest, ScannerResponse, ScanRequest, ScanResponse
+from .models import (
+    ActionType,
+    ScannerMessage,
+    ScanRealtimeSubscribeRequest,
+    ScanRealtimeSubscribeResponse,
+    ScanRealtimeUnsubscribeRequest,
+    ScanRequest,
+    ScanResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/scanners", tags=["scanner"])
 
 
-class ScannerMessage(BaseModel):
-    symbol: str
-    scan_time: str
-    scanner_id: str
-    candle: Dict[str, Any]
-
-
 class WebSocketScannerHandler:
-    def __init__(self, websocket: WebSocket):
+    def __init__(self, scanner_id: str, websocket: WebSocket):
         self._websocket = websocket
-        self._scanner_id = ""
+        self._scanner_id = scanner_id
 
     async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
         if not passed:
@@ -46,9 +49,6 @@ class WebSocketScannerHandler:
         await self._send_message(message)
 
         return new_row
-
-    def set_scanner_id(self, scanner_id: str):
-        self._scanner_id = scanner_id
 
     async def _send_message(self, message: ScannerMessage):
         try:
@@ -80,29 +80,35 @@ async def websocket_realtime_scanner(
     await websocket.accept()
 
     data = await websocket.receive_text()
-    scanner_request = ScannerRequest.model_validate_json(data)
-    processed_params = _parse_known_parameters(scanner_request.params)
-    scanner_params = ScannerParams(type_=scanner_request.type, params=processed_params)
-    handler = WebSocketScannerHandler(websocket)
-
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=handler, freq=processed_params["freq"]
+    request = ScanRealtimeSubscribeRequest.model_validate_json(data)
+    processed_params = _parse_known_parameters(request.params)
+    scanner_params = ScannerParams(type_=request.type, params=processed_params)
+    handler = WebSocketScannerHandler(
+        scanner_id=request.scanner_id, websocket=websocket
     )
 
-    response = ScannerResponse(scanner_id=scanner_id)
-    await websocket.send_text(response.model_dump_json())
-
-    logger.info(f"Started scanner with ID: {scanner_id}, Type: {scanner_request.type}")
+    await service.subscribe_realtime(
+        scanner_id=request.scanner_id,
+        params=scanner_params,
+        handler=handler,
+        freq=request.freq,
+    )
 
     try:
+        response = ScanRealtimeSubscribeResponse(scanner_id=request.scanner_id)
+        await websocket.send_text(response.model_dump_json())
+
+        logger.info(
+            f"Started scanner with ID: {request.scanner_id}, Type: {request.type}"
+        )
         while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for scanner {scanner_id}")
+            msg = await websocket.receive_text()
+            msg_data = json.loads(msg)
+            if msg_data.get("action") == ActionType.UNSUBSCRIBE:
+                break
     finally:
-        if scanner_id:
-            await service.unsubscribe_realtime(scanner_id)
-            logger.info(f"Unsubscribed scanner {scanner_id}")
+        await service.unsubscribe_realtime(request.scanner_id)
+        logger.info(f"Unsubscribed scanner {request.scanner_id}")
 
 
 @router.post("/{scanner_type}/scans")

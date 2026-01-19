@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -445,13 +445,9 @@ async def test_candle_aggregation(setup):
         _, row = handler.received[0]
 
         assert row[CandleCol.OPEN] == 100
-
         assert row[CandleCol.HIGH] == 110
-
         assert row[CandleCol.LOW] == 98
-
         assert row[CandleCol.CLOSE] == 108
-
         assert row[CandleCol.VOLUME] == 1500
 
         assert row.name == ts_start

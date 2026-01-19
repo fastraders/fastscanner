@@ -19,21 +19,12 @@ from fastscanner.services.indicators.service import (
     SubscriptionHandler,
 )
 
+from .models import ActionType, StatusType
 from .services import get_indicators_service, get_indicators_service_ws
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/indicators", tags=["indicators"])
-
-
-class ActionType(str, Enum):
-    SUBSCRIBE = "subscribe"
-    UNSUBSCRIBE = "unsubscribe"
-
-
-class StatusType(str, Enum):
-    SUCCESS = "success"
-    ERROR = "error"
 
 
 class IndicatorsParams(BaseModel):

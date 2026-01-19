@@ -18,8 +18,6 @@ class ScanAllResult:
 
 
 class Scanner(Protocol):
-    def id(self) -> str: ...
-
     async def scan(
         self, symbol: str, start: date, end: date, freq: str
     ) -> pd.DataFrame:
@@ -33,8 +31,6 @@ class Scanner(Protocol):
 
 
 class ScannerRealtime(Protocol):
-    def id(self) -> str: ...
-
     @classmethod
     def type(cls) -> str: ...
 

@@ -4,6 +4,7 @@ import math
 import multiprocessing
 from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
+from uuid import uuid4
 
 import pandas as pd
 
@@ -29,8 +30,6 @@ class SubscriptionHandler(Protocol):
         self, symbol: str, new_row: pd.Series, passed: bool
     ) -> pd.Series: ...
 
-    def set_scanner_id(self, scanner_id: str): ...
-
 
 class ScannerChannelHandler:
     def __init__(
@@ -40,14 +39,12 @@ class ScannerChannelHandler:
         handler: SubscriptionHandler,
         freq: str,
     ):
+        self._id = str(uuid4())
         self._symbol = symbol
         self._scanner = scanner
         self._handler = handler
         self._freq = freq
         self._buffer = CandleBuffer(symbol, freq, self._handle)
-
-    def id(self) -> str:
-        return f"{self._scanner.id()}_{self._symbol}"
 
     async def _handle(self, row: pd.Series) -> None:
         new_row, passed = await self._scanner.scan_realtime(
@@ -81,6 +78,9 @@ class ScannerChannelHandler:
             return
         await self._handle(agg)
 
+    def id(self) -> str:
+        return self._id
+
 
 class ScannerService:
     def __init__(
@@ -90,6 +90,7 @@ class ScannerService:
         self._channel = channel
         self._symbols_provider = symbols_provider
         self._handlers: dict[str, list[ScannerChannelHandler]] = {}
+        self._lock = asyncio.Lock()
 
     async def _subscribe_symbol(
         self,
@@ -105,36 +106,37 @@ class ScannerService:
 
     async def subscribe_realtime(
         self,
+        scanner_id: str,
         params: ScannerParams,
         handler: SubscriptionHandler,
         freq: str,
-    ) -> str:
-        scanner = ScannersLibrary.instance().get_realtime(params.type_, params.params)
-        scanner_id = scanner.id()
-        handler.set_scanner_id(scanner_id)
-        symbols = await self._symbols_provider.active_symbols()
-        tasks = [
-            asyncio.create_task(self._subscribe_symbol(symbol, scanner, handler, freq))
-            for symbol in symbols
-        ]
-        handlers = await asyncio.gather(*tasks)
+    ):
+        async with self._lock:
+            scanner = ScannersLibrary.instance().get_realtime(
+                params.type_, params.params
+            )
+            symbols = await self._symbols_provider.active_symbols()
+            tasks = [
+                asyncio.create_task(
+                    self._subscribe_symbol(symbol, scanner, handler, freq)
+                )
+                for symbol in symbols
+            ]
+            handlers = await asyncio.gather(*tasks)
 
-        self._handlers[scanner_id] = handlers
-
-        return scanner_id
+            self._handlers[scanner_id] = handlers
 
     async def unsubscribe_realtime(self, scanner_id: str):
+        async with self._lock:
+            if scanner_id not in self._handlers:
+                return
 
-        if scanner_id not in self._handlers:
-            return
+            handlers = self._handlers[scanner_id]
+            for handler in handlers:
+                stream_key = f"candles_min_{handler._symbol}"
+                await self._channel.unsubscribe(stream_key, handler.id())
 
-        handlers = self._handlers[scanner_id]
-
-        for handler in handlers:
-            stream_key = f"candles_min_{handler._symbol}"
-            await self._channel.unsubscribe(stream_key, handler.id())
-
-        del self._handlers[scanner_id]
+            del self._handlers[scanner_id]
 
     async def scan_all(
         self,
