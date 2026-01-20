@@ -10,7 +10,11 @@ from fastapi.testclient import TestClient
 from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import get_scanner_service
 from fastscanner.pkg.clock import ClockRegistry, FixedClock
-from fastscanner.services.indicators.ports import CandleCol, FundamentalData
+from fastscanner.services.indicators.ports import (
+    CandleCol,
+    ChannelHandler,
+    FundamentalData,
+)
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib import ScannersLibrary
 from fastscanner.services.scanners.ports import ScannerParams
@@ -50,32 +54,24 @@ class MockSymbolsProvider:
 class MockChannel:
     def __init__(self):
         self.subscriptions = {}
-        self.unsubscriptions = {}
-        self.handlers = {}
+        self.handlers: dict[str, ChannelHandler] = {}
 
-    async def subscribe(self, channel_id: str, handler):
+    async def subscribe(self, channel_id: str, handler: ChannelHandler):
         if channel_id not in self.subscriptions:
             self.subscriptions[channel_id] = []
-        self.subscriptions[channel_id].append(handler)
         self.handlers[channel_id] = handler
 
     async def unsubscribe(self, channel_id: str, handler_id: str):
-        if channel_id not in self.unsubscriptions:
-            self.unsubscriptions[channel_id] = []
-        self.unsubscriptions[channel_id].append(handler_id)
-
         # Actually remove the handler when unsubscribing (needed for websocket tests)
         if channel_id in self.handlers:
             del self.handlers[channel_id]
 
-        # Remove from subscriptions as well
-        if channel_id in self.subscriptions:
-            del self.subscriptions[channel_id]
-
     async def push_data(self, channel_id: str, data: dict[Any, Any]):
         """Helper method to push data to a specific channel for testing"""
-        if channel_id in self.handlers:
-            await self.handlers[channel_id].handle(channel_id, data)
+        for cid, h in self.handlers.items():
+            _, unit, symbol = cid.split(".")
+            if symbol == "*" or cid == channel_id:
+                await h.handle(channel_id, data)
 
     async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True): ...
 
@@ -102,8 +98,6 @@ class MockSubscriptionHandler(SubscriptionHandler):
         self.handled_rows.append(new_row)
         self.handled_passed.append(passed)
         return new_row
-
-    def set_scanner_id(self, scanner_id: str): ...
 
 
 @pytest.fixture

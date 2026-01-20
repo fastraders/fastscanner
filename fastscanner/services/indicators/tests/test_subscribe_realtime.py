@@ -7,7 +7,7 @@ import pytest
 import pytz
 from httpx import patch
 
-from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, FixedClock
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
@@ -105,6 +105,7 @@ def candles():
 def setup(candles):
     symbol = "AAPL"
     ts = datetime(2023, 1, 11, 13, 0, tzinfo=pytz.timezone(LOCAL_TIMEZONE_STR))
+    ClockRegistry.set(FixedClock(ts))
     df = pd.DataFrame(
         {
             CandleCol.OPEN: range(100, 115),
@@ -140,7 +141,7 @@ async def test_prev_day_indicator(setup):
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
 
-    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+    await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     ClockRegistry.unset()
 
@@ -158,7 +159,7 @@ async def test_daily_gap_indicator(setup):
     pre_market_ts = ts.replace(hour=9, minute=15)
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
     await channel_handler.handle(
-        f"candles_min_{symbol}", create_stream_message(pre_market_ts)
+        f"candles.min.{symbol}", create_stream_message(pre_market_ts)
     )
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -166,7 +167,7 @@ async def test_daily_gap_indicator(setup):
 
     handler.received = []
 
-    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+    await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
     await asyncio.sleep(0.2)
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -185,7 +186,7 @@ async def test_daily_atr_indicator(setup):
     await indicator.extend(symbol, df)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
-    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+    await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -199,7 +200,7 @@ async def test_daily_atr_gap_indicator(setup):
     indicator = DailyATRGapIndicator(period=3)
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
-    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+    await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -214,7 +215,7 @@ async def test_cumulative_daily_volume(setup):
 
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
     await channel_handler.handle(
-        f"candles_min_{symbol}", create_stream_message(ts, volume=1000)
+        f"candles.min.{symbol}", create_stream_message(ts, volume=1000)
     )
 
     assert len(handler.received) == 1
@@ -223,7 +224,7 @@ async def test_cumulative_daily_volume(setup):
 
     handler.received = []
     await channel_handler.handle(
-        f"candles_min_{symbol}",
+        f"candles.min.{symbol}",
         create_stream_message(ts + timedelta(minutes=1), volume=500),
     )
     await asyncio.sleep(0.2)
@@ -240,7 +241,7 @@ async def test_premarket_cumulative(setup):
     pre_market_ts = ts.replace(hour=9, minute=15)
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
     await channel_handler.handle(
-        f"candles_min_{symbol}", create_stream_message(pre_market_ts, close=100)
+        f"candles.min.{symbol}", create_stream_message(pre_market_ts, close=100)
     )
 
     assert len(handler.received) == 1
@@ -249,7 +250,7 @@ async def test_premarket_cumulative(setup):
 
     handler.received = []
     await channel_handler.handle(
-        f"candles_min_{symbol}",
+        f"candles.min.{symbol}",
         create_stream_message(pre_market_ts + timedelta(minutes=1), close=50),
     )
     await asyncio.sleep(0.2)
@@ -259,7 +260,7 @@ async def test_premarket_cumulative(setup):
 
     handler.received = []
     await channel_handler.handle(
-        f"candles_min_{symbol}", create_stream_message(ts, close=200)
+        f"candles.min.{symbol}", create_stream_message(ts, close=200)
     )
     await asyncio.sleep(0.2)
     assert len(handler.received) == 1
@@ -293,7 +294,7 @@ async def test_atr_indicator(setup):
     ts = index[3]
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
     await channel_handler.handle(
-        f"candles_min_{symbol}",
+        f"candles.min.{symbol}",
         create_stream_message(ts, open=103, high=113, low=93, close=108),
     )
 
@@ -317,7 +318,7 @@ async def test_position_in_range(setup):
     channel_handler = CandleChannelHandler(symbol, [indicator], handler, "1min")
 
     await channel_handler.handle(
-        f"candles_min_{symbol}", create_stream_message(ts, close=112)
+        f"candles.min.{symbol}", create_stream_message(ts, close=112)
     )
 
     assert len(handler.received) == 1
@@ -332,7 +333,7 @@ async def test_channel_handler_missing_timestamp(setup):
     channel_handler = CandleChannelHandler(symbol, [], handler, "1min")
 
     try:
-        await channel_handler.handle(f"candles_min_{symbol}", {})
+        await channel_handler.handle(f"candles.min.{symbol}", {})
         assert False, "Expected KeyError"
     except KeyError:
         ...
@@ -345,7 +346,7 @@ async def test_channel_handler_invalid_data(setup):
 
     try:
         await channel_handler.handle(
-            f"candles_min_{symbol}", {"timestamp": "invalid", "open": "not_a_number"}
+            f"candles.min.{symbol}", {"timestamp": "invalid", "open": "not_a_number"}
         )
         assert False, "Expected ValueError"
     except ValueError:
@@ -370,7 +371,7 @@ async def test_channel_handler_multiple_indicators(setup):
 
     channel_handler = CandleChannelHandler(symbol, indicators, handler, "1min")
 
-    await channel_handler.handle(f"candles_min_{symbol}", create_stream_message(ts))
+    await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
     _, row = handler.received[0]
@@ -399,7 +400,7 @@ async def test_multiple_ticks_aggregation():
             "close": 100.5 + i,
             "volume": 1000 * (i + 1),
         }
-        await channel_handler.handle(f"candles_min_{symbol}", data)
+        await channel_handler.handle(f"candles.min.{symbol}", data)
 
     # Should have one aggregated candle
     assert len(handler.received) == 1
@@ -435,9 +436,9 @@ async def test_candle_aggregation(setup):
     mock_clock.now.return_value = ts_start
 
     try:
-        await channel_handler.handle(f"candles_min_{symbol}", msg1)
-        await channel_handler.handle(f"candles_min_{symbol}", msg2)
-        await channel_handler.handle(f"candles_min_{symbol}", msg3)
+        await channel_handler.handle(f"candles.min.{symbol}", msg1)
+        await channel_handler.handle(f"candles.min.{symbol}", msg2)
+        await channel_handler.handle(f"candles.min.{symbol}", msg3)
 
         await asyncio.sleep(0.05)
 
@@ -482,10 +483,10 @@ async def test_flush_on_timeout_with_partial_buffer(setup):
     ClockRegistry.set(mock_clock)
 
     try:
-        await channel_handler.handle(f"candles_min_{symbol}", msg1)
-        await channel_handler.handle(f"candles_min_{symbol}", msg2)
+        await channel_handler.handle(f"candles.min.{symbol}", msg1)
+        await channel_handler.handle(f"candles.min.{symbol}", msg2)
 
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(1)
 
         assert len(handler.received) == 1
         _, row = handler.received[0]

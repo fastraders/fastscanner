@@ -97,7 +97,7 @@ async def main():
         handler=PrintHandler(),
     )
 
-    logger.info("\nSubscribed to Redis stream: candles_min_AAPL")
+    logger.info("\nSubscribed to Redis stream: candles.min.AAPL")
 
     while True:
         await asyncio.sleep(1)

@@ -109,6 +109,8 @@ async def websocket_realtime_scanner(
             msg_data = json.loads(msg)
             if msg_data.get("action") == ActionType.UNSUBSCRIBE:
                 break
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
     finally:
         await service.unsubscribe_realtime(request.scanner_id)
         logger.info(f"Unsubscribed scanner {request.scanner_id}")

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
-STREAM_PREFIX = "candles_min_"
+STREAM_PREFIX = "candles.min."
 NO_DATA_TIMEOUT = 10
 
 batch_start_time = None

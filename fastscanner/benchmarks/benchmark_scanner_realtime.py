@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime
 from datetime import time as dt_time
+from uuid import uuid4
 
 import pandas as pd
 import uvloop
@@ -28,7 +29,7 @@ load_logging_config()
 logger = logging.getLogger(__name__)
 
 SYMBOLS_FILE = "data/symbols/polygon_symbols.json"
-STREAM_PREFIX = "candles_min_"
+STREAM_PREFIX = "candles.min."
 NO_DATA_TIMEOUT = 10
 
 batch_start_time = None
@@ -116,8 +117,10 @@ async def main():
             "min_market_cap": 0.0,
         },
     )
+    scanner_id = str(uuid4())
 
-    scanner_id = await service.subscribe_realtime(
+    await service.subscribe_realtime(
+        scanner_id=scanner_id,
         params=scanner_params,
         handler=BenchmarkScannerHandler(),
         freq="1min",
@@ -131,7 +134,7 @@ async def main():
         await monitor_task
     except KeyboardInterrupt:
         logger.info("Shutting down scanner...")
-        await service.unsubscribe_realtime(scanner_id)
+        await service.unsubscribe_realtime(scanner_id=scanner_id)
         monitor_task.cancel()
 
 

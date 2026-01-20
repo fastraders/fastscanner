@@ -150,7 +150,7 @@ async def test_websocket_subscribe_single_symbol(indicators_service):
         assert "Subscribed to AAPL" in response_data["message"]
 
         # Push test data to trigger indicator processing
-        await channel.push_data("candles_min_AAPL", test_data)
+        await channel.push_data("candles.min.AAPL", test_data)
 
         # Receive the indicator message
         message = websocket.receive_text()
@@ -221,14 +221,14 @@ async def test_websocket_multiple_subscriptions(indicators_service):
         assert response2["subscription_id"] == "test_sub_2"
 
         # Push data for first symbol
-        await channel.push_data("candles_min_AAPL", test_data_aapl)
+        await channel.push_data("candles.min.AAPL", test_data_aapl)
         message1 = json.loads(websocket.receive_text())
         assert message1["subscription_id"] == "test_sub_1"
         assert message1["symbol"] == "AAPL"
         assert message1["candle"]["dummy_value"] == 200.0  # 100 * 2.0
 
         # Push data for second symbol
-        await channel.push_data("candles_min_GOOGL", test_data_googl)
+        await channel.push_data("candles.min.GOOGL", test_data_googl)
         message2 = json.loads(websocket.receive_text())
         assert message2["subscription_id"] == "test_sub_2"
         assert message2["symbol"] == "GOOGL"
@@ -263,7 +263,7 @@ async def test_websocket_unsubscribe(indicators_service):
         websocket.send_text(json.dumps(subscription_request))
         response = json.loads(websocket.receive_text())
         assert response["status"] == StatusType.SUCCESS
-        assert len(channel.unsubscriptions.get("candles_min_AAPL", [])) == 0
+        assert len(channel.unsubscriptions.get("candles.min.AAPL", [])) == 0
 
         # Unsubscribe
         websocket.send_text(json.dumps(unsubscription_request))
@@ -273,7 +273,7 @@ async def test_websocket_unsubscribe(indicators_service):
         assert "Unsubscribed from AAPL" in response["message"]
 
         # Verify unsubscription happened
-        assert len(channel.unsubscriptions["candles_min_AAPL"]) > 0
+        assert len(channel.unsubscriptions["candles.min.AAPL"]) > 0
 
     app.dependency_overrides.clear()
 
@@ -358,7 +358,7 @@ async def test_websocket_resubscribe_scenario(indicators_service):
         assert response3["subscription_id"] == "test_sub_2"
 
         # Push data and verify the new subscription works
-        await channel.push_data("candles_min_AAPL", test_data)
+        await channel.push_data("candles.min.AAPL", test_data)
         message = json.loads(websocket.receive_text())
         assert message["subscription_id"] == "test_sub_2"
         assert message["symbol"] == "AAPL"
@@ -505,7 +505,7 @@ async def test_websocket_complex_scenario(indicators_service):
         assert json.loads(websocket.receive_text())["status"] == StatusType.SUCCESS
 
         # Push AAPL data - should trigger both AAPL subscriptions
-        await channel.push_data("candles_min_AAPL", test_data_aapl)
+        await channel.push_data("candles.min.AAPL", test_data_aapl)
 
         # Receive messages (order might vary)
         messages = []
@@ -535,7 +535,7 @@ async def test_websocket_complex_scenario(indicators_service):
         assert json.loads(websocket.receive_text())["status"] == StatusType.SUCCESS
 
         # Push GOOGL data
-        await channel.push_data("candles_min_GOOGL", test_data_googl)
+        await channel.push_data("candles.min.GOOGL", test_data_googl)
         googl_message = json.loads(websocket.receive_text())
         assert googl_message["subscription_id"] == "googl_sub_1"
         assert googl_message["symbol"] == "GOOGL"

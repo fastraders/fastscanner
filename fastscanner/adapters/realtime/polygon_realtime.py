@@ -126,10 +126,10 @@ class PolygonRealtime:
         self._client.unsubscribe_all()
 
     _event_type_to_channel = {
-        EventType.EquityAgg: "candles_s_",
-        EventType.EquityAggMin: "candles_min_",
-        EventType.EquityAgg.value: "candles_s_",
-        EventType.EquityAggMin.value: "candles_min_",
+        EventType.EquityAgg: "candles.s.",
+        EventType.EquityAggMin: "candles.min.",
+        EventType.EquityAgg.value: "candles.s.",
+        EventType.EquityAggMin.value: "candles.min.",
     }
 
     async def handle_messages(self, msgs: list[WebSocketMessage]):

@@ -92,8 +92,8 @@ class IndicatorsService:
 
         _, unit = split_freq(freq)
         unit_to_channel = {
-            "s": "candles_s_",
-            "min": "candles_min_",
+            "s": "candles.s.",
+            "min": "candles.min.",
         }
         stream_key = f"{unit_to_channel[unit]}{symbol}"
         sub_handler = CandleChannelHandler(symbol, indicator_instances, handler, freq)
@@ -131,14 +131,14 @@ class IndicatorsService:
                 {
                     "symbol": symbol,
                     "subscriber_id": subscription_id,
-                    "unit": stream_key.split("_")[1],
+                    "unit": stream_key.split(".")[1],
                 },
             )
         await self.channel.unsubscribe(stream_key, subscription_id)
 
     async def stop(self):
         for sub_id, channel in self._subscription_to_channel.items():
-            _, unit, symbol = channel.split("_")
+            _, unit, symbol = channel.split(".")
             await self.channel.unsubscribe(channel, sub_id)
             await self.channel.push(
                 self._symbols_unsubscribe_channel,

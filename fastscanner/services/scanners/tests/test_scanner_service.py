@@ -28,7 +28,7 @@ async def test_realtime_data_flow_scanner_passes(
         "timestamp": 1640995200000,  # 2022-01-01 00:00:00 UTC
     }
 
-    await channel.push_data("candles_min_AAPL", test_data)
+    await channel.push_data("candles.min.AAPL", test_data)
 
     assert len(subscription_handler.handled_symbols) == 1
     assert subscription_handler.handled_symbols[0] == "AAPL"
@@ -62,7 +62,7 @@ async def test_realtime_data_flow_scanner_fails(
         "timestamp": 1640995200000,
     }
 
-    await channel.push_data("candles_min_AAPL", test_data)
+    await channel.push_data("candles.min.AAPL", test_data)
 
     assert len(subscription_handler.handled_symbols) == 1
     assert subscription_handler.handled_symbols[0] == "AAPL"
@@ -99,8 +99,8 @@ async def test_realtime_data_flow_multiple_symbols(
         "timestamp": 1640995200000,
     }
 
-    await channel.push_data("candles_min_AAPL", test_data_aapl)
-    await channel.push_data("candles_min_GOOGL", test_data_googl)
+    await channel.push_data("candles.min.AAPL", test_data_aapl)
+    await channel.push_data("candles.min.GOOGL", test_data_googl)
 
     assert len(subscription_handler.handled_symbols) == 2
     assert "AAPL" in subscription_handler.handled_symbols
@@ -131,7 +131,7 @@ async def test_realtime_data_flow_different_scanner_params(
         "timestamp": 1640995200000,
     }
 
-    await channel.push_data("candles_min_AAPL", test_data)
+    await channel.push_data("candles.min.AAPL", test_data)
 
     assert bool(subscription_handler.handled_passed[0]) is False
 
@@ -175,7 +175,7 @@ async def test_data_type_conversion(
         "timestamp": 1640995200000,
     }
 
-    await channel.push_data("candles_min_AAPL", test_data)
+    await channel.push_data("candles.min.AAPL", test_data)
 
     handled_row = subscription_handler.handled_rows[0]
     assert isinstance(handled_row["open"], float)

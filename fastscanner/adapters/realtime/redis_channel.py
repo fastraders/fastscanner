@@ -111,7 +111,7 @@ class RedisChannel:
         try:
             while True:
                 cursor, keys = await self.redis.scan(
-                    cursor=cursor, match="candles_min_*", _type="stream"
+                    cursor=cursor, match="candles.min.*", _type="stream"
                 )
                 keys_to_delete.extend(keys)
 
@@ -121,7 +121,7 @@ class RedisChannel:
             if len(keys_to_delete) > 0:
                 await self.redis.delete(*keys_to_delete)
                 logger.info(
-                    f"Successfully cleared {len(keys_to_delete)} candles_min_ streams"
+                    f"Successfully cleared {len(keys_to_delete)} candles.min. streams"
                 )
             else:
                 logger.warning("No candle streams found to clear")

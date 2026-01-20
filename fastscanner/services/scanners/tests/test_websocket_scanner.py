@@ -7,13 +7,13 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from fastscanner.adapters.rest.main import app
-from fastscanner.adapters.rest.scanner import get_scanner_service
+from fastscanner.adapters.rest.scanner import get_scanner_service_ws
 
 
 @pytest.mark.asyncio
 async def test_websocket_realtime_scanner_end_to_end(scanner_service):
     service, channel = scanner_service
-    app.dependency_overrides[get_scanner_service] = lambda: service
+    app.dependency_overrides[get_scanner_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -45,7 +45,7 @@ async def test_websocket_realtime_scanner_end_to_end(scanner_service):
         scanner_id = json.loads(scanner_response)["scanner_id"]
         assert isinstance(scanner_id, str)
 
-        await channel.push_data("candles_min_AAPL", test_data)
+        await channel.push_data("candles.min.AAPL", test_data)
 
         message = websocket.receive_text()
         data = json.loads(message)
@@ -63,7 +63,7 @@ async def test_websocket_malformed_subscription(scanner_service):
     Test: When invalid JSON is sent to /api/scanners, the server raises ValidationError.
     """
     service, _ = scanner_service
-    app.dependency_overrides[get_scanner_service] = lambda: service
+    app.dependency_overrides[get_scanner_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -81,7 +81,7 @@ async def test_websocket_scanner_failing_conditions(scanner_service):
     Test: When scanner conditions are not met, no message should be sent via WebSocket.
     """
     service, channel = scanner_service
-    app.dependency_overrides[get_scanner_service] = lambda: service
+    app.dependency_overrides[get_scanner_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -113,7 +113,7 @@ async def test_websocket_scanner_failing_conditions(scanner_service):
         scanner_id = json.loads(scanner_response)["scanner_id"]
         assert isinstance(scanner_id, str)
 
-        await channel.push_data("candles_min_AAPL", test_data)
+        await channel.push_data("candles.min.AAPL", test_data)
 
         await asyncio.sleep(0.1)
 
@@ -126,7 +126,7 @@ async def test_websocket_disconnect_and_unsubscribe(scanner_service):
     Test: When WebSocket disconnects, the scanner should be properly unsubscribed.
     """
     service, channel = scanner_service
-    app.dependency_overrides[get_scanner_service] = lambda: service
+    app.dependency_overrides[get_scanner_service_ws] = lambda: service
 
     client = TestClient(app)
 
@@ -164,9 +164,9 @@ async def test_websocket_disconnect_and_unsubscribe(scanner_service):
         new_scanner_response = websocket.receive_text()
         new_scanner_id = json.loads(new_scanner_response)["scanner_id"]
         assert isinstance(new_scanner_id, str)
-        assert new_scanner_id != scanner_id  # Should be a different ID
+        assert new_scanner_id == scanner_id
 
-        await channel.push_data("candles_min_AAPL", test_data)
+        await channel.push_data("candles.min.AAPL", test_data)
 
         message = websocket.receive_text()
         data = json.loads(message)
@@ -184,7 +184,7 @@ async def test_websocket_invalid_scanner_type(scanner_service):
     Test: When an invalid scanner type is provided, the system should handle it gracefully.
     """
     service, channel = scanner_service
-    app.dependency_overrides[get_scanner_service] = lambda: service
+    app.dependency_overrides[get_scanner_service_ws] = lambda: service
 
     client = TestClient(app)
 

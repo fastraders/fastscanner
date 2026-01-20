@@ -34,25 +34,30 @@ class SubscriptionHandler(Protocol):
 class ScannerChannelHandler:
     def __init__(
         self,
-        symbol: str,
         scanner: ScannerRealtime,
         handler: SubscriptionHandler,
         freq: str,
     ):
         self._id = str(uuid4())
-        self._symbol = symbol
         self._scanner = scanner
         self._handler = handler
         self._freq = freq
-        self._buffer = CandleBuffer(symbol, freq, self._handle)
+        self._buffers: dict[str, CandleBuffer] = {}
 
-    async def _handle(self, row: pd.Series) -> None:
-        new_row, passed = await self._scanner.scan_realtime(
-            self._symbol, row, self._freq
-        )
-        await self._handler.handle(self._symbol, new_row, passed)
+    async def _new_buffer(self, symbol: str) -> CandleBuffer:
+        async def _handle(row: pd.Series) -> None:
+            new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
+            await self._handler.handle(symbol, new_row, passed)
+
+        buffer = CandleBuffer(symbol, self._freq, _handle)
+        self._buffers[symbol] = buffer
+        return buffer
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
+        symbol = channel_id.split(".")[-1]
+        buffer = self._buffers.get(symbol)
+        if buffer is None:
+            buffer = await self._new_buffer(symbol)
         for field in (
             C.OPEN,
             C.HIGH,
@@ -68,15 +73,14 @@ class ScannerChannelHandler:
         row = pd.Series(data, name=ts)
 
         if self._freq == "1min":
-            new_row, passed = await self._scanner.scan_realtime(
-                self._symbol, row, self._freq
-            )
-            await self._handler.handle(self._symbol, new_row, passed)
+            new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
+            await self._handler.handle(symbol, new_row, passed)
             return
-        agg = await self._buffer.add(row)
+        agg = await buffer.add(row)
         if agg is None:
             return
-        await self._handle(agg)
+        new_row, passed = await self._scanner.scan_realtime(symbol, agg, self._freq)
+        await self._handler.handle(symbol, new_row, passed)
 
     def id(self) -> str:
         return self._id
@@ -89,20 +93,8 @@ class ScannerService:
         self._candles = candles
         self._channel = channel
         self._symbols_provider = symbols_provider
-        self._handlers: dict[str, list[ScannerChannelHandler]] = {}
+        self._handlers: dict[str, ScannerChannelHandler] = {}
         self._lock = asyncio.Lock()
-
-    async def _subscribe_symbol(
-        self,
-        symbol: str,
-        scanner: ScannerRealtime,
-        handler: SubscriptionHandler,
-        freq: str,
-    ) -> ScannerChannelHandler:
-        stream_key = f"candles_min_{symbol}"
-        sch = ScannerChannelHandler(symbol, scanner, handler, freq)
-        await self._channel.subscribe(stream_key, sch)
-        return sch
 
     async def subscribe_realtime(
         self,
@@ -115,28 +107,20 @@ class ScannerService:
             scanner = ScannersLibrary.instance().get_realtime(
                 params.type_, params.params
             )
-            symbols = await self._symbols_provider.active_symbols()
-            tasks = [
-                asyncio.create_task(
-                    self._subscribe_symbol(symbol, scanner, handler, freq)
-                )
-                for symbol in symbols
-            ]
-            handlers = await asyncio.gather(*tasks)
+            stream_key = "candles.min.*"
+            sch = ScannerChannelHandler(scanner, handler, freq)
+            await self._channel.subscribe(stream_key, sch)
 
-            self._handlers[scanner_id] = handlers
+            self._handlers[scanner_id] = sch
 
     async def unsubscribe_realtime(self, scanner_id: str):
         async with self._lock:
             if scanner_id not in self._handlers:
                 return
 
-            handlers = self._handlers[scanner_id]
-            for handler in handlers:
-                stream_key = f"candles_min_{handler._symbol}"
-                await self._channel.unsubscribe(stream_key, handler.id())
-
-            del self._handlers[scanner_id]
+            handler = self._handlers.pop(scanner_id)
+            stream_key = "candles.min.*"
+            await self._channel.unsubscribe(stream_key, handler.id())
 
     async def scan_all(
         self,
