@@ -20,12 +20,12 @@ class ScanRealtimeSubscribeRequest(BaseModel):
     type: str
     params: Dict[str, Any]
     freq: str
-    action = ActionType.SUBSCRIBE
+    action: ActionType = ActionType.SUBSCRIBE
 
 
 class ScanRealtimeUnsubscribeRequest(BaseModel):
     subscription_id: str
-    action = ActionType.UNSUBSCRIBE
+    action: ActionType = ActionType.UNSUBSCRIBE
 
 
 class ScanRealtimeSubscribeResponse(BaseModel):

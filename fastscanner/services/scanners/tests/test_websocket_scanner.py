@@ -18,6 +18,8 @@ async def test_websocket_realtime_scanner_end_to_end(scanner_service):
     client = TestClient(app)
 
     scanner_request = {
+        "scanner_id": "test_scanner_id",
+        "freq": "1min",
         "type": "dummy_scanner",
         "params": {
             "min_value": 50.0,
@@ -84,6 +86,8 @@ async def test_websocket_scanner_failing_conditions(scanner_service):
     client = TestClient(app)
 
     scanner_request = {
+        "scanner_id": "test_scanner_id",
+        "freq": "1min",
         "type": "dummy_scanner",
         "params": {
             "min_value": 100.0,  # Higher threshold
@@ -127,6 +131,8 @@ async def test_websocket_disconnect_and_unsubscribe(scanner_service):
     client = TestClient(app)
 
     scanner_request = {
+        "scanner_id": "test_scanner_id",
+        "freq": "1min",
         "type": "dummy_scanner",
         "params": {
             "min_value": 50.0,
@@ -183,6 +189,8 @@ async def test_websocket_invalid_scanner_type(scanner_service):
     client = TestClient(app)
 
     scanner_request = {
+        "scanner_id": "test_scanner_id",
+        "freq": "1min",
         "type": "non_existent_scanner",  # Invalid scanner type
         "params": {
             "min_value": 50.0,

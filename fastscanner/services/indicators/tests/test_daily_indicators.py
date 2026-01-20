@@ -10,6 +10,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRGapIndicator,
     DailyATRIndicator,
     DailyGapIndicator,
+    DayOpenIndicator,
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
@@ -1841,3 +1842,245 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
 
     # Ensure the values are different
     assert jan15_adr != jan16_adr
+
+
+def test_day_open_indicator_type():
+    indicator = DayOpenIndicator()
+    assert indicator.type() == "day_open"
+
+
+def test_day_open_indicator_column_name():
+    indicator = DayOpenIndicator()
+    assert indicator.column_name() == "day_open"
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend(candles: "CandleStoreTest"):
+    daily_dates = pd.date_range(start=date(2023, 1, 10), end=date(2023, 1, 11))
+    daily_opens = [100, 110]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    dates = [
+        datetime(2023, 1, 10, 9, 30),
+        datetime(2023, 1, 10, 10, 0),
+        datetime(2023, 1, 10, 10, 30),
+    ]
+    opens = [100, 101, 102]
+    df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
+
+    indicator = DayOpenIndicator()
+    result_df = await indicator.extend("AAPL", df)
+
+    assert result_df[indicator.column_name()].to_list() == [100, 100, 100]
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_multiple_days(candles: "CandleStoreTest"):
+    daily_dates = pd.date_range(start=date(2023, 1, 10), end=date(2023, 1, 12))
+    daily_opens = [100, 110, 120]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    dates = [
+        datetime(2023, 1, 10, 9, 30),
+        datetime(2023, 1, 10, 10, 0),
+        datetime(2023, 1, 11, 9, 30),
+        datetime(2023, 1, 11, 10, 0),
+        datetime(2023, 1, 12, 9, 30),
+    ]
+    opens = [100, 101, 110, 111, 120]
+    df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
+
+    indicator = DayOpenIndicator()
+    result_df = await indicator.extend("AAPL", df)
+
+    expected_values = [100, 100, 110, 110, 120]
+    assert result_df[indicator.column_name()].to_list() == expected_values
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_premarket(candles: "CandleStoreTest"):
+    daily_dates = pd.date_range(start=date(2023, 1, 10), end=date(2023, 1, 11))
+    daily_opens = [100, 110]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    dates = [
+        datetime(2023, 1, 10, 8, 0),
+        datetime(2023, 1, 10, 9, 0),
+        datetime(2023, 1, 10, 9, 30),
+        datetime(2023, 1, 10, 10, 0),
+    ]
+    opens = [95, 98, 100, 101]
+    df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
+
+    indicator = DayOpenIndicator()
+    result_df = await indicator.extend("AAPL", df)
+
+    assert pd.isna(result_df[indicator.column_name()].iloc[0])
+    assert pd.isna(result_df[indicator.column_name()].iloc[1])
+    assert result_df[indicator.column_name()].iloc[2] == 100
+    assert result_df[indicator.column_name()].iloc[3] == 100
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_empty_df(candles: "CandleStoreTest"):
+    daily_data = pd.DataFrame({CandleCol.OPEN: []}, index=pd.DatetimeIndex([]))
+    candles.set_data("AAPL", daily_data)
+
+    df = pd.DataFrame({CandleCol.OPEN: []}, index=pd.DatetimeIndex([]))
+
+    indicator = DayOpenIndicator()
+    result_df = await indicator.extend("AAPL", df)
+
+    assert indicator.column_name() in result_df.columns
+    assert len(result_df) == 0
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_realtime(candles: "CandleStoreTest"):
+    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    new_row = pd.Series(
+        {
+            CandleCol.CLOSE: 110,
+            CandleCol.HIGH: 112,
+            CandleCol.LOW: 108,
+            CandleCol.OPEN: 109,
+        },
+        name=datetime(2023, 1, 11, 9, 30),
+    )
+
+    indicator = DayOpenIndicator()
+    result_row = await indicator.extend_realtime("AAPL", new_row.copy())
+
+    assert result_row[indicator.column_name()] == 109
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_realtime_multiple_calls_same_day(
+    candles: "CandleStoreTest",
+):
+    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    indicator = DayOpenIndicator()
+
+    row1 = pd.Series(
+        {CandleCol.CLOSE: 110, CandleCol.OPEN: 109},
+        name=datetime(2023, 1, 11, 9, 30),
+    )
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
+
+    row2 = pd.Series(
+        {CandleCol.CLOSE: 112, CandleCol.OPEN: 111},
+        name=datetime(2023, 1, 11, 10, 0),
+    )
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
+
+    assert result1[indicator.column_name()] == 109
+    assert result2[indicator.column_name()] == 109
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_realtime_different_days(
+    candles: "CandleStoreTest",
+):
+    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 11))
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105, 110]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    indicator = DayOpenIndicator()
+
+    row1 = pd.Series(
+        {CandleCol.CLOSE: 110, CandleCol.OPEN: 109},
+        name=datetime(2023, 1, 11, 9, 30),
+    )
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
+
+    row2 = pd.Series(
+        {CandleCol.CLOSE: 115, CandleCol.OPEN: 114},
+        name=datetime(2023, 1, 12, 9, 30),
+    )
+    result2 = await indicator.extend_realtime("AAPL", row2.copy())
+
+    assert result1[indicator.column_name()] == 109
+    assert result2[indicator.column_name()] == 114
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_realtime_premarket(candles: "CandleStoreTest"):
+    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    indicator = DayOpenIndicator()
+
+    premarket_row = pd.Series(
+        {CandleCol.OPEN: 108, CandleCol.CLOSE: 108},
+        name=datetime(2023, 1, 11, 9, 0),
+    )
+    premarket_result = await indicator.extend_realtime("AAPL", premarket_row.copy())
+
+    assert pd.isna(premarket_result[indicator.column_name()])
+
+    market_open_row = pd.Series(
+        {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
+        name=datetime(2023, 1, 11, 9, 30),
+    )
+    market_open_result = await indicator.extend_realtime("AAPL", market_open_row.copy())
+
+    assert market_open_result[indicator.column_name()] == 110
+
+
+@pytest.mark.asyncio
+async def test_day_open_indicator_extend_realtime_new_day_reset(
+    candles: "CandleStoreTest",
+):
+    daily_dates = pd.date_range(start=date(2023, 1, 1), end=date(2023, 1, 10))
+    daily_opens = [100, 102, 105, 103, 101, 104, 106, 108, 107, 105]
+    daily_data = pd.DataFrame({CandleCol.OPEN: daily_opens}, index=daily_dates)
+
+    candles.set_data("AAPL", daily_data)
+
+    indicator = DayOpenIndicator()
+
+    row1 = pd.Series(
+        {CandleCol.OPEN: 109, CandleCol.CLOSE: 110},
+        name=datetime(2023, 1, 11, 9, 30),
+    )
+    result1 = await indicator.extend_realtime("AAPL", row1.copy())
+    assert result1[indicator.column_name()] == 109
+
+    premarket_next_day = pd.Series(
+        {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
+        name=datetime(2023, 1, 12, 9, 0),
+    )
+    premarket_result = await indicator.extend_realtime("AAPL", premarket_next_day.copy())
+
+    assert pd.isna(premarket_result[indicator.column_name()])
+
+    market_open_next_day = pd.Series(
+        {CandleCol.OPEN: 115, CandleCol.CLOSE: 115},
+        name=datetime(2023, 1, 12, 9, 30),
+    )
+    market_open_result = await indicator.extend_realtime(
+        "AAPL", market_open_next_day.copy()
+    )
+
+    assert market_open_result[indicator.column_name()] == 115

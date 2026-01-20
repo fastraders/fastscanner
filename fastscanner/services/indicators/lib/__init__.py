@@ -17,6 +17,7 @@ from .daily import (
     DailyATRGapIndicator,
     DailyATRIndicator,
     DailyGapIndicator,
+    DayOpenIndicator,
     PrevDayIndicator,
 )
 from .fundamental import (
@@ -40,6 +41,7 @@ _indicators: list[type["Indicator"]] = [
     MarketCapIndicator,
     GapIndicator,
     ATRGapIndicator,
+    DayOpenIndicator,
 ]
 
 

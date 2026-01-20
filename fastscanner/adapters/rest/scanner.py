@@ -8,7 +8,10 @@ import pandas as pd
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from fastscanner.adapters.rest.services import get_scanner_service
+from fastscanner.adapters.rest.services import (
+    get_scanner_service,
+    get_scanner_service_ws,
+)
 from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService
@@ -75,7 +78,7 @@ def _parse_known_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.websocket("")
 async def websocket_realtime_scanner(
-    websocket: WebSocket, service: ScannerService = Depends(get_scanner_service)
+    websocket: WebSocket, service: ScannerService = Depends(get_scanner_service_ws)
 ):
     await websocket.accept()
 

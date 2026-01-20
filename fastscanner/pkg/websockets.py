@@ -74,8 +74,7 @@ class WebSocketSubscriber(ABC):
                     url = f"ws://{self._host}:{self._port}{self._endpoint}"
                     ws = await websockets.connect(url)
                     if not is_new:
-                        for message in self._subscription_messages.values():
-                            await ws.send(message)
+                        await self._resubscribe_handlers(socket_id, ws)
 
                     self._websockets[socket_id] = ws
                     if is_new:
@@ -93,9 +92,20 @@ class WebSocketSubscriber(ABC):
                 delay = min(delay * self._DELAY_FACTOR, self._DELAY_MAX)
                 await self._sockets_to_connect.put((socket_id, is_new))
 
+    async def _resubscribe_handlers(
+        self, socket_id: str, ws: websockets.ClientConnection
+    ):
+        handlers = self._socket_to_handlers.get(socket_id, [])
+        for handler_id in handlers:
+            if handler_id not in self._subscription_messages:
+                continue
+            await ws.send(self._subscription_messages[handler_id])
+
     async def _reconnect_websocket(self, socket_id: str) -> websockets.ClientConnection:
         async with self._websocket_available:
-            self._websockets.pop(socket_id, None)
+            ws = self._websockets.pop(socket_id, None)
+            if ws is not None:
+                await ws.close()
             await self._sockets_to_connect.put((socket_id, False))
             while socket_id not in self._websockets:
                 await self._websocket_available.wait()

@@ -377,3 +377,49 @@ class PrevAllDayIndicator:
         df.loc[:, "date"] = df.index.date  # type: ignore
         df = df.join(daily[[self.column_name()]], on="date")
         return df.drop(columns=["date"])
+
+
+class DayOpenIndicator:
+    def __init__(self):
+        self._day_open: dict[str, float] = {}
+        self._last_date: dict[str, date] = {}
+
+    @classmethod
+    def type(cls):
+        return "day_open"
+
+    def column_name(self):
+        return "day_open"
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            df[self.column_name()] = pd.NA
+            return df
+
+        start_date = df.index[0].date()
+        end_date = df.index[-1].date()
+
+        daily_df = await ApplicationRegistry.candles.get(
+            symbol, start_date, end_date, "1d"
+        )
+        daily_df = daily_df.set_index(daily_df.index.date)[[C.OPEN]]  # type: ignore
+
+        df.loc[:, "date"] = df.index.date  # type: ignore
+        df = df.join(daily_df.rename(columns={C.OPEN: self.column_name()}), on="date")
+        df.loc[df.index.time < time(9, 30), self.column_name()] = pd.NA  # type: ignore
+        return df.drop(columns=["date"])
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, datetime)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            self._day_open.pop(symbol, None)
+            self._last_date[symbol] = new_date
+
+        day_open = self._day_open.get(symbol)
+        if day_open is None and new_row.name.time() >= time(9, 30):
+            day_open = new_row[C.OPEN]
+            self._day_open[symbol] = day_open
+
+        new_row[self.column_name()] = day_open if day_open is not None else pd.NA
+        return new_row

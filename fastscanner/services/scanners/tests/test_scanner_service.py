@@ -1,16 +1,22 @@
 import pytest
 
 from fastscanner.services.scanners.ports import ScannerParams
+from fastscanner.services.scanners.service import ScannerService
 
 
 @pytest.mark.asyncio
 async def test_realtime_data_flow_scanner_passes(
     scanner_service, scanner_params, subscription_handler
 ):
+    service: ScannerService
     service, channel = scanner_service
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=subscription_handler, freq="1min"
+    scanner_id = "test_scanner_id"
+    await service.subscribe_realtime(
+        scanner_id=scanner_id,
+        params=scanner_params,
+        handler=subscription_handler,
+        freq="1min",
     )
 
     test_data = {
@@ -39,8 +45,12 @@ async def test_realtime_data_flow_scanner_fails(
 ):
     service, channel = scanner_service
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=subscription_handler, freq="1min"
+    scanner_id = "test_scanner_id_fail"
+    await service.subscribe_realtime(
+        scanner_id=scanner_id,
+        params=scanner_params,
+        handler=subscription_handler,
+        freq="1min",
     )
 
     test_data = {
@@ -69,8 +79,12 @@ async def test_realtime_data_flow_multiple_symbols(
 ):
     service, channel = scanner_service
 
-    scanner_id = await service.subscribe_realtime(
-        params=scanner_params, handler=subscription_handler, freq="1min"
+    scanner_id = "test_scanner_multi"
+    await service.subscribe_realtime(
+        scanner_id=scanner_id,
+        params=scanner_params,
+        handler=subscription_handler,
+        freq="1min",
     )
 
     test_data_aapl = {
@@ -106,8 +120,9 @@ async def test_realtime_data_flow_different_scanner_params(
     service, channel = scanner_service
 
     params = ScannerParams(type_="dummy_scanner", params={"min_value": 100.0})
-    scanner_id = await service.subscribe_realtime(
-        params=params, handler=subscription_handler, freq="1min"
+    scanner_id = "test_scanner_diff_params"
+    await service.subscribe_realtime(
+        scanner_id=scanner_id, params=params, handler=subscription_handler, freq="1min"
     )
 
     test_data = {
@@ -127,13 +142,16 @@ async def test_scanner_service_subscription_behavior(
 ):
     service, channel = scanner_service
 
-    scanner_id = await service.subscribe_realtime(
-        scanner_params, subscription_handler, "1min"
+    scanner_id = "test_scanner_sub_unsub"
+    await service.subscribe_realtime(
+        scanner_id=scanner_id,
+        params=scanner_params,
+        handler=subscription_handler,
+        freq="1min",
     )
     assert scanner_id is not None
 
     await service.unsubscribe_realtime(scanner_id)
-
     await service.unsubscribe_realtime("non-existent")
 
 
@@ -143,8 +161,9 @@ async def test_data_type_conversion(
 ):
     service, channel = scanner_service
 
-    scanner_id = await service.subscribe_realtime(
-        scanner_params, subscription_handler, "1min"
+    scanner_id = "test_scanner_data_type"
+    await service.subscribe_realtime(
+        scanner_id, scanner_params, subscription_handler, "1min"
     )
 
     test_data = {

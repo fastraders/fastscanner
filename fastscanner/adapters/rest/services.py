@@ -14,3 +14,7 @@ def get_indicators_service_ws(websocket: WebSocket) -> IndicatorsService:
 
 def get_scanner_service(request: Request) -> ScannerService:
     return request.state.scanner
+
+
+def get_scanner_service_ws(websocket: WebSocket) -> ScannerService:
+    return websocket.state.scanner
