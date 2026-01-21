@@ -183,6 +183,11 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                     df[CandleCol.DATETIME], format="%Y-%m-%d"
                 )
                 return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
+            except pd.errors.EmptyDataError:
+                return pd.DataFrame(
+                    columns=list(CandleCol.RESAMPLE_MAP.keys()),
+                    index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
+                ).tz_localize(self.tz)
             except FileNotFoundError:
                 if _log_cache_miss:
                     logger.info(
