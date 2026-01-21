@@ -61,7 +61,7 @@ class NATSChannel:
                 data = json.loads(msg.data.decode())
                 handlers = self._handlers.get(channel_id, [])
                 for h in handlers:
-                    await h.handle(channel_id, data)
+                    await h.handle(msg.subject, data)
             except Exception:
                 logger.exception(f"Message processing error for channel {channel_id}")
 
