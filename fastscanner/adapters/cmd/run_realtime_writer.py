@@ -4,9 +4,11 @@ import traceback
 
 import uvloop
 
+from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.realtime.nats_channel import NATSChannel
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.pkg import config
+from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 
 load_logging_config()
@@ -23,6 +25,10 @@ async def main():
         #     password=None,
         #     db=0,
         # )
+        ClockRegistry.set(LocalClock())
+        symbols_provider = PolygonCandlesProvider(
+            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
+        )
         channel = NATSChannel(servers=config.NATS_SERVER)
         realtime = PolygonRealtime(
             api_key=config.POLYGON_API_KEY,
@@ -30,7 +36,7 @@ async def main():
         )
 
         await realtime.start()
-        realtime.subscribe_all()
+        await realtime.subscribe_all_active(symbols_provider)
 
         while True:
             await asyncio.sleep(10.131)  # Just a long sleep. The number is irrelevant.

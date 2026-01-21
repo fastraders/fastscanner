@@ -1,3 +1,4 @@
+import logging
 import math
 import uuid
 from datetime import date, time
@@ -20,6 +21,8 @@ from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
 from .utils import filter_by_market_cap
+
+logger = logging.getLogger(__name__)
 
 
 class HighRangeGapUpScanner:
@@ -364,6 +367,10 @@ class LowRangeGapDownScanner:
         cum_volume_value = new_row[self._cum_volume.column_name()]
         atr_gap_value = new_row[self._atr_gap.column_name()]
         days_from_earnings_value = new_row[self._days_from_earnings.column_name()]
+
+        # TODO: DELETE SANITY CHECK
+        if symbol in ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]:
+            logger.info(f"LowRangeGapDownScanner for {symbol}: {new_row.to_dict()}")
 
         mandatory_values = [
             adv_value,
