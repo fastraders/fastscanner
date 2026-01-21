@@ -73,4 +73,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=config.SERVER_PORT,
         workers=multiprocessing.cpu_count() * 2 + 1,
+        ws_ping_interval=config.WS_PING_INTERVAL,
+        ws_ping_timeout=config.WS_PING_TIMEOUT,
     )

@@ -28,7 +28,7 @@ class CandleStoreTest(CandleStore):
 
 
 class MockFundamentalDataStore:
-    async def get(self, symbol):
+    async def get(self, symbol) -> FundamentalData:
         date_index = pd.date_range(start="2023-01-01", periods=3, freq="D").date
         return FundamentalData(
             "",

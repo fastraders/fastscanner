@@ -13,6 +13,7 @@ from fastscanner.adapters.rest.services import (
     get_scanner_service_ws,
 )
 from fastscanner.pkg.clock import ClockRegistry
+from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService
 
@@ -57,6 +58,9 @@ class WebSocketScannerHandler:
         try:
             message_json = message.model_dump_json()
             await self._websocket.send_text(message_json)
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected")
+            raise UnsubscribeSignal("WebSocket disconnected")
         except Exception as e:
             logger.error(f"Failed to send websocket message: {e}")
 

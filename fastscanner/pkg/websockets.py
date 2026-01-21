@@ -15,6 +15,8 @@ class WebSocketSubscriber(ABC):
     _DELAY_FACTOR = 2.0
     _POISON_PILL = ("STOP", False)
     _MAX_SEND_RETRIES = 3
+    _DEFAULT_PING_INTERVAL = 20
+    _DEFAULT_PING_TIMEOUT = 60
 
     def __init__(
         self, host: str, port: int, endpoint: str, max_connections: int | None = 10
@@ -72,7 +74,11 @@ class WebSocketSubscriber(ABC):
             try:
                 async with self._websocket_available:
                     url = f"ws://{self._host}:{self._port}{self._endpoint}"
-                    ws = await websockets.connect(url)
+                    ws = await websockets.connect(
+                        url,
+                        ping_interval=self._DEFAULT_PING_INTERVAL,
+                        ping_timeout=self._DEFAULT_PING_TIMEOUT,
+                    )
                     if not is_new:
                         await self._resubscribe_handlers(socket_id, ws)
 

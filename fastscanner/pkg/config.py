@@ -7,6 +7,8 @@ load_dotenv()
 SERVER_HOST = "localhost"
 SERVER_PORT = 12356
 DEBUG = bool(int(os.getenv("DEBUG", "0")))
+WS_PING_INTERVAL = int(os.getenv("WS_PING_INTERVAL", "20"))
+WS_PING_TIMEOUT = int(os.getenv("WS_PING_TIMEOUT", "60"))
 
 # Massive (Previously Polygon.io)
 POLYGON_BASE_URL = os.environ["POLYGON_BASE_URL"]

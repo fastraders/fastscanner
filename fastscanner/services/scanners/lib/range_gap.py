@@ -368,10 +368,6 @@ class LowRangeGapDownScanner:
         atr_gap_value = new_row[self._atr_gap.column_name()]
         days_from_earnings_value = new_row[self._days_from_earnings.column_name()]
 
-        # TODO: DELETE SANITY CHECK
-        if symbol in ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]:
-            logger.info(f"LowRangeGapDownScanner for {symbol}: {new_row.to_dict()}")
-
         mandatory_values = [
             adv_value,
             adr_value,

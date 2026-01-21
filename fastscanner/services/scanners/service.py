@@ -3,7 +3,7 @@ import logging
 import math
 import multiprocessing
 from datetime import date, datetime, time, timedelta
-from typing import Any, Protocol
+from typing import Any, Awaitable, Callable, Protocol
 from uuid import uuid4
 
 import pandas as pd
@@ -22,6 +22,8 @@ from fastscanner.services.scanners.ports import (
     SymbolsProvider,
 )
 
+from ..exceptions import UnsubscribeSignal
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,20 +36,27 @@ class SubscriptionHandler(Protocol):
 class ScannerChannelHandler:
     def __init__(
         self,
+        id_: str,
         scanner: ScannerRealtime,
         handler: SubscriptionHandler,
         freq: str,
+        unsubscribe: Callable[[str], Awaitable[None]],
     ):
-        self._id = str(uuid4())
+        self._id = id_
         self._scanner = scanner
         self._handler = handler
         self._freq = freq
         self._buffers: dict[str, CandleBuffer] = {}
+        self._unsubscribe = unsubscribe
 
     async def _new_buffer(self, symbol: str) -> CandleBuffer:
         async def _handle(row: pd.Series) -> None:
             new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
-            await self._handler.handle(symbol, new_row, passed)
+            try:
+                await self._handler.handle(symbol, new_row, passed)
+            except UnsubscribeSignal:
+                await self._unsubscribe(self._id)
+                return
 
         buffer = CandleBuffer(symbol, self._freq, _handle)
         self._buffers[symbol] = buffer
@@ -75,7 +84,6 @@ class ScannerChannelHandler:
         if self._freq == "1min":
             new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
             await self._handler.handle(symbol, new_row, passed)
-            return
         agg = await buffer.add(row)
         if agg is None:
             return
@@ -108,7 +116,9 @@ class ScannerService:
                 params.type_, params.params
             )
             stream_key = "candles.min.*"
-            sch = ScannerChannelHandler(scanner, handler, freq)
+            sch = ScannerChannelHandler(
+                scanner_id, scanner, handler, freq, self.unsubscribe_realtime
+            )
             await self._channel.subscribe(stream_key, sch)
 
             self._handlers[scanner_id] = sch
