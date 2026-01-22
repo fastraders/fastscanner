@@ -13,6 +13,7 @@ from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
 from fastscanner.pkg import config
+from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.indicators.service import IndicatorParams as Params
 from fastscanner.services.indicators.service import (
     IndicatorsService,
@@ -75,15 +76,6 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
         self._subscription_id = subscription_id
 
     async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        if (
-            self._websocket.client_state != WebSocketState.CONNECTED
-            or self._websocket.application_state != WebSocketState.CONNECTED
-        ):
-            logger.warning(
-                f"Trying to send message for {symbol} on disconnected websocket"
-            )
-            return new_row
-
         candle = new_row.to_dict()
         message = IndicatorMessage(
             subscription_id=self._subscription_id,
@@ -99,6 +91,12 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
         try:
             message_json = message.model_dump_json()
             await self._websocket.send_text(message_json)
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected")
+            raise UnsubscribeSignal("WebSocket disconnected")
+        except RuntimeError as re:
+            logger.info(f"RuntimeError: {re}")
+            raise UnsubscribeSignal(f"RuntimeError: {re}")
         except Exception as e:
             logger.exception(e)
 
@@ -232,6 +230,9 @@ async def websocket_realtime_indicators(
 
             except WebSocketDisconnect:
                 logger.info("WebSocket disconnected")
+                break
+            except RuntimeError as re:
+                logger.info(f"RuntimeError: {re}")
                 break
             except Exception as e:
                 logger.error(f"Error processing WebSocket message: {data}")

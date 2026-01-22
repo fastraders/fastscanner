@@ -2,13 +2,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, split_freq
+from fastscanner.services.exceptions import UnsubscribeSignal
 
 from .lib import Indicator, IndicatorsLibrary
 from .ports import CandleStore, Channel, FundamentalDataStore
@@ -96,7 +97,9 @@ class IndicatorsService:
             "min": "candles.min.",
         }
         stream_key = f"{unit_to_channel[unit]}{symbol}"
-        sub_handler = CandleChannelHandler(symbol, indicator_instances, handler, freq)
+        sub_handler = CandleChannelHandler(
+            symbol, indicator_instances, handler, freq, self.unsubscribe_realtime
+        )
         # Skip sending subscribe signal for persister subscriptions to avoid cycles.
         if _send_events:
             await self.channel.push(
@@ -161,6 +164,7 @@ class CandleChannelHandler:
         indicators: list[Indicator],
         handler: SubscriptionHandler,
         freq: str,
+        unsubscribe: Callable[[str, str], Awaitable[None]],
     ) -> None:
         self._id = str(uuid4())
         self._symbol = symbol
@@ -171,6 +175,7 @@ class CandleChannelHandler:
         self._timeout_minutes = 10.0
         self._buffer = CandleBuffer(symbol, freq, self._handle, self._candle_timeout)
         self._buffer_lock = asyncio.Lock()
+        self._unsubscribe = unsubscribe
 
     @property
     def _candle_timeout(self) -> float:
@@ -182,7 +187,11 @@ class CandleChannelHandler:
         for ind in self._indicators:
             row = await ind.extend_realtime(self._symbol, row)
 
-        await self._handler.handle(self._symbol, row)
+        try:
+            await self._handler.handle(self._symbol, row)
+        except UnsubscribeSignal:
+            await self._unsubscribe(self._id, self._symbol)
+            return
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
         data = data.copy()

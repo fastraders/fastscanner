@@ -51,7 +51,7 @@ class ScannerChannelHandler:
 
     async def _new_buffer(self, symbol: str) -> CandleBuffer:
         async def _handle(row: pd.Series) -> None:
-            new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
+            new_row, passed = await self._scanner.scan_realtime(symbol, row)
             try:
                 await self._handler.handle(symbol, new_row, passed)
             except UnsubscribeSignal:
@@ -82,12 +82,13 @@ class ScannerChannelHandler:
         row = pd.Series(data, name=ts)
 
         if self._freq == "1min":
-            new_row, passed = await self._scanner.scan_realtime(symbol, row, self._freq)
+            new_row, passed = await self._scanner.scan_realtime(symbol, row)
             await self._handler.handle(symbol, new_row, passed)
+            return
         agg = await buffer.add(row)
         if agg is None:
             return
-        new_row, passed = await self._scanner.scan_realtime(symbol, agg, self._freq)
+        new_row, passed = await self._scanner.scan_realtime(symbol, agg)
         await self._handler.handle(symbol, new_row, passed)
 
     def id(self) -> str:

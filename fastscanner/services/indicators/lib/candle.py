@@ -348,10 +348,10 @@ class DailyRollingIndicator:
         daily_df = await ApplicationRegistry.candles.get(
             symbol, start_date, end_date, "1d"
         )
-        if daily_df.shape[0] < self._n_days:
-            logger.warning(
-                f"Requested {self._n_days} days of data for {symbol} on {start_date}-{end_date}, got {daily_df.shape[0]} days."
-            )
+        # if daily_df.shape[0] < self._n_days:
+        #     logger.warning(
+        #         f"Requested {self._n_days} days of data for {symbol} on {start_date}-{end_date}, got {daily_df.shape[0]} days."
+        #     )
         return daily_df
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:

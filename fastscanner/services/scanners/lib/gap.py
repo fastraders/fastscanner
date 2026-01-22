@@ -121,7 +121,7 @@ class ATRGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]:
         """
         Realtime scan implementation that enriches the new_row with indicators
@@ -277,7 +277,7 @@ class ATRGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]:
         """
         Realtime scan implementation that enriches the new_row with indicators

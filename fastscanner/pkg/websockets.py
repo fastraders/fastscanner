@@ -16,7 +16,7 @@ class WebSocketSubscriber(ABC):
     _POISON_PILL = ("STOP", False)
     _MAX_SEND_RETRIES = 3
     _DEFAULT_PING_INTERVAL = 20
-    _DEFAULT_PING_TIMEOUT = 60
+    _DEFAULT_PING_TIMEOUT = 180
 
     def __init__(
         self, host: str, port: int, endpoint: str, max_connections: int | None = 10

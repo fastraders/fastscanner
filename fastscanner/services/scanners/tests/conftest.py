@@ -37,7 +37,7 @@ class DummyScanner:
         return pd.DataFrame()
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]:
         # Add a test indicator to the row to verify processing
         enhanced_row = new_row.copy()

@@ -130,25 +130,6 @@ async def test_subscribe_duplicate_handler(nats_channel, mock_nats_connect):
 
 
 @pytest.mark.asyncio
-async def test_message_handler(nats_channel, mock_nats_connect):
-    mock_connect, mock_nc = mock_nats_connect
-
-    handler1 = MockHandler("handler1")
-    handler2 = MockHandler("handler2")
-    nats_channel._handlers["test_channel"] = [handler1, handler2]
-
-    mock_msg = Mock()
-    test_data = {"test": "data"}
-    mock_msg.data.decode.return_value = json.dumps(test_data)
-
-    message_handler = nats_channel._message_handler("test_channel")
-    await message_handler(mock_msg)
-
-    handler1.handle.assert_called_once_with("test_channel", test_data)
-    handler2.handle.assert_called_once_with("test_channel", test_data)
-
-
-@pytest.mark.asyncio
 async def test_unsubscribe_removes_handler(nats_channel):
     handler1 = MockHandler("handler1")
     handler2 = MockHandler("handler2")

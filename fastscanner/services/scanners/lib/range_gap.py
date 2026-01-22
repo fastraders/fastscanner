@@ -140,7 +140,7 @@ class HighRangeGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]:
 
         assert isinstance(new_row.name, pd.Timestamp)
@@ -334,7 +334,7 @@ class LowRangeGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]:
 
         assert isinstance(new_row.name, pd.Timestamp)

@@ -35,7 +35,7 @@ class ScannerRealtime(Protocol):
     def type(cls) -> str: ...
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series, freq: str
+        self, symbol: str, new_row: pd.Series
     ) -> tuple[pd.Series, bool]: ...
 
 
