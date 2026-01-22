@@ -38,6 +38,10 @@ class WebSocketScannerHandler:
         self._scanner_id = scanner_id
 
     async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+        if symbol == "SXTP":
+            logger.info(
+                f"Scanner {self._scanner_id} - handling new row for {symbol} - row: {new_row.to_dict()}"
+            )
         if not passed:
             return new_row
 

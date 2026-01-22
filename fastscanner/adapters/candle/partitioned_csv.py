@@ -171,7 +171,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         partition_path = self._partition_path(symbol, key, freq)
         if not self._is_expired(symbol, key, unit, today):
             try:
-                df = pd.read_csv(partition_path)
+                df = await asyncio.to_thread(pd.read_csv, partition_path)
                 if unit.lower() != "d":
                     df[CandleCol.DATETIME] = pd.to_datetime(
                         df[CandleCol.DATETIME],
