@@ -24,7 +24,7 @@ async def _collect(
 ) -> None:
     # for year in range(2025, now.today().year + 1):
     start_year = 2025
-    end_year = 2025
+    end_year = 2026
     freqs = ["1min", "2min", "1d"]
     for year in range(start_year, end_year + 1):
         await candles.collect(symbol, year, freqs)

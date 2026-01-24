@@ -49,7 +49,7 @@ class ScannerChannelHandler:
         self._buffers: dict[str, CandleBuffer] = {}
         self._unsubscribe = unsubscribe
 
-    async def _new_buffer(self, symbol: str) -> CandleBuffer:
+    def _new_buffer(self, symbol: str) -> CandleBuffer:
         async def _handle(row: pd.Series) -> None:
             new_row, passed = await self._scanner.scan_realtime(symbol, row)
             try:
@@ -66,7 +66,7 @@ class ScannerChannelHandler:
         symbol = channel_id.split(".")[-1]
         buffer = self._buffers.get(symbol)
         if buffer is None:
-            buffer = await self._new_buffer(symbol)
+            buffer = self._new_buffer(symbol)
         for field in (
             C.OPEN,
             C.HIGH,

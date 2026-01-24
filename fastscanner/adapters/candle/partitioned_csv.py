@@ -127,22 +127,24 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
 
-        grouped_by_unit: dict[str, str] = {}
         # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
         unit_to_freqs: dict[str, list[str]] = {}
         for freq in freqs:
             _, unit = split_freq(freq)
             unit_to_freqs.setdefault(unit, []).append(freq)
-        for exp_key, exp_date in expirations.items():
-            if exp_date > yday:
-                continue
-            partition_key, unit = exp_key.rsplit("_", 1)
-            grouped_by_unit[unit] = partition_key
 
+        grouped_by_unit: dict[str, str] = {}
+        # Adds default partition keys for all units
         for unit in unit_to_freqs.keys():
-            if unit not in grouped_by_unit:
-                partition_key = self._partition_key(yday, unit)
-                grouped_by_unit[unit] = partition_key
+            default_pkey = self._partition_key(yday, unit)
+            grouped_by_unit[unit] = default_pkey
+
+        for exp_key, exp_date in expirations.items():
+            partition_key, unit = exp_key.rsplit("_", 1)
+            if exp_date > today:
+                grouped_by_unit.pop(unit, None)
+                continue
+            grouped_by_unit[unit] = partition_key
 
         for unit, partition_key in grouped_by_unit.items():
             freqs = unit_to_freqs[unit]
