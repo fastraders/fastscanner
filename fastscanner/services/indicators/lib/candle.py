@@ -252,7 +252,7 @@ class ATRIndicator:
         return "atr"
 
     def column_name(self):
-        return f"atr_{self._period}"
+        return f"atr_{self._period}_{self._freq}"
 
     async def save_to_cache(self):
         await ApplicationRegistry.cache.save(

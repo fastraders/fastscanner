@@ -131,10 +131,10 @@ class IndicatorsService:
             self._caching_task = asyncio.create_task(self._start_caching())
         stream_pattern = "candles.min.*"
 
-        noop_handler = NoopHandler()
+        latency_handler = LatencyMeasurementHandler("1min")
         cache_handler = CandleChannelHandler(
             indicators,
-            noop_handler,
+            latency_handler,
             "1min",
             self.unsubscribe_realtime,
         )
@@ -279,6 +279,24 @@ class CandleChannelHandler:
         return self._id
 
 
-class NoopHandler:
+class LatencyMeasurementHandler(SubscriptionHandler):
+    def __init__(self, freq: str) -> None:
+        self._freq = freq
+        self._latest_timestamp: datetime | None = None
+        self._current_minute: datetime | None = None
+
     async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        if self._current_minute is None or self._latest_timestamp is None:
+            self._current_minute = new_row.name + pd.Timedelta(self._freq)  # type: ignore
+            self._latest_timestamp = ClockRegistry.clock.now()
+            return new_row
+        new_minute = new_row.name + pd.Timedelta(self._freq)  # type: ignore
+        if new_minute > self._current_minute:
+            latency = self._latest_timestamp - self._current_minute
+            logger.info(
+                f"Latency at {self._current_minute.strftime('%H:%M')}: {latency.total_seconds():.2f} seconds"
+            )
+            self._current_minute = new_minute
+
+        self._latest_timestamp = ClockRegistry.clock.now()
         return new_row
