@@ -21,10 +21,13 @@ MASSIVE_FILES_SECRET_KEY = os.environ["MASSIVE_FILES_SECRET_KEY"]
 EOD_HD_BASE_URL = os.environ["EOD_HD_BASE_URL"]
 EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 
-# Redis
+# Cache
 REDIS_DB_PORT = 6379
 REDIS_DB_HOST = "localhost"
 UNIX_SOCKET_PATH = os.environ.get("REDIS_UNIX_SOCKET", "/tmp/redis-server.sock")
+DRAGONFLY_UNIX_SOCKET = os.environ.get(
+    "DRAGONFLY_UNIX_SOCKET", "/run/dragonfly/dragonfly-redis.sock"
+)
 
 # NATS
 NATS_SERVER = os.environ.get("NATS_SERVER", "nats://localhost:4222").split(",")
@@ -41,3 +44,5 @@ TRADES_DATA_DIR = os.environ["TRADES_DATA_DIR"]
 
 # Others
 PERSISTER_SUBSCRIPTION_PREFIX = "persister_"
+# e.g., 10 means caching at 10th second of each minute
+CACHE_AT_SECONDS = int(os.getenv("CACHE_AT_SECONDS", "10"))

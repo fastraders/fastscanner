@@ -67,15 +67,6 @@ class ScannerChannelHandler:
         buffer = self._buffers.get(symbol)
         if buffer is None:
             buffer = self._new_buffer(symbol)
-        for field in (
-            C.OPEN,
-            C.HIGH,
-            C.LOW,
-            C.CLOSE,
-            C.VOLUME,
-        ):
-            if field in data:
-                data[field] = float(data[field])
         ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
             LOCAL_TIMEZONE_STR
         )

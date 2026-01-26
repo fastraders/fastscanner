@@ -153,33 +153,3 @@ async def test_scanner_service_subscription_behavior(
 
     await service.unsubscribe_realtime(scanner_id)
     await service.unsubscribe_realtime("non-existent")
-
-
-@pytest.mark.asyncio
-async def test_data_type_conversion(
-    scanner_service, scanner_params, subscription_handler
-):
-    service, channel = scanner_service
-
-    scanner_id = "test_scanner_data_type"
-    await service.subscribe_realtime(
-        scanner_id, scanner_params, subscription_handler, "1min"
-    )
-
-    test_data = {
-        "open": "100.5",
-        "high": "105.5",
-        "low": "95.5",
-        "close": "60.5",
-        "volume": "1000",
-        "timestamp": 1640995200000,
-    }
-
-    await channel.push_data("candles.min.AAPL", test_data)
-
-    handled_row = subscription_handler.handled_rows[0]
-    assert isinstance(handled_row["open"], float)
-    assert isinstance(handled_row["high"], float)
-    assert isinstance(handled_row["low"], float)
-    assert isinstance(handled_row["close"], float)
-    assert isinstance(handled_row["volume"], float)

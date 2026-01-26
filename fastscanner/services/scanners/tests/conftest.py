@@ -11,6 +11,7 @@ from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import get_scanner_service
 from fastscanner.pkg.clock import ClockRegistry, FixedClock
 from fastscanner.services.indicators.ports import (
+    Cache,
     CandleCol,
     ChannelHandler,
     FundamentalData,
@@ -183,14 +184,29 @@ class MockPublicHolidaysStore:
         return set()
 
 
+class MockCache(Cache):
+    def __init__(self):
+        self._data = {}
+
+    async def save(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def get(self, key: str) -> str:
+        return self._data.get(key, "")
+
+
 @pytest.fixture
 def candles():
     candle_store = CandleStoreTest()
     fundamental_store = MockFundamentalDataStore()
     holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
 
     ApplicationRegistry.init(
-        candles=candle_store, fundamentals=fundamental_store, holidays=holiday_store
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        holidays=holiday_store,
+        cache=cache,
     )
 
     yield candle_store

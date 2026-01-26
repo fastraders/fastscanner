@@ -173,7 +173,6 @@ async def _handle_unsubscribe(
         )
     symbol, service_subscription_id = subscriptions[request.subscription_id]
     await service.unsubscribe_realtime(
-        symbol,
         service_subscription_id,
         _send_events=not _is_persister_subscription(request.subscription_id),
     )
@@ -244,7 +243,6 @@ async def websocket_realtime_indicators(
         ) in subscriptions.items():
             try:
                 await service.unsubscribe_realtime(
-                    symbol,
                     service_subscription_id,
                     _send_events=not _is_persister_subscription(subscription_id),
                 )

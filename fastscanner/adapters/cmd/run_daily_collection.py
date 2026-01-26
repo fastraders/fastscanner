@@ -7,6 +7,8 @@ import os
 import time
 from datetime import date, timedelta
 
+import uvloop
+
 from fastscanner.adapters.candle.massive_adjusted import MassiveAdjustedCollector
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
@@ -54,7 +56,7 @@ async def _collect_batch(symbols: list[str]) -> None:
 
 
 def _run_batch(batch: list[str]) -> None:
-    asyncio.run(_collect_batch(batch))
+    uvloop.run(_collect_batch(batch))
 
 
 async def collect_daily_data(only_active: bool = False) -> None:

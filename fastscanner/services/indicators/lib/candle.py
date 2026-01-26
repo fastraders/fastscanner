@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 from datetime import date, datetime, time, timedelta
@@ -15,7 +16,7 @@ from fastscanner.services.indicators.lib.daily import (
 )
 
 from ...registry import ApplicationRegistry
-from ..ports import CandleCol
+from ..ports import Cache, CandleCol
 from ..utils import lookback_days
 
 if TYPE_CHECKING:
@@ -35,6 +36,27 @@ class CumulativeDailyVolumeIndicator:
 
     def column_name(self):
         return self.type()
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_volume": self._last_volume,
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_volume = indicator_data["last_volume"]
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
@@ -106,6 +128,27 @@ class PremarketCumulativeIndicator:
     def column_name(self):
         return f"premarket_{self._op.label()}_{self._candle_col}"
 
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_value": self._last_value,
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_value = indicator_data["last_value"]
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
             df.loc[:, self.column_name()] = 0.0
@@ -153,6 +196,19 @@ class CumulativeIndicator:
     def column_name(self):
         return f"{self._op.label()}_{self._candle_col}"
 
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps({"last_value": self._last_value}),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_value = indicator_data["last_value"]
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         values = df[self._candle_col]
         assert isinstance(values.index, pd.DatetimeIndex)
@@ -180,7 +236,7 @@ class ATRIndicator:
         self._last_close: dict[str, float] = {}
         self._freq = freq
 
-    def _lookback_days(self) -> int:
+    def _lookback_days(self, start_date: date) -> date:
         n, unit = split_freq(self._freq)
         if unit == "d":
             n *= 390
@@ -188,7 +244,8 @@ class ATRIndicator:
             n *= 390 / 6.5
 
         # 390 minute candles in a day and a security factor of 2
-        return math.ceil(2 * self._period * n / 390)
+        n_days = math.ceil(2 * self._period * n / 390)
+        return lookback_days(start_date, n_days)
 
     @classmethod
     def type(cls):
@@ -197,14 +254,28 @@ class ATRIndicator:
     def column_name(self):
         return f"atr_{self._period}"
 
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps({"last_atr": self._last_atr, "last_close": self._last_close}),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_atr = indicator_data["last_atr"]
+        self._last_close = indicator_data["last_close"]
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         col_name = self.column_name()
         if df.empty:
             return df
 
         df_start = df.index[0]
-        end_date = df.index[0].date() - timedelta(days=1)
-        start_date = end_date - timedelta(days=self._lookback_days())
+        end_date = df.index[0].date()
+        start_date = self._lookback_days(end_date)
         prev_df = await ApplicationRegistry.candles.get(
             symbol, start_date, end_date, self._freq
         )
@@ -270,6 +341,23 @@ class PositionInRangeIndicator:
 
     def column_name(self):
         return f"position_in_range_{self._n_days}"
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {"last_date": {k: v.isoformat() for k, v in self._last_date.items()}}
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         original_columns = set(df.columns)
@@ -341,6 +429,27 @@ class DailyRollingIndicator:
 
     def column_name(self) -> str:
         return f"{self._operation}_{self._candle_col}_{self._n_days}d"
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "rolling_values": self._rolling_values,
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._rolling_values = indicator_data["rolling_values"]
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
 
     async def _get_data_for_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         start_date = lookback_days(df.index[0].date(), self._n_days)
@@ -419,7 +528,12 @@ class GapIndicator:
         return "gap"
 
     def column_name(self) -> str:
-        return "gap"
+        return f"gap_{self._candle_col}"
+
+    async def save_to_cache(self): ...
+
+    async def load_from_cache(self):
+        await self._prev_day.load_from_cache()
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         cols_to_drop: list[str] = []
@@ -462,7 +576,14 @@ class ATRGapIndicator:
         return "atr_gap"
 
     def column_name(self) -> str:
-        return "atr_gap"
+        return f"atr_gap_{self._candle_col}_{self._period}"
+
+    async def save_to_cache(self): ...
+
+    async def load_from_cache(self):
+        await self._atr.load_from_cache()
+        await self._gap.load_from_cache()
+        await self._prev_day.load_from_cache()
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         aux_indicators = [self._atr, self._gap, self._prev_day]
@@ -514,6 +635,27 @@ class ShiftIndicator:
 
     def column_name(self) -> str:
         return f"{self._candle_col}_shift_{self._shift}"
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                    "last_values": self._last_values,
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_values = indicator_data["last_values"]
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:

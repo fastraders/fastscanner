@@ -5,6 +5,7 @@ from typing import AsyncIterator, TypedDict
 import uvicorn
 from fastapi import APIRouter, FastAPI
 
+from fastscanner.adapters.cache.dragonfly import DragonflyCache
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
@@ -38,17 +39,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     fundamental = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
     holidays = ExchangeCalendarsPublicHolidaysStore()
     channel = NATSChannel(servers=config.NATS_SERVER)
+    cache = DragonflyCache(
+        config.DRAGONFLY_UNIX_SOCKET,
+        password=None,
+        db=0,
+    )
     indicators_service = IndicatorsService(
         candles=candles,
         fundamentals=fundamental,
         channel=channel,
+        cache=cache,
         symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
+        cache_at_seconds=config.CACHE_AT_SECONDS,
     )
     scanner_service = ScannerService(
         candles=candles, channel=channel, symbols_provider=polygon
     )
-    ApplicationRegistry.init(candles, fundamental, holidays)
+    ApplicationRegistry.init(candles, fundamental, holidays, cache)
 
     yield {
         "indicators": indicators_service,

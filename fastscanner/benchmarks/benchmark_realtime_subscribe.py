@@ -8,6 +8,7 @@ from datetime import datetime
 import pandas as pd
 import uvloop
 
+from fastscanner.adapters.cache.dragonfly import DragonflyCache
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
@@ -111,15 +112,22 @@ async def main():
     holidays = ExchangeCalendarsPublicHolidaysStore()
     candles = PartitionedCSVCandlesProvider(polygon)
     fundamentals = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
+    cache = DragonflyCache(
+        config.DRAGONFLY_UNIX_SOCKET,
+        password=None,
+        db=0,
+    )
 
-    ApplicationRegistry.init(candles, fundamentals, holidays)
+    ApplicationRegistry.init(candles, fundamentals, holidays, cache)
 
     service = IndicatorsService(
         candles=candles,
         fundamentals=fundamentals,
         channel=redis_channel,
+        cache=cache,
         symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
+        cache_at_seconds=config.CACHE_AT_SECONDS,
     )
 
     symbols = await polygon.all_symbols()

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 from collections import defaultdict
 from datetime import date
 from uuid import uuid4
@@ -127,13 +128,17 @@ class CandlePersister:
         )
         save_df.to_csv(csv_path, index=False)
 
-        logger.info(f"Persisted {len(df)} candles for {symbol} ({freq}) on {date_str}")
+        # Log occasionally to avoid log flooding
+        if random.random() < 0.05:
+            logger.info(
+                f"Persisted {len(df)} candles for {symbol} ({freq}) on {date_str}"
+            )
 
     async def periodic_flush(self):
         while True:
             await asyncio.sleep(60)
             for (symbol, freq), candles in list(self._candle_buffers.items()):
-                if candles:
+                if len(candles) > 0:
                     await self._flush_buffer(symbol, freq)
 
 

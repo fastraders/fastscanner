@@ -216,32 +216,3 @@ class PolygonRealtime:
             await self._channel.flush()
         except Exception as e:
             logger.error(traceback.format_exc())
-
-
-async def main():
-    try:
-        redis_channel = RedisChannel(
-            unix_socket_path=config.UNIX_SOCKET_PATH,
-            host=config.REDIS_DB_HOST,
-            port=config.REDIS_DB_PORT,
-            password=None,
-            db=0,
-        )
-
-        realtime = PolygonRealtime(
-            api_key=config.POLYGON_API_KEY, channel=redis_channel
-        )
-
-        await realtime.start()
-        realtime.subscribe_min({"AAPL", "MSFT", "GOOGL"})
-        await asyncio.sleep(300)
-        realtime.unsubscribe_min({"MSFT", "GOOGL"})
-        await realtime.stop()
-
-    except Exception as e:
-        logger.error(f"Error in main(): {e}")
-        logger.error(traceback.format_exc())
-
-
-if __name__ == "__main__":
-    uvloop.run(main())

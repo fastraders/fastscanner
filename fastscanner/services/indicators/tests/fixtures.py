@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from fastscanner.services.indicators.ports import (
+    Cache,
     CandleCol,
     CandleStore,
     FundamentalData,
@@ -51,14 +52,29 @@ class MockPublicHolidaysStore:
         return set()
 
 
+class MockCache(Cache):
+    def __init__(self):
+        self._data = {}
+
+    async def save(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def get(self, key: str) -> str:
+        return self._data.get(key, "")
+
+
 @pytest.fixture
 def candles():
     candle_store = CandleStoreTest()
     fundamental_store = MockFundamentalDataStore()
     holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
 
     ApplicationRegistry.init(
-        candles=candle_store, fundamentals=fundamental_store, holidays=holiday_store
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        holidays=holiday_store,
+        cache=cache,
     )
 
     yield candle_store

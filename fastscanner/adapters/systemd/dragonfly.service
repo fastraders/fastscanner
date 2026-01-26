@@ -1,0 +1,18 @@
+[Unit]
+Description=Dragonfly In-Memory Cache
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dragonfly --logtostderr --unixsocket /tmp/dragonfly-redis.sock --cache_mode
+ExecStop=/bin/kill -s SIGTERM $MAINPID
+TimeoutStopSec=30
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target

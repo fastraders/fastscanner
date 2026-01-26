@@ -4,10 +4,16 @@ from typing import Any, Protocol
 import pandas as pd
 import pytest
 
-from fastscanner.services.indicators.ports import CandleCol, CandleStore, ChannelHandler
+from fastscanner.services.indicators.ports import (
+    Cache,
+    CandleCol,
+    CandleStore,
+    ChannelHandler,
+)
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.indicators.tests.fixtures import (
     CandleStoreTest,
+    MockCache,
     MockFundamentalDataStore,
     MockPublicHolidaysStore,
 )
@@ -49,17 +55,23 @@ def candles():
     candle_store = CandleStoreTest()
     fundamental_store = MockFundamentalDataStore()
     holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
 
     ApplicationRegistry.init(
-        candles=candle_store, fundamentals=fundamental_store, holidays=holiday_store
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        holidays=holiday_store,
+        cache=cache,
     )
 
     indicators_service = IndicatorsService(
         candles=candle_store,
         fundamentals=fundamental_store,
         channel=MockChannel(),
+        cache=cache,
         symbols_subscribe_channel="test_subscribe",
         symbols_unsubscribe_channel="test_unsubscribe",
+        cache_at_seconds=10,
     )
     ApplicationRegistry.set_indicators(indicators_service)
 

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import numpy as np
@@ -17,6 +18,27 @@ class DaysToEarningsIndicator:
 
     def column_name(self):
         return self.type()
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                    "last_days": self._last_days,
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_days = indicator_data["last_days"]
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
@@ -67,6 +89,27 @@ class DaysFromEarningsIndicator:
     def column_name(self):
         return self.type()
 
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                    "last_days": self._last_days,
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_days = indicator_data["last_days"]
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
@@ -114,6 +157,27 @@ class MarketCapIndicator:
 
     def column_name(self):
         return self.type()
+
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                    "last_market_cap": self._last_market_cap,
+                }
+            ),
+        )
+
+    async def load_from_cache(self):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+        }
+        self._last_market_cap = indicator_data["last_market_cap"]
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)

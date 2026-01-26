@@ -60,6 +60,16 @@ class Indicator(Protocol):
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
+class Cacheable(Protocol):
+    async def save_to_cache(self) -> None: ...
+
+    async def load_from_cache(self) -> None: ...
+
+
+class CacheableIndicator(Cacheable, Indicator, Protocol):
+    pass
+
+
 class IndicatorsLibrary:
     _instance: ContextVar["IndicatorsLibrary"] = ContextVar("IndicatorsLibrary")
 

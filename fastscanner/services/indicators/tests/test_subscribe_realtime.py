@@ -28,6 +28,7 @@ from fastscanner.services.indicators.service import (
 )
 from fastscanner.services.indicators.tests.fixtures import (
     CandleStoreTest,
+    MockCache,
     MockFundamentalDataStore,
     MockPublicHolidaysStore,
 )
@@ -91,11 +92,13 @@ def candles():
     candle_store = CandleStoreTest()
     fundamental_store = MockFundamentalDataStore()
     holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
 
     ApplicationRegistry.init(
         candles=candle_store,
         fundamentals=fundamental_store,
         holidays=holiday_store,
+        cache=cache,
     )
     yield candle_store
     ApplicationRegistry.reset()
@@ -140,9 +143,7 @@ async def test_prev_day_indicator(setup):
     ClockRegistry.set(mock_clock)
     unsubscribe = MagicMock()
 
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", unsubscribe
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", unsubscribe)
 
     await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
@@ -160,9 +161,7 @@ async def test_daily_gap_indicator(setup):
     indicator = DailyGapIndicator()
 
     pre_market_ts = ts.replace(hour=9, minute=15)
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(
         f"candles.min.{symbol}", create_stream_message(pre_market_ts)
     )
@@ -190,9 +189,7 @@ async def test_daily_atr_indicator(setup):
     )
     await indicator.extend(symbol, df)
 
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
@@ -206,9 +203,7 @@ async def test_daily_atr_gap_indicator(setup):
     symbol, ts, handler = setup
     indicator = DailyATRGapIndicator(period=3)
 
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
     assert len(handler.received) == 1
@@ -222,9 +217,7 @@ async def test_cumulative_daily_volume(setup):
     symbol, ts, handler = setup
     indicator = CumulativeDailyVolumeIndicator()
 
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(
         f"candles.min.{symbol}", create_stream_message(ts, volume=1000)
     )
@@ -250,9 +243,7 @@ async def test_premarket_cumulative(setup):
     indicator = PremarketCumulativeIndicator(CandleCol.CLOSE, op="sum")
 
     pre_market_ts = ts.replace(hour=9, minute=15)
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(
         f"candles.min.{symbol}", create_stream_message(pre_market_ts, close=100)
     )
@@ -305,9 +296,7 @@ async def test_atr_indicator(setup):
         await indicator.extend_realtime(symbol, row)
 
     ts = index[3]
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
     await channel_handler.handle(
         f"candles.min.{symbol}",
         create_stream_message(ts, open=103, high=113, low=93, close=108),
@@ -330,9 +319,7 @@ async def test_position_in_range(setup):
     )
     await indicator.extend(symbol, df)
 
-    channel_handler = CandleChannelHandler(
-        symbol, [indicator], handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler([indicator], handler, "1min", MagicMock())
 
     await channel_handler.handle(
         f"candles.min.{symbol}", create_stream_message(ts, close=112)
@@ -347,7 +334,7 @@ async def test_position_in_range(setup):
 @pytest.mark.asyncio
 async def test_channel_handler_missing_timestamp(setup):
     symbol, _, handler = setup
-    channel_handler = CandleChannelHandler(symbol, [], handler, "1min", MagicMock())
+    channel_handler = CandleChannelHandler([], handler, "1min", MagicMock())
 
     try:
         await channel_handler.handle(f"candles.min.{symbol}", {})
@@ -359,7 +346,7 @@ async def test_channel_handler_missing_timestamp(setup):
 @pytest.mark.asyncio
 async def test_channel_handler_invalid_data(setup):
     symbol, _, handler = setup
-    channel_handler = CandleChannelHandler(symbol, [], handler, "1min", MagicMock())
+    channel_handler = CandleChannelHandler([], handler, "1min", MagicMock())
 
     try:
         await channel_handler.handle(
@@ -386,9 +373,7 @@ async def test_channel_handler_multiple_indicators(setup):
         if hasattr(indicator, "extend"):
             await indicator.extend(symbol, df)
 
-    channel_handler = CandleChannelHandler(
-        symbol, indicators, handler, "1min", MagicMock()
-    )
+    channel_handler = CandleChannelHandler(indicators, handler, "1min", MagicMock())
 
     await channel_handler.handle(f"candles.min.{symbol}", create_stream_message(ts))
 
@@ -406,7 +391,7 @@ async def test_multiple_ticks_aggregation():
     base_ts = pd.Timestamp("2023-01-01 10:00:00", tz=LOCAL_TIMEZONE_STR)
 
     # 3min frequency - should buffer until 3 ticks arrive
-    channel_handler = CandleChannelHandler(symbol, [], handler, "3min", MagicMock())
+    channel_handler = CandleChannelHandler([], handler, "3min", MagicMock())
 
     # Send 3 ticks at 1 minute intervals
     for i in range(3):
@@ -435,7 +420,7 @@ async def test_multiple_ticks_aggregation():
 async def test_candle_aggregation(setup):
     symbol, ts, handler = setup
 
-    channel_handler = CandleChannelHandler(symbol, [], handler, "3min", MagicMock())
+    channel_handler = CandleChannelHandler([], handler, "3min", MagicMock())
 
     ts_start = pd.Timestamp(ts).floor("3min")
     ts1 = ts_start
@@ -478,8 +463,10 @@ async def test_candle_aggregation(setup):
 @pytest.mark.asyncio
 async def test_flush_on_timeout_with_partial_buffer(setup):
     symbol, ts, handler = setup
-    channel_handler = CandleChannelHandler(symbol, [], handler, "3min", MagicMock())
-    channel_handler._buffer = CandleBuffer(symbol, "3min", channel_handler._handle, 0.1)
+    channel_handler = CandleChannelHandler([], handler, "3min", MagicMock())
+    buffer = channel_handler._new_buffer(symbol)
+    buffer._timeout = 0.1
+    channel_handler._buffers = {symbol: buffer}
     ts_start = pd.Timestamp(ts).floor("3min")
 
     msg1 = create_stream_message(

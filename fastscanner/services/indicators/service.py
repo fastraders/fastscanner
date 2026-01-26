@@ -1,18 +1,18 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
-from typing import Any, Awaitable, Callable
+from datetime import date, datetime, time, timedelta
+from typing import Any, Awaitable, Callable, Iterable, Protocol
 from uuid import uuid4
 
 import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
-from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, split_freq
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
 from fastscanner.services.exceptions import UnsubscribeSignal
 
-from .lib import Indicator, IndicatorsLibrary
-from .ports import CandleStore, Channel, FundamentalDataStore
+from .lib import Cacheable, CacheableIndicator, Indicator, IndicatorsLibrary
+from .ports import Cache, CandleStore, Channel, FundamentalDataStore
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -30,15 +30,22 @@ class IndicatorsService:
         candles: CandleStore,
         fundamentals: FundamentalDataStore,
         channel: Channel,
+        cache: Cache,
         symbols_subscribe_channel: str,
         symbols_unsubscribe_channel: str,
+        cache_at_seconds: int,
     ) -> None:
         self.candles = candles
         self.fundamentals = fundamentals
         self.channel = channel
+        self._cache = cache
         self._symbols_subscribe_channel = symbols_subscribe_channel
         self._symbols_unsubscribe_channel = symbols_unsubscribe_channel
         self._subscription_to_channel: dict[str, str] = {}
+        # Cache parameters
+        self._cached_indicators: list[CacheableIndicator] = []
+        self._cache_at_seconds = cache_at_seconds
+        self._caching_task: asyncio.Task[None] | None = None
 
     async def calculate_from_params(
         self,
@@ -98,7 +105,7 @@ class IndicatorsService:
         }
         stream_key = f"{unit_to_channel[unit]}{symbol}"
         sub_handler = CandleChannelHandler(
-            symbol, indicator_instances, handler, freq, self.unsubscribe_realtime
+            indicator_instances, handler, freq, self.unsubscribe_realtime
         )
         # Skip sending subscribe signal for persister subscriptions to avoid cycles.
         if _send_events:
@@ -115,9 +122,69 @@ class IndicatorsService:
         await self.channel.subscribe(stream_key, sub_handler)
         return sub_handler.id()
 
+    async def cache_indicators(
+        self,
+        indicators: Iterable[CacheableIndicator],
+    ) -> str:
+        self._cached_indicators.extend(indicators)
+        if self._caching_task is None:
+            self._caching_task = asyncio.create_task(self._start_caching())
+        stream_pattern = "candles.min.*"
+
+        noop_handler = NoopHandler()
+        cache_handler = CandleChannelHandler(
+            indicators,
+            noop_handler,
+            "1min",
+            self.unsubscribe_realtime,
+        )
+
+        self._subscription_to_channel[cache_handler.id()] = stream_pattern
+        await self.channel.subscribe(stream_pattern, cache_handler)
+        return cache_handler.id()
+
+    async def stop_caching(self, subscription_id: str) -> None:
+        await self.unsubscribe_realtime(subscription_id)
+        if self._caching_task:
+            try:
+                self._caching_task.cancel()
+                await self._caching_task
+            except asyncio.CancelledError:
+                pass
+            self._caching_task = None
+        self._cached_indicators = []
+
+    async def _start_caching(self) -> None:
+        while True:
+            now = ClockRegistry.clock.now()
+            # We receive the latest candle at 20:00 UTC but it can have a bit of delay.
+            if (now.time() < time(4, 0, self._cache_at_seconds)) or (
+                now.time() > time(20, 1, self._cache_at_seconds)
+            ):
+                next_premarket = ClockRegistry.clock.next_datetime_at(
+                    time(4, 0, self._cache_at_seconds)
+                )
+                logger.info(
+                    f"Waiting for pre-market to cache indicators. Now: {now}, next pre-market at: {next_premarket}"
+                )
+                await asyncio.sleep((next_premarket - now).total_seconds())
+                continue
+
+            now = ClockRegistry.clock.now()
+            for indicator in self._cached_indicators:
+                try:
+                    await indicator.save_to_cache()
+                except Exception as e:
+                    logger.exception(e)
+                    logger.error(f"Error caching indicator {indicator.column_name()}")
+
+            next_minute = (now + timedelta(minutes=1)).replace(
+                second=self._cache_at_seconds, microsecond=0
+            )
+            await asyncio.sleep((next_minute - now).total_seconds())
+
     async def unsubscribe_realtime(
         self,
-        symbol: str,
         subscription_id: str,
         _send_events: bool = True,
     ) -> None:
@@ -127,14 +194,15 @@ class IndicatorsService:
         stream_key = self._subscription_to_channel.get(subscription_id)
         if stream_key is None:
             return
+        _, unit, symbol = stream_key.split(".")
         # Skip sending unsubscribe signal for persister subscriptions to avoid cycles.
-        if _send_events:
+        if _send_events and symbol != "*":
             await self.channel.push(
                 self._symbols_unsubscribe_channel,
                 {
                     "symbol": symbol,
                     "subscriber_id": subscription_id,
-                    "unit": stream_key.split(".")[1],
+                    "unit": unit,
                 },
             )
         await self.channel.unsubscribe(stream_key, subscription_id)
@@ -153,59 +221,64 @@ class IndicatorsService:
             )
 
 
-class SubscriptionHandler:
+class SubscriptionHandler(Protocol):
     async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
 class CandleChannelHandler:
     def __init__(
         self,
-        symbol: str,
-        indicators: list[Indicator],
+        indicators: Iterable[Indicator],
         handler: SubscriptionHandler,
         freq: str,
-        unsubscribe: Callable[[str, str], Awaitable[None]],
+        unsubscribe: Callable[[str], Awaitable[None]],
     ) -> None:
         self._id = str(uuid4())
-        self._symbol = symbol
         self._indicators = indicators
         self._handler = handler
         self._freq = freq
         self._timeout_seconds = 2.8
         self._timeout_minutes = 10.0
-        self._buffer = CandleBuffer(symbol, freq, self._handle, self._candle_timeout)
-        self._buffer_lock = asyncio.Lock()
+        self._buffers: dict[str, CandleBuffer] = {}
         self._unsubscribe = unsubscribe
 
-    @property
-    def _candle_timeout(self) -> float:
-        if self._freq.endswith("s"):
-            return self._timeout_seconds
-        return self._timeout_minutes
-
-    async def _handle(self, row: pd.Series) -> None:
+    async def _handle(self, symbol: str, new_row: pd.Series) -> None:
         for ind in self._indicators:
-            row = await ind.extend_realtime(self._symbol, row)
-
+            new_row = await ind.extend_realtime(symbol, new_row)
         try:
-            await self._handler.handle(self._symbol, row)
+            await self._handler.handle(symbol, new_row)
         except UnsubscribeSignal:
-            await self._unsubscribe(self._id, self._symbol)
+            await self._unsubscribe(self._id)
             return
 
+    def _new_buffer(self, symbol: str) -> CandleBuffer:
+        async def _handle(new_row: pd.Series) -> None:
+            await self._handle(symbol, new_row)
+
+        buffer = CandleBuffer(symbol, self._freq, _handle)
+        self._buffers[symbol] = buffer
+        return buffer
+
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        data = data.copy()
-        timestamp = data.pop("timestamp")
-        ts = pd.to_datetime(timestamp, unit="ms", utc=True).tz_convert(
+        symbol = channel_id.split(".")[-1]
+        buffer = self._buffers.get(symbol)
+        if buffer is None:
+            buffer = self._new_buffer(symbol)
+        ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
             LOCAL_TIMEZONE_STR
         )
         new_row = pd.Series(data, name=ts)
         if self._freq == "1min":
-            return await self._handle(new_row)
-        agg = await self._buffer.add(new_row)
+            return await self._handle(symbol, new_row)
+        agg = await buffer.add(new_row)
         if agg is None:
             return
-        await self._handle(agg)
+        await self._handle(symbol, agg)
 
     def id(self) -> str:
         return self._id
+
+
+class NoopHandler:
+    async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        return new_row

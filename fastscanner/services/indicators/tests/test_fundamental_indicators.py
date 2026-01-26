@@ -9,6 +9,7 @@ from fastscanner.services.indicators.lib.fundamental import (
     DaysToEarningsIndicator,
 )
 from fastscanner.services.indicators.ports import (
+    Cache,
     CandleCol,
     FundamentalData,
     FundamentalDataStore,
@@ -27,10 +28,22 @@ class FundamentalDataStoreTest(FundamentalDataStore):
         return self._data[symbol]
 
 
+class MockCache(Cache):
+    def __init__(self):
+        self._data = {}
+
+    async def save(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def get(self, key: str) -> str:
+        return self._data.get(key, "")
+
+
 @pytest.fixture
 def fundamentals():
     store = FundamentalDataStoreTest()
-    ApplicationRegistry.init(candles=None, fundamentals=store, holidays=None)  # type: ignore
+    cache = MockCache()
+    ApplicationRegistry.init(candles=None, fundamentals=store, holidays=None, cache=cache)  # type: ignore
     yield store
     ApplicationRegistry.reset()
 

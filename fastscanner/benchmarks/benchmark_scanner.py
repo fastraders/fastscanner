@@ -6,6 +6,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.adapters.cache.dragonfly import DragonflyCache
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
@@ -43,15 +44,22 @@ async def run():
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,
     )
+    cache = DragonflyCache(
+        config.DRAGONFLY_UNIX_SOCKET,
+        password=None,
+        db=0,
+    )
     indicator_service = IndicatorsService(
         candles,
         fundamentals,
         VoidChannel(),
+        cache,
         config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
+        cache_at_seconds=config.CACHE_AT_SECONDS,
     )
 
-    ApplicationRegistry.init(candles, fundamentals, holidays)
+    ApplicationRegistry.init(candles, fundamentals, holidays, cache)
     ApplicationRegistry.set_indicators(indicator_service)
 
     start_date = date(2023, 1, 1)

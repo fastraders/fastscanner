@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
+import uvloop
 
 from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesProvider
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
@@ -446,7 +447,7 @@ def main() -> None:
     if args.date:
         check_date_val = date.fromisoformat(args.date)
 
-    asyncio.run(check_integrity(args.symbols, check_date_val, args.freqs))
+    uvloop.run(check_integrity(args.symbols, check_date_val, args.freqs))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from typing import Set
 
 import pytest
 
-from fastscanner.services.indicators.ports import PublicHolidaysStore
+from fastscanner.services.indicators.ports import Cache, PublicHolidaysStore
 from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -19,10 +19,22 @@ class PublicHolidaysTest(PublicHolidaysStore):
         return self._holidays
 
 
+class MockCache(Cache):
+    def __init__(self):
+        self._data = {}
+
+    async def save(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def get(self, key: str) -> str:
+        return self._data.get(key, "")
+
+
 @pytest.fixture
 def holidays():
     store = PublicHolidaysTest()
-    ApplicationRegistry.init(candles=None, fundamentals=None, holidays=store)  # type: ignore
+    cache = MockCache()
+    ApplicationRegistry.init(candles=None, fundamentals=None, holidays=store, cache=cache)  # type: ignore
     yield store
     ApplicationRegistry.reset()
 

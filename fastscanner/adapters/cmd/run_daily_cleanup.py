@@ -3,6 +3,7 @@ import logging
 import time
 
 import redis.asyncio as aioredis
+import uvloop
 from redis import RedisError
 
 from fastscanner.adapters.cmd.run_daily_collection import collect_daily_data
@@ -23,7 +24,7 @@ async def daily_cleanup_job() -> None:
 
 def main() -> None:
     load_logging_config()
-    asyncio.run(daily_cleanup_job())
+    uvloop.run(daily_cleanup_job())
 
 
 if __name__ == "__main__":

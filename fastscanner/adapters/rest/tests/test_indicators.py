@@ -12,7 +12,7 @@ from fastscanner.adapters.rest.indicators import (
 )
 from fastscanner.adapters.rest.main import app
 from fastscanner.services.indicators.lib import Indicator, IndicatorsLibrary
-from fastscanner.services.indicators.ports import ChannelHandler, FundamentalData
+from fastscanner.services.indicators.ports import Cache, ChannelHandler, FundamentalData
 from fastscanner.services.indicators.service import (
     IndicatorsService,
     SubscriptionHandler,
@@ -68,6 +68,17 @@ class MockChannel:
     async def reset(self): ...
 
 
+class MockCache(Cache):
+    def __init__(self):
+        self._data = {}
+
+    async def save(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def get(self, key: str) -> str:
+        return self._data.get(key, "")
+
+
 class MockCandleStore:
     async def get(
         self, symbol, start, end, freq, adjusted: bool = False
@@ -104,8 +115,9 @@ def indicators_service():
     candles = MockCandleStore()
     fundamentals = MockFundamentalDataStore()
     channel = MockChannel()
+    cache = MockCache()
     service = IndicatorsService(
-        candles, fundamentals, channel, "test_subscribe", "test_unsubscribe"
+        candles, fundamentals, channel, cache, "test_subscribe", "test_unsubscribe", 10
     )
 
     yield service, channel
