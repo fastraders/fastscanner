@@ -70,7 +70,7 @@ class MockChannel:
     async def push_data(self, channel_id: str, data: dict[Any, Any]):
         """Helper method to push data to a specific channel for testing"""
         for cid, h in self.handlers.items():
-            _, unit, symbol = cid.split(".")
+            _, unit, symbol = cid.split(".", 2)
             if symbol == "*" or cid == channel_id:
                 await h.handle(channel_id, data)
 

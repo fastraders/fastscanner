@@ -63,7 +63,7 @@ class ScannerChannelHandler:
         return buffer
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        symbol = channel_id.split(".")[-1]
+        symbol = channel_id.split(".", 2)[-1]
         buffer = self._buffers.get(symbol)
         if buffer is None:
             buffer = self._new_buffer(symbol)

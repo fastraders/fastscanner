@@ -194,7 +194,7 @@ class IndicatorsService:
         stream_key = self._subscription_to_channel.get(subscription_id)
         if stream_key is None:
             return
-        _, unit, symbol = stream_key.split(".")
+        _, unit, symbol = stream_key.split(".", 2)
         # Skip sending unsubscribe signal for persister subscriptions to avoid cycles.
         if _send_events and symbol != "*":
             await self.channel.push(
@@ -209,7 +209,7 @@ class IndicatorsService:
 
     async def stop(self):
         for sub_id, channel in self._subscription_to_channel.items():
-            _, unit, symbol = channel.split(".")
+            _, unit, symbol = channel.split(".", 2)
             await self.channel.unsubscribe(channel, sub_id)
             await self.channel.push(
                 self._symbols_unsubscribe_channel,
@@ -260,7 +260,7 @@ class CandleChannelHandler:
         return buffer
 
     async def handle(self, channel_id: str, data: dict[Any, Any]) -> None:
-        symbol = channel_id.split(".")[-1]
+        symbol = channel_id.split(".", 2)[-1]
         buffer = self._buffers.get(symbol)
         if buffer is None:
             buffer = self._new_buffer(symbol)

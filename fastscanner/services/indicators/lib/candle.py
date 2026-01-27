@@ -268,6 +268,8 @@ class ATRIndicator:
         return "atr"
 
     def column_name(self):
+        if self._freq == "1min":
+            return f"atr_{self._period}"
         return f"atr_{self._period}_{self._freq}"
 
     async def save_to_cache(self):
