@@ -85,8 +85,6 @@ class IndicatorsService:
         _send_events: bool = True,
     ) -> str:
         """
-        Redis -> RedisChannel -> For all subscribers, compute the indicators -> SubscriptionHandler
-            candle                                                          candle with indicators
         Store the subscription handler in a dictionary.
         Every time we get a new candle, for the symbol, we will first fill the new row with the indicators (extend_realtime).
         Then we will call the handler with the new row.

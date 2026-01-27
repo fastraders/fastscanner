@@ -94,6 +94,7 @@ async def main():
         PrevDayIndicator(CandleCol.CLOSE),
         DayOpenIndicator(),
     ]
+    logger.info(f"Loading {len(indicators_with_cache)} indicators from cache.")
     for i in indicators_with_cache:
         await i.load_from_cache()
     sub_id = await indicators_service.cache_indicators(indicators_with_cache)

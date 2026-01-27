@@ -1,6 +1,8 @@
 from contextvars import ContextVar
 from typing import Any, Hashable
 
+from fastscanner.services.indicators.lib import Cacheable
+
 from ..ports import Scanner, ScannerRealtime
 from .day2 import Day2GapScanner
 from .gap import ATRGapDownScanner, ATRGapUpScanner
@@ -76,3 +78,8 @@ class ScannersLibrary:
                 instance.register_realtime(scanner)
             cls._instance.set(instance)
             return instance
+
+    async def load_all_cacheable(self, scanner: ScannerRealtime) -> None:
+        for attr in scanner.__dict__.values():
+            if isinstance(attr, Cacheable):
+                await attr.load_from_cache()

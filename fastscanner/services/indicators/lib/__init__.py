@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 from datetime import date, datetime
-from typing import Any, Hashable, Protocol
+from typing import Any, Hashable, Protocol, runtime_checkable
 
 import pandas as pd
 
@@ -60,6 +60,7 @@ class Indicator(Protocol):
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
 
 
+@runtime_checkable
 class Cacheable(Protocol):
     async def save_to_cache(self) -> None: ...
 

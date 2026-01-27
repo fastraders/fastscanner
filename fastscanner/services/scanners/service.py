@@ -10,6 +10,7 @@ import pandas as pd
 
 from fastscanner.pkg.candle import CandleBuffer
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, FixedClock
+from fastscanner.services.indicators.lib import Cacheable
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.ports import CandleStore, Channel
 from fastscanner.services.registry import ApplicationRegistry
@@ -103,10 +104,9 @@ class ScannerService:
         handler: SubscriptionHandler,
         freq: str,
     ):
+        scanner = ScannersLibrary.instance().get_realtime(params.type_, params.params)
+        await ScannersLibrary.instance().load_all_cacheable(scanner)
         async with self._lock:
-            scanner = ScannersLibrary.instance().get_realtime(
-                params.type_, params.params
-            )
             stream_key = "candles.min.*"
             sch = ScannerChannelHandler(
                 scanner_id, scanner, handler, freq, self.unsubscribe_realtime
