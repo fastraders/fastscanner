@@ -71,7 +71,7 @@ class ClockWrapper(Clock):
                 if next_day.weekday() < 5 and next_day not in public_holidays:
                     n_days -= 1
 
-            return datetime.combine(next_day, at)
+            return datetime.combine(next_day, at, tzinfo=self._tzinfo)
 
         return now.replace(
             hour=at.hour,

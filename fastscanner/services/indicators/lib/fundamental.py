@@ -30,15 +30,21 @@ class DaysToEarningsIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_days = indicator_data["last_days"]
+        self._last_days = {
+            k: v
+            for k, v in indicator_data["last_days"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
@@ -100,15 +106,21 @@ class DaysFromEarningsIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_days = indicator_data["last_days"]
+        self._last_days = {
+            k: v
+            for k, v in indicator_data["last_days"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
@@ -169,15 +181,21 @@ class MarketCapIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_market_cap = indicator_data["last_market_cap"]
+        self._last_market_cap = {
+            k: v
+            for k, v in indicator_data["last_market_cap"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)

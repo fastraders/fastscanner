@@ -1,0 +1,18 @@
+[Unit]
+Description=Fastscanner Indicator Caching
+After=network-online.target ntp.service
+
+[Service]
+WorkingDirectory=/home/mmoheeka/Projects/fastscanner
+PrivateTmp=true
+Type=simple
+ExecStart=/home/mmoheeka/.local/bin/poetry run python -m fastscanner.adapters.cmd.run_indicators_caching
+ExecStop=/bin/kill -s SIGTERM $MAINPID
+
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+[Install]
+WantedBy=multi-user.target

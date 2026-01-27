@@ -48,15 +48,21 @@ class CumulativeDailyVolumeIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_volume = indicator_data["last_volume"]
+        self._last_volume = {
+            k: v
+            for k, v in indicator_data["last_volume"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
@@ -139,15 +145,21 @@ class PremarketCumulativeIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_value = indicator_data["last_value"]
+        self._last_value = {
+            k: v
+            for k, v in indicator_data["last_value"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
@@ -202,12 +214,16 @@ class CumulativeIndicator:
             json.dumps({"last_value": self._last_value}),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
-        self._last_value = indicator_data["last_value"]
+        self._last_value = {
+            k: v
+            for k, v in indicator_data["last_value"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         values = df[self._candle_col]
@@ -260,13 +276,21 @@ class ATRIndicator:
             json.dumps({"last_atr": self._last_atr, "last_close": self._last_close}),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
-        self._last_atr = indicator_data["last_atr"]
-        self._last_close = indicator_data["last_close"]
+        self._last_atr = {
+            k: v
+            for k, v in indicator_data["last_atr"].items()
+            if symbol is None or k == symbol
+        }
+        self._last_close = {
+            k: v
+            for k, v in indicator_data["last_close"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         col_name = self.column_name()
@@ -350,13 +374,15 @@ class PositionInRangeIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
@@ -441,14 +467,20 @@ class DailyRollingIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
-        self._rolling_values = indicator_data["rolling_values"]
+        self._rolling_values = {
+            k: v
+            for k, v in indicator_data["rolling_values"].items()
+            if symbol is None or k == symbol
+        }
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
 
     async def _get_data_for_n_days(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
@@ -532,8 +564,8 @@ class GapIndicator:
 
     async def save_to_cache(self): ...
 
-    async def load_from_cache(self):
-        await self._prev_day.load_from_cache()
+    async def load_from_cache(self, symbol: str | None = None):
+        await self._prev_day.load_from_cache(symbol)
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         cols_to_drop: list[str] = []
@@ -580,10 +612,10 @@ class ATRGapIndicator:
 
     async def save_to_cache(self): ...
 
-    async def load_from_cache(self):
-        await self._atr.load_from_cache()
-        await self._gap.load_from_cache()
-        await self._prev_day.load_from_cache()
+    async def load_from_cache(self, symbol: str | None = None):
+        await self._atr.load_from_cache(symbol)
+        await self._gap.load_from_cache(symbol)
+        await self._prev_day.load_from_cache(symbol)
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         aux_indicators = [self._atr, self._gap, self._prev_day]
@@ -647,15 +679,21 @@ class ShiftIndicator:
             ),
         )
 
-    async def load_from_cache(self):
+    async def load_from_cache(self, symbol: str | None = None):
         indicator_data = await ApplicationRegistry.cache.get(
             f"indicator:{self.column_name()}"
         )
         indicator_data = json.loads(indicator_data)
         self._last_date = {
-            k: date.fromisoformat(v) for k, v in indicator_data["last_date"].items()
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
         }
-        self._last_values = indicator_data["last_values"]
+        self._last_values = {
+            k: v
+            for k, v in indicator_data["last_values"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
