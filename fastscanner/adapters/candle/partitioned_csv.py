@@ -41,13 +41,12 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                 f"End date {end} cannot be in the future. Max date is {max_date}."
             )
 
-        _, unit = split_freq(freq)
-        keys = self._partition_keys_in_range(start, end, unit)
+        keys = self._partition_keys_in_range(start, end, freq)
 
         dfs: list[pd.DataFrame] = []
         for key in keys:
             df = await self._cache(
-                symbol, key, unit, freq, _today=today, _log_cache_miss=_log_cache_miss
+                symbol, key, freq, _today=today, _log_cache_miss=_log_cache_miss
             )
             if df.empty:
                 continue
@@ -60,12 +59,6 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
             ).tz_localize(self.tz)
 
         df = pd.concat(dfs)
-        if not df.index.is_monotonic_increasing:
-            logger.warning(
-                f"Data for {symbol} ({freq}) is not sorted between {start} and {end}"
-            )
-            df = df.sort_index()
-
         start_dt = pd.Timestamp(datetime.combine(start, time(0, 0)), tz=self.tz)
         end_dt = pd.Timestamp(datetime.combine(end, time(23, 59, 59)), tz=self.tz)
         df = df.loc[start_dt:end_dt]
@@ -107,10 +100,9 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
             else:
                 raise ValueError(f"Unsupported frequency: {freq}")
 
-            _, unit = split_freq(freq)
-            partition_keys = self._partition_keys_in_range(start, end, unit)
+            partition_keys = self._partition_keys_in_range(start, end, freq)
             for key in partition_keys:
-                curr_start, curr_end = self._range_from_key(key, unit)
+                curr_start, curr_end = self._range_from_key(key, freq)
                 start_dt = pd.Timestamp(
                     datetime.combine(curr_start, time(0, 0)), tz=self.tz
                 )
@@ -119,7 +111,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                 )
                 sub_df = df.loc[start_dt:end_dt]
                 self._save_cache(symbol, key, freq, sub_df)
-                self._mark_expiration(symbol, key, unit, today)
+                self._mark_expiration(symbol, key, freq, today)
 
     async def collect_expired_data(self, symbol: str, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
@@ -127,52 +119,38 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
 
-        # if unit not in expiration.json and we should retreive partition_key of yesterday _partition_key(yesterday,unit)
-        unit_to_freqs: dict[str, list[str]] = {}
-        for freq in freqs:
-            _, unit = split_freq(freq)
-            unit_to_freqs.setdefault(unit, []).append(freq)
-
-        grouped_by_unit: dict[str, str] = {}
-        # Adds default partition keys for all units
-        for unit in unit_to_freqs.keys():
-            default_pkey = self._partition_key(yday, unit)
-            grouped_by_unit[unit] = default_pkey
-
+        freq_to_partition_key: dict[str, str] = {}
         for exp_key, exp_date in expirations.items():
-            partition_key, unit = exp_key.rsplit("_", 1)
+            partition_key, freq = exp_key.rsplit("_", 1)
             if exp_date > today:
-                grouped_by_unit.pop(unit, None)
                 continue
-            grouped_by_unit[unit] = partition_key
+            freq_to_partition_key[freq] = partition_key
 
-        for unit, partition_key in grouped_by_unit.items():
-            freqs = unit_to_freqs[unit]
-            start_date, _ = self._range_from_key(partition_key, unit)
-            for freq in freqs:
-                await self.get(
-                    symbol,
-                    start_date,
-                    yday,
-                    freq,
-                    adjusted=False,
-                    _today=today,
-                    _log_cache_miss=False,
-                )
+        for freq, partition_key in freq_to_partition_key.items():
+            start_date, _ = self._range_from_key(partition_key, freq)
+            await self.get(
+                symbol,
+                start_date,
+                yday,
+                freq,
+                adjusted=False,
+                _today=today,
+                _log_cache_miss=False,
+            )
 
     async def _cache(
         self,
         symbol: str,
         key: str,
-        unit: str,
         freq: str,
         _today: date | None = None,
         _log_cache_miss: bool = True,
     ) -> pd.DataFrame:
         today = _today or ClockRegistry.clock.today()
         partition_path = self._partition_path(symbol, key, freq)
-        if not self._is_expired(symbol, key, unit, today):
+        if not self._is_expired(symbol, key, freq, today):
             try:
+                _, unit = split_freq(freq)
                 df = await asyncio.to_thread(pd.read_csv, partition_path)
                 if unit.lower() != "d":
                     df[CandleCol.DATETIME] = pd.to_datetime(
@@ -193,20 +171,24 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
             except FileNotFoundError:
                 if _log_cache_miss:
                     logger.info(
-                        f"Cache miss for {symbol} ({unit}) with key {key}. Fetching from store."
+                        f"Cache miss for {symbol} ({freq}) with key {key}. Fetching from store."
                     )
             except Exception as e:
                 logger.exception(e)
                 logger.error(
-                    f"Failed to load cached data for {symbol} ({unit}): {e}. Resetting cache."
+                    f"Failed to load cached data for {symbol} ({freq}): {e}. Resetting cache."
                 )
 
-        start, end = self._range_from_key(key, unit)
+        start, end = self._range_from_key(key, freq)
         yday = today - timedelta(days=1)
         end = min(end, yday)
-        df = (await self._store.get(symbol, start, end, freq, adjusted=False)).dropna()
+        df = (
+            (await self._store.get(symbol, start, end, freq, adjusted=False))
+            .dropna()
+            .sort_index()
+        )
         self._save_cache(symbol, key, freq, df)
-        self._mark_expiration(symbol, key, unit, today)
+        self._mark_expiration(symbol, key, freq, today)
         return df
 
     def _save_cache(self, symbol: str, key: str, freq: str, df: pd.DataFrame):
@@ -214,7 +196,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         partition_dir = os.path.dirname(partition_path)
         os.makedirs(partition_dir, exist_ok=True)
 
-        unit = split_freq(freq)[1]
+        _, unit = split_freq(freq)
         if unit.lower() != "d":
             df = df.tz_convert("utc").tz_convert(None).reset_index()
         else:
@@ -226,17 +208,12 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     def _partition_path(self, symbol: str, key: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
 
-    def _partition_key(self, dt: date, unit: str) -> str:
-        if unit == "s":
-            return dt.isoformat()
-        return self._partition_keys(pd.DatetimeIndex([dt]), unit).iat[0]
+    def _partition_key(self, dt: date, freq: str) -> str:
+        return self._partition_keys(pd.DatetimeIndex([dt]), freq).iat[0]
 
-    def _partition_keys(self, index: pd.DatetimeIndex, unit: str) -> "pd.Series[str]":
-        if unit.lower() in ("s",):
-            return pd.Series(
-                index.strftime("%Y-%m-%d"), index=index, name="partition_key"
-            )
-        if unit.lower() in ("s", "min", "t"):
+    def _partition_keys(self, index: pd.DatetimeIndex, freq: str) -> "pd.Series[str]":
+        _, unit = split_freq(freq)
+        if unit.lower() in ("min", "t"):
             dt = pd.to_timedelta(index.dayofweek, unit="d")
             return pd.Series(
                 (index - dt).strftime("%Y-%m-%d"), index=index, name="partition_key"
@@ -247,23 +224,20 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
             return pd.Series(index.strftime("%Y"), index=index, name="partition_key")
         raise ValueError(f"Invalid unit: {unit}")
 
-    def _partition_keys_in_range(self, start: date, end: date, unit: str) -> list[str]:
-        if unit == "s":
-            return pd.date_range(start, end, freq="1d").strftime("%Y-%m-%d").tolist()
-        keys = self._partition_keys(pd.date_range(start, end, freq="1d"), unit)
+    def _partition_keys_in_range(self, start: date, end: date, freq: str) -> list[str]:
+        keys = self._partition_keys(pd.date_range(start, end, freq="1d"), freq)
         return keys.drop_duplicates().tolist()
 
-    def _covering_range(self, start: date, end: date, unit: str) -> tuple[date, date]:
-        start_key = self._partition_key(start, unit)
-        end_key = self._partition_key(end, unit)
+    def _covering_range(self, start: date, end: date, freq: str) -> tuple[date, date]:
+        start_key = self._partition_key(start, freq)
+        end_key = self._partition_key(end, freq)
         return (
-            self._range_from_key(start_key, unit)[0],
-            self._range_from_key(end_key, unit)[1],
+            self._range_from_key(start_key, freq)[0],
+            self._range_from_key(end_key, freq)[1],
         )
 
-    def _range_from_key(self, key: str, unit: str) -> tuple[date, date]:
-        if unit.lower() in ("s",):
-            return date.fromisoformat(key), date.fromisoformat(key)
+    def _range_from_key(self, key: str, freq: str) -> tuple[date, date]:
+        _, unit = split_freq(freq)
         if unit.lower() in ("min", "t"):
             return date.fromisoformat(key), date.fromisoformat(key) + timedelta(days=6)
         if unit.lower() in ("h",):
@@ -277,41 +251,36 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
 
     _expirations: dict[str, dict[str, date]]
 
-    def _is_expired(self, symbol: str, key: str, unit: str, today: date) -> bool:
-        if unit == "s":
-            return False
-
+    def _is_expired(self, symbol: str, key: str, freq: str, today: date) -> bool:
         self._load_expirations(symbol)
 
-        expiration_key = self._expiration_key(key, unit)
+        expiration_key = self._expiration_key(key, freq)
         expirations = self._expirations.get(symbol, {})
         if expiration_key not in expirations:
             return False
 
         return expirations[expiration_key] <= today
 
-    def _mark_expiration(self, symbol: str, key: str, unit: str, today: date) -> None:
-        if unit == "s":
-            return
-
+    def _mark_expiration(self, symbol: str, key: str, freq: str, today: date) -> None:
         self._load_expirations(symbol)
 
-        _, end = self._range_from_key(key, unit)
-        expiration_key = self._expiration_key(key, unit)
+        _, end = self._range_from_key(key, freq)
+        expiration_key = self._expiration_key(key, freq)
         expirations = self._expirations.setdefault(symbol, {})
         if today > end and expiration_key not in expirations:
             return
 
         if today > end:
             expirations.pop(expiration_key, None)
-        else:
-            expirations[expiration_key] = today + timedelta(days=1)
+            key = self._partition_key(today, freq)
+            expiration_key = self._expiration_key(key, freq)
+        expirations[expiration_key] = today + timedelta(days=1)
 
         with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json"), "w") as f:
             json.dump({key: value.isoformat() for key, value in expirations.items()}, f)
 
-    def _expiration_key(self, key: str, unit: str) -> str:
-        return f"{key}_{unit}"
+    def _expiration_key(self, key: str, freq: str) -> str:
+        return f"{key}_{freq}"
 
     def _load_expirations(self, symbol: str):
         if not hasattr(self, "_expirations"):
@@ -322,6 +291,12 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
 
         try:
             with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json")) as f:
+                # self._expirations[symbol] = {
+                #     "2026_1d": date(2026, 1, 28),
+                #     "2026-01-26_1min": date(2026, 1, 28),
+                #     "2026-01-26_2min": date(2026, 1, 28),
+                # }
+
                 self._expirations[symbol] = {
                     key: date.fromisoformat(value)
                     for key, value in json.load(f).items()

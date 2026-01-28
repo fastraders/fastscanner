@@ -55,6 +55,7 @@ def test_save_and_load_cache(provider):
 @pytest.mark.asyncio
 async def test_fetch_and_cache_new_data(tmp_path):
     mock_store = AsyncMock()
+    ClockRegistry.set(LocalClock())
     provider = PartitionedCSVCandlesProvider(mock_store)
     provider.CACHE_DIR = tmp_path
 
@@ -73,7 +74,7 @@ async def test_fetch_and_cache_new_data(tmp_path):
 
     mock_store.get.return_value = df
 
-    result_df = await provider._cache(SYMBOL, TEST_KEY, UNIT, FREQ)
+    result_df = await provider._cache(SYMBOL, TEST_KEY, FREQ)
 
     assert isinstance(result_df, pd.DataFrame)
     assert len(result_df) == 3
@@ -158,13 +159,14 @@ async def test_get_invalid_unit():
 
 @pytest.mark.asyncio
 async def test_range_from_key_invalid_unit(provider):
-    with pytest.raises(ValueError, match="Invalid unit"):
+    with pytest.raises(ValueError, match="Invalid frequency"):
         provider._range_from_key("2023-01", "invalid_unit")
 
 
 @pytest.mark.asyncio
 async def test_cache_fallback_on_corrupt_file(tmp_path):
     mock_store = MagicMock()
+    ClockRegistry.set(LocalClock())
 
     provider = PartitionedCSVCandlesProvider(store=mock_store)
     provider.CACHE_DIR = tmp_path / "candles"
@@ -188,7 +190,7 @@ async def test_cache_fallback_on_corrupt_file(tmp_path):
 
     mock_store.get = AsyncMock(return_value=df)
 
-    result = await provider._cache("AAPL", "2023", "d", "1min")
+    result = await provider._cache("AAPL", "2023", "1d")
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 2
@@ -197,12 +199,12 @@ async def test_cache_fallback_on_corrupt_file(tmp_path):
 @pytest.mark.asyncio
 async def test_partition_keys_invalid_unit(provider):
     idx = pd.date_range("2023-01-01", periods=3, freq="D")
-    with pytest.raises(ValueError, match="Invalid unit"):
+    with pytest.raises(ValueError, match="Invalid frequency"):
         provider._partition_keys(idx, "badunit")
 
 
 def test_partition_keys_in_range(provider):
-    keys = provider._partition_keys_in_range(date(2023, 2, 1), date(2023, 2, 5), UNIT)
+    keys = provider._partition_keys_in_range(date(2023, 2, 1), date(2023, 2, 5), FREQ)
     assert isinstance(keys, list)
     assert all(isinstance(k, str) for k in keys)
     assert len(set(keys)) == len(keys)
@@ -216,19 +218,19 @@ def test_partition_path(provider):
 
 def test_partition_keys(provider):
     idx = pd.date_range("2023-01-01", "2023-01-03", freq="1h")
-    keys = provider._partition_keys(idx, UNIT)
+    keys = provider._partition_keys(idx, FREQ)
     assert isinstance(keys, pd.Series)
     assert not keys.empty
 
 
 def test_range_from_key_min(provider):
-    start, end = provider._range_from_key("2023-01-01", UNIT)
+    start, end = provider._range_from_key("2023-01-01", FREQ)
     assert isinstance(start, date)
     assert (end - start).days == 6
 
 
 def test_range_from_key_hour(provider):
-    start, end = provider._range_from_key("2023-01", "h")
+    start, end = provider._range_from_key("2023-01", "1h")
     assert start.month == 1
     assert end.month == 1
 
@@ -245,10 +247,10 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
     yesterday = today.date() - timedelta(days=1)
     provider._expirations = {
         symbol: {
-            "2023-05-22_min": yesterday - timedelta(days=5),  # expired
-            # "2023-05-29_min": yesterday + timedelta(days=2),  # not expired
-            "2023-05_h": yesterday - timedelta(days=3),  # expired
-            "2023-01_d": yesterday + timedelta(days=10),  # not expired
+            "2023-05-22_1min": yesterday - timedelta(days=5),  # expired
+            # "2023-05-29_1min": yesterday + timedelta(days=2),  # not expired
+            "2023-05_1h": yesterday - timedelta(days=3),  # expired
+            "2023-01_1d": yesterday + timedelta(days=10),  # not expired
         }
     }
 
@@ -370,8 +372,6 @@ async def test_midnight_expiration_skips_days(tmp_path):
     provider = PartitionedCSVCandlesProvider(store)
 
     await provider.collect_expired_data("AAPL", ["1min"])
-
-    assert len(store.calls) > 0, "No calls made to store"
 
     assert "AAPL" in provider._expirations, "No expirations set for AAPL"
 
