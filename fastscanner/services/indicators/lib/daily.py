@@ -166,11 +166,11 @@ class DailyGapIndicator:
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             yday = lookback_days(new_date, 1)
+            self._daily_open.pop(symbol, None)
+            self._last_date[symbol] = new_date
             close = await ApplicationRegistry.candles.get(symbol, yday, yday, "1d")
             if not close.empty:
                 self._daily_close[symbol] = close[C.CLOSE].values[0]
-            self._daily_open.pop(symbol, None)
-            self._last_date[symbol] = new_date
 
         day_open = self._daily_open.get(symbol)
         if day_open is None and new_row.name.time() >= time(9, 30):
@@ -256,10 +256,12 @@ class DailyATRIndicator:
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._daily_atr[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
+            self._daily_atr.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._daily_atr[symbol] = value
 
-        new_row[self.column_name()] = self._daily_atr[symbol]
+        new_row[self.column_name()] = self._daily_atr.get(symbol, pd.NA)
         return new_row
 
 
@@ -332,9 +334,11 @@ class DailyATRGapIndicator:
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             self._daily_gap.pop(symbol, None)
-            self._last_date[symbol] = new_date
 
-        if new_row.name.time() >= time(9, 30) and symbol not in self._daily_gap:
+        if (
+            (last_date := self._last_date.get(symbol)) is None or last_date != new_date
+        ) and (new_row.name.time() >= time(9, 30)):
+            self._last_date[symbol] = new_date
             cols_to_drop = []
             for ind in self._aux_indicators:
                 if ind.column_name() in new_row.index:
@@ -348,8 +352,8 @@ class DailyATRGapIndicator:
                 / new_row[self._atr.column_name()]
             )
             new_row = new_row.drop(columns=cols_to_drop)
-            self._daily_gap[symbol] = new_row[self.column_name()]
-            self._last_date[symbol] = new_date
+            if pd.notna(value := new_row[self.column_name()]):
+                self._daily_gap[symbol] = value
 
         new_row[self.column_name()] = self._daily_gap.get(symbol, pd.NA)
         return new_row
@@ -430,9 +434,11 @@ class ADRIndicator:
         if last_date is None or last_date != new_row.name.date():
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
             self._last_date[symbol] = new_row.name.date()  # type: ignore
-            self._last_value[symbol] = new_row[self.column_name()]
+            self._last_value.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._last_value[symbol] = value
 
-        new_row[self.column_name()] = self._last_value[symbol]
+        new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
         return new_row
 
 
@@ -507,8 +513,10 @@ class ADVIndicator:
         if last_date is None or last_date != new_row.name.date():
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
             self._last_date[symbol] = new_row.name.date()  # type: ignore
-            self._last_value[symbol] = new_row[self.column_name()]
-        new_row[self.column_name()] = self._last_value[symbol]
+            self._last_value.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._last_value[symbol] = value
+        new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
         return new_row
 
 

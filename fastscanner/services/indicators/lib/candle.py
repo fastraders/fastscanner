@@ -530,9 +530,9 @@ class DailyRollingIndicator:
             daily_df = await self._get_data_for_n_days(symbol, new_row.to_frame().T)
             self._last_date[symbol] = new_row.name.date()
 
-            self._rolling_values[symbol] = daily_df[self._candle_col].to_list()[
-                -self._n_days :
-            ]
+            self._rolling_values[symbol] = (
+                daily_df[self._candle_col].dropna().to_list()[-self._n_days :]
+            )
 
         values = self._rolling_values.get(symbol, [])
         if not values:

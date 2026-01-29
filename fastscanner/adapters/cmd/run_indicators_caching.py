@@ -88,6 +88,7 @@ async def main():
         ADRIndicator(period=14),
         MarketCapIndicator(),
         DailyRollingIndicator(n_days=20, operation="min", candle_col=CandleCol.LOW),
+        DailyRollingIndicator(n_days=20, operation="max", candle_col=CandleCol.HIGH),
         DaysFromEarningsIndicator(),
         PremarketCumulativeIndicator(CandleCol.VOLUME, "sum"),
         DailyATRIndicator(14),
@@ -96,7 +97,11 @@ async def main():
     ]
     logger.info(f"Loading {len(indicators_with_cache)} indicators from cache.")
     for i in indicators_with_cache:
-        await i.load_from_cache()
+        try:
+            await i.load_from_cache()
+        except KeyError:
+            await i.save_to_cache()
+            logger.info(f"Indicator {i} not found in cache. It will be cached anew.")
     sub_id = await indicators_service.cache_indicators(indicators_with_cache)
     logger.info(f"Subscribed to all symbols. Starting caching loop...")
     try:

@@ -34,13 +34,19 @@ class HighRangeGapUpScanner:
         end_time: time,
         min_volume: float,
         n_days: int,
+        min_atr_gap: float | None = None,
+        max_adr: float | None = None,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_from_earnings: int | None = None,
+        max_days_from_earnings: int | None = None,
+        days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
+        self._max_adr = max_adr
         self._start_time = start_time
         self._end_time = end_time
         self._min_volume = min_volume
@@ -48,6 +54,10 @@ class HighRangeGapUpScanner:
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._include_null_market_cap = include_null_market_cap
+        self._min_days_from_earnings = min_days_from_earnings
+        self._max_days_from_earnings = max_days_from_earnings
+        self._days_of_week = days_of_week
+        self._min_atr_gap = min_atr_gap
 
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
@@ -55,6 +65,7 @@ class HighRangeGapUpScanner:
         self._highest_high = DailyRollingIndicator(
             n_days=self._n_days, operation="max", candle_col=C.HIGH
         )
+        self._days_from_earnings = DaysFromEarningsIndicator()
         self._cum_volume = PremarketCumulativeIndicator(C.VOLUME, CumOp.SUM)
         self._gap = GapIndicator(C.HIGH)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
@@ -150,12 +161,19 @@ class HighRangeGapUpScanner:
         ):
             new_row["signal"] = pd.NA
             return new_row, False
+        if (
+            self._days_of_week is not None
+            and new_row.name.dayofweek not in self._days_of_week
+        ):
+            new_row["signal"] = pd.NA
+            return new_row, False
 
         new_row = await self._adv.extend_realtime(symbol, new_row)
         new_row = await self._adr.extend_realtime(symbol, new_row)
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._highest_high.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._days_from_earnings.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
         new_row = await self._atr_gap.extend_realtime(symbol, new_row)
 
@@ -164,6 +182,8 @@ class HighRangeGapUpScanner:
         market_cap_value = new_row[self._market_cap.column_name()]
         highest_high_value = new_row[self._highest_high.column_name()]
         cum_volume_value = new_row[self._cum_volume.column_name()]
+        atr_gap_value = new_row[self._atr_gap.column_name()]
+        days_from_earnings_value = new_row[self._days_from_earnings.column_name()]
 
         mandatory_values = [
             adv_value,
@@ -171,6 +191,13 @@ class HighRangeGapUpScanner:
             highest_high_value,
             cum_volume_value,
         ]
+        if self._min_atr_gap is not None:
+            mandatory_values.append(atr_gap_value)
+        if (
+            self._min_days_from_earnings is not None
+            or self._max_days_from_earnings is not None
+        ):
+            mandatory_values.append(days_from_earnings_value)
         if any(pd.isna(v) for v in mandatory_values):
             new_row["signal"] = pd.NA
             return new_row, False
@@ -179,6 +206,13 @@ class HighRangeGapUpScanner:
             not pd.isna(market_cap_value)
             and self._min_market_cap <= market_cap_value <= self._max_market_cap
         ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+        days_from_earnings_passes = (
+            self._min_days_from_earnings is None
+            or days_from_earnings_value >= self._min_days_from_earnings
+        ) and (
+            self._max_days_from_earnings is None
+            or days_from_earnings_value <= self._max_days_from_earnings
+        )
 
         passes_filter = (
             adv_value >= self._min_adv
@@ -186,6 +220,8 @@ class HighRangeGapUpScanner:
             and market_cap_passes
             and cum_volume_value >= self._min_volume
             and new_row[C.HIGH] > highest_high_value
+            and days_from_earnings_passes
+            and (self._min_atr_gap is None or atr_gap_value >= self._min_atr_gap)
         )
 
         return new_row, passes_filter

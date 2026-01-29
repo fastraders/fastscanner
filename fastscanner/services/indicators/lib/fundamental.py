@@ -76,10 +76,12 @@ class DaysToEarningsIndicator:
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_days[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
+            self._last_days.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._last_days[symbol] = value
 
-        new_row[self.column_name()] = self._last_days[symbol]
+        new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
         return new_row
 
 
@@ -151,10 +153,12 @@ class DaysFromEarningsIndicator:
         new_date = new_row.name.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_days[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
+            self._last_days.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._last_days[symbol] = value
 
-        new_row[self.column_name()] = self._last_days[symbol]
+        new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
         return new_row
 
 
@@ -226,8 +230,10 @@ class MarketCapIndicator:
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_market_cap[symbol] = new_row[self.column_name()]
             self._last_date[symbol] = new_date
+            self._last_market_cap.pop(symbol, None)
+            if pd.notna(value := new_row[self.column_name()]):
+                self._last_market_cap[symbol] = value
 
-        new_row[self.column_name()] = self._last_market_cap.get(symbol, np.nan)
+        new_row[self.column_name()] = self._last_market_cap.get(symbol, pd.NA)
         return new_row
