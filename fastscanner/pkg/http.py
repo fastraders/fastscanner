@@ -54,7 +54,12 @@ async def async_retry_request(
             )
 
         except httpx.RequestError as ex:
-            logger.warning(f"RequestError: {ex}. Will retry...")
+            method, url = (
+                args[:2]
+                if len(args) == 2
+                else (kwargs.get("method"), kwargs.get("url"))
+            )
+            logger.warning(f"Request: {method} {url} RequestError: {ex}. Will retry...")
 
         retry_count += 1
         logger.info(f"Retry number {retry_count}...")
