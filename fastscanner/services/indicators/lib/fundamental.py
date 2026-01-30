@@ -79,7 +79,7 @@ class DaysToEarningsIndicator:
             self._last_date[symbol] = new_date
             self._last_days.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._last_days[symbol] = value
+                self._last_days[symbol] = int(value)
 
         new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
         return new_row
@@ -156,7 +156,7 @@ class DaysFromEarningsIndicator:
             self._last_date[symbol] = new_date
             self._last_days.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._last_days[symbol] = value
+                self._last_days[symbol] = int(value)
 
         new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
         return new_row
@@ -233,7 +233,7 @@ class MarketCapIndicator:
             self._last_date[symbol] = new_date
             self._last_market_cap.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._last_market_cap[symbol] = value
+                self._last_market_cap[symbol] = float(value)
 
         new_row[self.column_name()] = self._last_market_cap.get(symbol, pd.NA)
         return new_row

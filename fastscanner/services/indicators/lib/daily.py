@@ -84,7 +84,7 @@ class PrevDayIndicator:
             candles = await ApplicationRegistry.candles.get(symbol, start, start, "1d")
             self._prev_day.pop(symbol, None)
             if not candles.empty:
-                self._prev_day[symbol] = candles[self._candle_col].values[0]
+                self._prev_day[symbol] = float(candles[self._candle_col].values[0])
             self._last_date[symbol] = new_date
 
         new_row[self.column_name()] = self._prev_day.get(symbol, pd.NA)
@@ -259,7 +259,7 @@ class DailyATRIndicator:
             self._last_date[symbol] = new_date
             self._daily_atr.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._daily_atr[symbol] = value
+                self._daily_atr[symbol] = float(value)
 
         new_row[self.column_name()] = self._daily_atr.get(symbol, pd.NA)
         return new_row
@@ -353,7 +353,7 @@ class DailyATRGapIndicator:
             )
             new_row = new_row.drop(columns=cols_to_drop)
             if pd.notna(value := new_row[self.column_name()]):
-                self._daily_gap[symbol] = value
+                self._daily_gap[symbol] = float(value)
 
         new_row[self.column_name()] = self._daily_gap.get(symbol, pd.NA)
         return new_row
@@ -436,7 +436,7 @@ class ADRIndicator:
             self._last_date[symbol] = new_row.name.date()  # type: ignore
             self._last_value.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._last_value[symbol] = value
+                self._last_value[symbol] = float(value)
 
         new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
         return new_row
@@ -515,7 +515,7 @@ class ADVIndicator:
             self._last_date[symbol] = new_row.name.date()  # type: ignore
             self._last_value.pop(symbol, None)
             if pd.notna(value := new_row[self.column_name()]):
-                self._last_value[symbol] = value
+                self._last_value[symbol] = float(value)
         new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
         return new_row
 

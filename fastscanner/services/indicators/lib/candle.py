@@ -75,7 +75,7 @@ class CumulativeDailyVolumeIndicator:
         return df
 
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        volume = new_row[CandleCol.VOLUME]
+        volume = float(new_row[CandleCol.VOLUME])
         assert isinstance(new_row.name, datetime)
         last_date = self._last_date.get(symbol)
         if last_date is not None and last_date == new_row.name.date():
@@ -326,8 +326,8 @@ class ATRIndicator:
         last_close = self._last_close.get(symbol)
         if last_close is None:
             new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_atr[symbol] = new_row[self.column_name()]
-            self._last_close[symbol] = new_row[CandleCol.CLOSE]
+            self._last_atr[symbol] = float(new_row[self.column_name()])
+            self._last_close[symbol] = float(new_row[CandleCol.CLOSE])
             return new_row
 
         tr0: float = abs(new_row[CandleCol.HIGH] - new_row[CandleCol.LOW])

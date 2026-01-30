@@ -72,9 +72,9 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         yday = today - timedelta(days=1)
         start = date(year, 1, 1)
         end = min(date(year, 12, 31), yday)
-        minute_range = self._covering_range(start, end, "min")
-        hourly_range = self._covering_range(start, end, "h")
-        daily_range = self._covering_range(start, end, "d")
+        minute_range = self._covering_range(start, end, "1min")
+        hourly_range = self._covering_range(start, end, "1h")
+        daily_range = self._covering_range(start, end, "1d")
 
         minute_start = min(minute_range[0], hourly_range[0])
         minute_end = min(max(minute_range[1], hourly_range[1]), yday)
@@ -119,9 +119,27 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         self._load_expirations(symbol)
         expirations = self._expirations.get(symbol, {})
 
+        # Delete after some days
+        if any(
+            exp_key.split("_", 1)[1] in ("d", "min", "h") for exp_key in expirations
+        ):
+            expirations = {
+                "2026_1d": today,
+                "2026-01-26_1min": today,
+                "2026-01-26_2min": today,
+            }
+            self._expirations[symbol] = expirations
+            with open(
+                os.path.join(self.CACHE_DIR, symbol, "expirations.json"), "w"
+            ) as f:
+                json.dump(
+                    {key: value.isoformat() for key, value in expirations.items()}, f
+                )
+
         freq_to_partition_key: dict[str, str] = {}
         for exp_key, exp_date in expirations.items():
             partition_key, freq = exp_key.rsplit("_", 1)
+
             if exp_date > today:
                 continue
             freq_to_partition_key[freq] = partition_key
