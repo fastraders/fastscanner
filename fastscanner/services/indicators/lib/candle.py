@@ -185,7 +185,7 @@ class PremarketCumulativeIndicator:
                 new_row[self.column_name()] = last_value
             return new_row
 
-        value = new_row[self._candle_col]
+        value = float(new_row[self._candle_col])
         if last_value is not None and last_date == new_row.name.date():
             value = self._op.func()(value, last_value)
 
@@ -236,7 +236,7 @@ class CumulativeIndicator:
     async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
         assert isinstance(new_row.name, datetime)
         last_value = self._last_value.get(symbol)
-        value = new_row[self._candle_col]
+        value = float(new_row[self._candle_col])
         if last_value is not None:
             value = self._op.func()(value, last_value)
 
@@ -338,7 +338,7 @@ class ATRIndicator:
         last_atr = self._last_atr.get(symbol)
         if last_atr is None:
             new_row[self.column_name()] = tr
-            self._last_close[symbol] = new_row[CandleCol.CLOSE]
+            self._last_close[symbol] = float(new_row[CandleCol.CLOSE])
             self._last_atr[symbol] = tr
             return new_row
 
@@ -346,7 +346,7 @@ class ATRIndicator:
         atr = last_atr * (1 - alpha) + tr * alpha
         new_row[self.column_name()] = round(atr, 3)
         self._last_atr[symbol] = atr
-        self._last_close[symbol] = new_row[CandleCol.CLOSE]
+        self._last_close[symbol] = float(new_row[CandleCol.CLOSE])
         return new_row
 
 

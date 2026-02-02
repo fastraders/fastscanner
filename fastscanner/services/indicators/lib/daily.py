@@ -170,11 +170,11 @@ class DailyGapIndicator:
             self._last_date[symbol] = new_date
             close = await ApplicationRegistry.candles.get(symbol, yday, yday, "1d")
             if not close.empty:
-                self._daily_close[symbol] = close[C.CLOSE].values[0]
+                self._daily_close[symbol] = float(close[C.CLOSE].values[0])
 
         day_open = self._daily_open.get(symbol)
         if day_open is None and new_row.name.time() >= time(9, 30):
-            day_open = new_row[C.OPEN]
+            day_open = float(new_row[C.OPEN])
             self._daily_open[symbol] = day_open
 
         day_close = self._daily_close.get(symbol)
@@ -647,7 +647,7 @@ class DayOpenIndicator:
 
         day_open = self._day_open.get(symbol)
         if day_open is None and new_row.name.time() >= time(9, 30):
-            day_open = new_row[C.OPEN]
+            day_open = float(new_row[C.OPEN])
             self._day_open[symbol] = day_open
 
         new_row[self.column_name()] = day_open if day_open is not None else pd.NA
