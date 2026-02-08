@@ -91,6 +91,7 @@ async def main():
         DailyRollingIndicator(n_days=20, operation="max", candle_col=CandleCol.HIGH),
         DaysFromEarningsIndicator(),
         PremarketCumulativeIndicator(CandleCol.VOLUME, "sum"),
+        CumulativeDailyVolumeIndicator(),
         DailyATRIndicator(14),
         PrevDayIndicator(CandleCol.CLOSE),
         DayOpenIndicator(),

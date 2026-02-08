@@ -39,7 +39,10 @@ from fastscanner.services.scanners.lib.parabolic import (
     DailyATRParabolicDownScanner,
     DailyATRParabolicUpScanner,
 )
-from fastscanner.services.scanners.lib.range_gap import HighRangeGapUpScanner
+from fastscanner.services.scanners.lib.range_gap import (
+    HighRangeGapUpScanner,
+    LowRangeGapDownScanner,
+)
 from fastscanner.services.scanners.lib.smallcap import SmallCapUpScanner
 from fastscanner.services.scanners.ports import Scanner
 
@@ -189,17 +192,40 @@ async def run_scanner():
 
     all_symbols = await polygon.all_symbols()
     # all_symbols = ["ROLR"] # fmt: skip
-    start_date = date(2026, 1, 15)
-    end_date = date(2026, 1, 15)
-    freq = "1d"
-    # scanner = ATRGapDownScanner(
-    #     min_adv=1_000_000,
+    start_date = date(2026, 1, 12)
+    end_date = date(2026, 1, 16)
+    freq = "1min"
+    # scanner = ATRGapUpScanner(
+    #     min_adv=500_000,
     #     min_adr=0.005,
-    #     min_volume=50_000,
-    #     atr_multiplier=0.5,
+    #     min_volume=5_000,
+    #     atr_multiplier=2,
     #     start_time=time(9, 20),
     #     end_time=time(9, 25),
+    #     min_market_cap=500_000_000,
+    #     min_days_from_earnings=0,
+    #     max_days_from_earnings=0,
+    #     days_of_week=[1, 3, 4],  # 0=Monday ... 6=Sunday
     # )
+    # Min_avd					500_000
+    # Min_adr					0.005
+    # Start_time					9:20:00
+    # End_time					9:29:00
+    # Min_volume					5_000
+    # atr_gap					>=2
+    # Min_marketcap				500_000_000
+
+    # Days_of_the_week				mon,tue,thu
+    scanner = ATRGapDownScanner(
+        min_adv=500_000,
+        min_adr=0.005,
+        min_volume=5_000,
+        atr_multiplier=2,
+        start_time=time(9, 20),
+        end_time=time(9, 29),
+        min_market_cap=500_000_000,
+        days_of_week=[0, 1, 3],  # 0=Monday ... 6=Sunday
+    )
     # scanner = ATRParabolicDownScanner(
     #     min_adv=2_000_000,
     #     min_adr=0.005,
@@ -215,14 +241,32 @@ async def run_scanner():
     #     atr_multiplier=0.5,
     #     include_null_market_cap=True,
     # )
-    # scanner = HighRangeGapUpScanner(
-    #     min_adv=1_000_000,
-    #     min_adr=0.0005,
+    # scanner = LowRangeGapDownScanner(
+    #     min_adv=500_000,
+    #     min_adr=0.03,
+    #     max_adr=0.07,
     #     start_time=time(9, 20),
-    #     end_time=time(9, 25),
-    #     min_volume=50_000,
-    #     n_days=5,
-    #     include_null_market_cap=True,
+    #     end_time=time(9, 29),
+    #     min_volume=5_000,
+    #     n_days=20,
+    #     min_market_cap=500_000_000,
+    #     min_atr_gap=-2,
+    #     min_days_from_earnings=50,
+    #     max_days_from_earnings=100,
+    #     # include_null_market_cap=True,
+    # )
+    # scanner = HighRangeGapUpScanner(
+    #     min_adv=500_000,
+    #     min_adr=0.005,
+    #     start_time=time(9, 20),
+    #     end_time=time(9, 29),
+    #     min_volume=5_000,
+    #     n_days=20,
+    #     min_market_cap=500_000_000,
+    #     min_days_from_earnings=50,
+    #     max_days_from_earnings=100,
+    #     days_of_week=[1, 3, 4],  # 0=Monday ... 6=Sunday
+    #     # include_null_market_cap=True,
     # )
     # scanner = SmallCapUpScanner(
     #     min_volume=10_000,
@@ -234,16 +278,16 @@ async def run_scanner():
     #     start_time=time(4, 00),
     #     end_time=time(12, 00),
     # )
-    scanner = Day2GapScanner(
-        min_adv=0,
-        min_adr=0,
-        min_gap=0.05,
-        min_retrace=0.1,
-        min_price=0.1,
-        min_market_cap=100_000,
-        max_market_cap=1_000_000_000,
-        include_null_market_cap=True,
-    )
+    # scanner = Day2GapScanner(
+    #     min_adv=0,
+    #     min_adr=0,
+    #     min_gap=0.05,
+    #     min_retrace=0.1,
+    #     min_price=0.1,
+    #     min_market_cap=100_000,
+    #     max_market_cap=1_000_000_000,
+    #     include_null_market_cap=True,
+    # )
 
     n_workers = 2 * multiprocessing.cpu_count() + 1
     batch_size = math.ceil(len(all_symbols) / n_workers)
