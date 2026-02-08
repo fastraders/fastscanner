@@ -94,9 +94,25 @@ class HighRangeGapUpScanner:
         daily_df = await self._adr.extend(symbol, daily_df)
         daily_df = await self._market_cap.extend(symbol, daily_df)
         daily_df = await self._highest_high.extend(symbol, daily_df)
+        daily_df = await self._days_from_earnings.extend(symbol, daily_df)
+
+        if self._min_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[self._days_from_earnings.column_name()]
+                >= self._min_days_from_earnings
+            ]
+        if self._max_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[self._days_from_earnings.column_name()]
+                <= self._max_days_from_earnings
+            ]
+        if self._days_of_week is not None:
+            daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
+        if self._max_adr is not None:
+            daily_df = daily_df[daily_df[self._adr.column_name()] <= self._max_adr]
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -123,6 +139,8 @@ class HighRangeGapUpScanner:
 
         df = df.loc[df.index.time >= self._start_time]  # type: ignore
         df = df.loc[df.index.time <= self._end_time]  # type: ignore
+        if self._min_atr_gap is not None:
+            df = df.loc[df[self._atr_gap.column_name()] >= self._min_atr_gap]
 
         if df.empty:
             return df
@@ -217,6 +235,7 @@ class HighRangeGapUpScanner:
         passes_filter = (
             adv_value >= self._min_adv
             and adr_value >= self._min_adr
+            and (self._max_adr is None or adr_value <= self._max_adr)
             and market_cap_passes
             and cum_volume_value >= self._min_volume
             and new_row[C.HIGH] > highest_high_value
@@ -436,6 +455,7 @@ class LowRangeGapDownScanner:
         passes_filter = (
             adv_value >= self._min_adv
             and adr_value >= self._min_adr
+            and (self._max_adr is None or adr_value <= self._max_adr)
             and market_cap_passes
             and cum_volume_value >= self._min_volume
             and new_row[C.LOW] < lowest_low_value
