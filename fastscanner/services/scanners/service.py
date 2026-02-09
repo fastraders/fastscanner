@@ -131,10 +131,13 @@ class ScannerService:
         start: date,
         end: date,
         freq: str,
+        init_registry: Callable,
     ) -> ScanAllResult:
         scanner = ScannersLibrary.instance().get(scanner_type, params)
         symbols = await self._symbols_provider.active_symbols()
-        all_results = await asyncio.to_thread(_scan, scanner, symbols, start, end, freq)
+        all_results = await asyncio.to_thread(
+            _scan, scanner, symbols, start, end, freq, init_registry
+        )
         return ScanAllResult(results=all_results, scanner_type=scanner_type)
 
 
@@ -144,10 +147,10 @@ def _scan(
     start_date: date,
     end_date: date,
     freq: str,
+    init_registry: Callable,
 ) -> list[dict]:
     n_workers = multiprocessing.cpu_count() // 2
     batch_size = math.ceil(len(symbols) / n_workers)
-    registry_params = ApplicationRegistry.params_for_init()
     batches = [
         (
             scanner,
@@ -155,7 +158,7 @@ def _scan(
             start_date,
             end_date,
             freq,
-            registry_params,
+            init_registry,
         )
         for i in range(0, len(symbols), batch_size)
     ]
@@ -167,7 +170,7 @@ def _scan(
 
 
 def _run_scanner_worker(
-    args: tuple[Scanner, list[str], date, date, str, dict],
+    args: tuple[Scanner, list[str], date, date, str, Callable],
 ) -> list[dict]:
     return asyncio.run(_run_async_scan(*args))
 
@@ -178,9 +181,9 @@ async def _run_async_scan(
     start_date: date,
     end_date: date,
     freq: str,
-    registry_params: dict,
+    init_registry: Callable[[], None],
 ) -> list[dict]:
-    ApplicationRegistry.init(**registry_params)
+    init_registry()
     ClockRegistry.set(
         FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
     )

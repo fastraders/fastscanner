@@ -17,6 +17,7 @@ from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService
 
+from .init import init
 from .models import (
     ActionType,
     ScannerMessage,
@@ -124,13 +125,13 @@ async def websocket_realtime_scanner(
 async def scan(
     request: ScanRequest, service: ScannerService = Depends(get_scanner_service)
 ) -> ScanResponse:
-
     result = await service.scan_all(
         scanner_type=request.type,
         params=request.params,
         start=request.start,
         end=request.end,
         freq=request.freq,
+        init_registry=init,
     )
 
     return ScanResponse(

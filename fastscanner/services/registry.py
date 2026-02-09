@@ -41,12 +41,3 @@ class ApplicationRegistry:
         del cls.fundamentals
         del cls.holidays
         del cls.cache
-
-    @classmethod
-    def params_for_init(cls) -> dict:
-        return {
-            "candles": cls.candles,
-            "fundamentals": cls.fundamentals,
-            "holidays": cls.holidays,
-            "cache": cls.cache,
-        }
