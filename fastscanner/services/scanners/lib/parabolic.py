@@ -16,7 +16,10 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
     PrevDayIndicator,
 )
-from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
+from fastscanner.services.indicators.lib.fundamental import (
+    DaysFromEarningsIndicator,
+    MarketCapIndicator,
+)
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -348,17 +351,25 @@ class DailyATRParabolicUpScanner:
         self,
         min_adv: float,
         min_adr: float,
-        atr_multiplier: float,
+        min_atr_multiplier: float,
+        max_atr_multiplier: float | None = None,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_from_earnings: int | None = None,
+        max_days_from_earnings: int | None = None,
+        days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
-        self._atr_multiplier = atr_multiplier
+        self._min_atr_multiplier = min_atr_multiplier
+        self._max_atr_multiplier = max_atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._min_days_from_earnings = min_days_from_earnings
+        self._max_days_from_earnings = max_days_from_earnings
+        self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
 
     def id(self) -> str:
@@ -380,6 +391,7 @@ class DailyATRParabolicUpScanner:
         prev_close = PrevDayIndicator(C.CLOSE)
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
+        days_from_earnings = DaysFromEarningsIndicator()
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
@@ -397,6 +409,20 @@ class DailyATRParabolicUpScanner:
         daily_df = await prev_close.extend(symbol, daily_df)
         daily_df = await prev_open.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
+        daily_df = await days_from_earnings.extend(symbol, daily_df)
+
+        if self._min_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[days_from_earnings.column_name()]
+                >= self._min_days_from_earnings
+            ]
+        if self._max_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[days_from_earnings.column_name()]
+                <= self._max_days_from_earnings
+            ]
+        if self._days_of_week is not None:
+            daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
@@ -413,7 +439,11 @@ class DailyATRParabolicUpScanner:
             daily_df[prev_close.column_name()] - daily_df[prev_open.column_name()]
         ) / daily_df[daily_atr.column_name()]
 
-        return daily_df[daily_df["signal"] > self._atr_multiplier]
+        daily_df = daily_df[daily_df["signal"] >= self._min_atr_multiplier]
+        if self._max_atr_multiplier is not None:
+            daily_df = daily_df[daily_df["signal"] <= self._max_atr_multiplier]
+
+        return daily_df
 
 
 class DailyATRParabolicDownScanner:
@@ -421,17 +451,25 @@ class DailyATRParabolicDownScanner:
         self,
         min_adv: float,
         min_adr: float,
-        atr_multiplier: float,
+        min_atr_multiplier: float,
+        max_atr_multiplier: float | None = None,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_from_earnings: int | None = None,
+        max_days_from_earnings: int | None = None,
+        days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
         self._min_adv = min_adv
         self._min_adr = min_adr
-        self._atr_multiplier = atr_multiplier
+        self._min_atr_multiplier = min_atr_multiplier
+        self._max_atr_multiplier = max_atr_multiplier
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._min_days_from_earnings = min_days_from_earnings
+        self._max_days_from_earnings = max_days_from_earnings
+        self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
 
     def id(self) -> str:
@@ -453,6 +491,7 @@ class DailyATRParabolicDownScanner:
         prev_close = PrevDayIndicator(C.CLOSE)
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
+        days_from_earnings = DaysFromEarningsIndicator()
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
@@ -470,6 +509,20 @@ class DailyATRParabolicDownScanner:
         daily_df = await prev_close.extend(symbol, daily_df)
         daily_df = await prev_open.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
+        daily_df = await days_from_earnings.extend(symbol, daily_df)
+
+        if self._min_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[days_from_earnings.column_name()]
+                >= self._min_days_from_earnings
+            ]
+        if self._max_days_from_earnings is not None:
+            daily_df = daily_df.loc[
+                daily_df[days_from_earnings.column_name()]
+                <= self._max_days_from_earnings
+            ]
+        if self._days_of_week is not None:
+            daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
@@ -486,4 +539,8 @@ class DailyATRParabolicDownScanner:
             daily_df[prev_open.column_name()] - daily_df[prev_close.column_name()]
         ) / daily_df[daily_atr.column_name()]
 
-        return daily_df[daily_df["signal"] > self._atr_multiplier]
+        daily_df = daily_df[daily_df["signal"] >= self._min_atr_multiplier]
+        if self._max_atr_multiplier is not None:
+            daily_df = daily_df[daily_df["signal"] <= self._max_atr_multiplier]
+
+        return daily_df
