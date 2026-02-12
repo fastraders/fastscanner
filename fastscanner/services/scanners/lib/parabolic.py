@@ -4,6 +4,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
@@ -21,6 +22,7 @@ from fastscanner.services.indicators.lib.fundamental import (
     MarketCapIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
+from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
 from .utils import filter_by_market_cap
@@ -395,14 +397,16 @@ class DailyATRParabolicUpScanner:
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
-            start,
-            end,
+            lookback_days(start, 1),
+            lookback_days(end, 1),
             "1d",
         )
+        daily_df.loc[pd.Timestamp(end, tz=LOCAL_TIMEZONE_STR), :] = pd.NA
+        daily_df = daily_df.shift(1)
+        daily_df = daily_df.loc[daily_df.index.date >= start]  # type: ignore
         if daily_df.empty:
             return daily_df
 
-        daily_df = daily_df.shift(1)
         daily_df = await adv.extend(symbol, daily_df)
         daily_df = await adr.extend(symbol, daily_df)
         daily_df = await daily_atr.extend(symbol, daily_df)
@@ -495,14 +499,16 @@ class DailyATRParabolicDownScanner:
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
-            start,
-            end,
+            lookback_days(start, 1),
+            lookback_days(end, 1),
             "1d",
         )
+        daily_df.loc[pd.Timestamp(end, tz=LOCAL_TIMEZONE_STR), :] = pd.NA
+        daily_df = daily_df.shift(1)
+        daily_df = daily_df.loc[daily_df.index.date >= start]  # type: ignore
         if daily_df.empty:
             return daily_df
 
-        daily_df = daily_df.shift(1)
         daily_df = await adv.extend(symbol, daily_df)
         daily_df = await adr.extend(symbol, daily_df)
         daily_df = await daily_atr.extend(symbol, daily_df)
