@@ -321,3 +321,8 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                 }
         except FileNotFoundError:
             self._expirations[symbol] = {}
+        except json.JSONDecodeError as e:
+            self._expirations[symbol] = {}
+            logger.error(
+                f"Failed to load expirations for {symbol} due to JSON decode error: {e}. Resetting expirations."
+            )
