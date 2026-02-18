@@ -184,9 +184,6 @@ async def _run_async_scan(
     init_registry: Callable[[], None],
 ) -> list[dict]:
     init_registry()
-    ClockRegistry.set(
-        FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
-    )
     all_results: list[dict] = []
     for symbol in symbols:
         df = await scanner.scan(
