@@ -136,11 +136,15 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                     {key: value.isoformat() for key, value in expirations.items()}, f
                 )
 
-        freq_to_partition_key: dict[str, str] = {}
+        freq_to_partition_key: dict[str, str] = {
+            freq: self._partition_key(yday, freq) for freq in freqs
+        }
         for exp_key, exp_date in expirations.items():
             partition_key, freq = exp_key.rsplit("_", 1)
-
+            if freq not in freqs:
+                continue
             if exp_date > today:
+                freq_to_partition_key.pop(freq, None)
                 continue
             freq_to_partition_key[freq] = partition_key
 
@@ -227,7 +231,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")
 
     def _partition_key(self, dt: date, freq: str) -> str:
-        return self._partition_keys(pd.DatetimeIndex([dt]), freq).iat[0]
+        return str(self._partition_keys(pd.DatetimeIndex([dt]), freq).iat[0])
 
     def _partition_keys(self, index: pd.DatetimeIndex, freq: str) -> "pd.Series[str]":
         _, unit = split_freq(freq)
