@@ -129,6 +129,9 @@ class EODHDFundamentalStore:
             institutional_ownership_perc=data["institutional_ownership_perc"],
             shares_float=data["shares_float"],
             beta=data["beta"],
+            ipo_date=data["ipo_date"],
+            ceo_name=data["ceo_name"],
+            cfo_name=data["cfo_name"],
         )
 
     def _load_raw_cached(self, symbol: str) -> dict | None:
@@ -185,6 +188,20 @@ class EODHDFundamentalStore:
         if technicals.get("Beta") is not None:
             beta = float(technicals["Beta"])
 
+        # NEW: IPO date and officers
+        ipo_date = general.get("IPODate")
+
+        officers = general.get("Officers", {})
+        ceo_name = None
+        cfo_name = None
+        for officer in officers.values() if isinstance(officers, dict) else []:
+            title = officer.get("Title", "") or ""
+            name = officer.get("Name")
+            if "CEO" in title.upper() and ceo_name is None:
+                ceo_name = name
+            if "CFO" in title.upper() and cfo_name is None:
+                cfo_name = name
+
         return FundamentalData(
             type=general.get("Type", ""),
             exchange=general.get("Exchange", ""),
@@ -198,6 +215,9 @@ class EODHDFundamentalStore:
             institutional_ownership_perc=institutional_ownership_perc,
             shares_float=shares_float,
             beta=beta,
+            ipo_date=ipo_date,
+            ceo_name=ceo_name,
+            cfo_name=cfo_name,
         )
 
     def _get_cache_path(self, symbol: str) -> str:
@@ -253,4 +273,7 @@ class EODHDFundamentalStore:
             institutional_ownership_perc=None,
             shares_float=None,
             beta=None,
+            ipo_date=None,  # ADD
+            ceo_name=None,  # ADD
+            cfo_name=None,
         )

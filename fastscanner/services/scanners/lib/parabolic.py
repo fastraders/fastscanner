@@ -109,8 +109,8 @@ class ATRParabolicDownScanner:
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
 
         # Comment out for lowest lowe from start_time logic
-        # df = await self._cum_low.extend(symbol, df)
-        # df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
+        df = await self._cum_low.extend(symbol, df)
+        df = df[(df[self._cum_low.column_name()] - df[C.LOW]).abs() < 0.0001]
 
         if df.empty:
             return df
@@ -269,8 +269,8 @@ class ATRParabolicUpScanner:
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
 
         # Comment out for highest high from start_time logic
-        # df = await self._cum_high.extend(symbol, df)
-        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+        df = await self._cum_high.extend(symbol, df)
+        df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
         if df.empty:
             return df
 

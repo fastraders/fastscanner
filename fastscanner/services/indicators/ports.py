@@ -35,6 +35,9 @@ class FundamentalData:
     institutional_ownership_perc: float | None
     shares_float: float | None
     beta: float | None
+    ipo_date: str | None  # ADD THIS
+    ceo_name: str | None  # ADD THIS
+    cfo_name: str | None  # ADD THIS
 
 
 class PublicHolidaysStore(Protocol):

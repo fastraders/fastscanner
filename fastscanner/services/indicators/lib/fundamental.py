@@ -237,3 +237,47 @@ class MarketCapIndicator:
 
         new_row[self.column_name()] = self._last_market_cap.get(symbol, pd.NA)
         return new_row
+
+class DaysSinceIPOIndicator:
+    def __init__(self) -> None:
+        self._last_date: dict[str, date] = {}
+        self._last_days: dict[str, int] = {}
+
+    @classmethod
+    def type(cls):
+        return "days_since_ipo"
+
+    def column_name(self):
+        return self.type()
+
+    async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
+        fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
+        assert isinstance(df.index, pd.DatetimeIndex)
+
+        ipo_date_str = fundamentals.ipo_date
+        unique_dates = np.unique(df.index.date)
+
+        days_since_ipo = pd.Series(
+            np.nan, index=unique_dates, dtype=float, name=self.column_name()
+        )
+
+        if ipo_date_str:
+            ipo_date = pd.to_datetime(ipo_date_str).date()
+            for d in unique_dates:
+                if d >= ipo_date:
+                    days_since_ipo[d] = (d - ipo_date).days
+
+        df.loc[:, "date"] = df.index.date
+        df = df.join(days_since_ipo, on="date")
+        return df.drop(columns=["date"])
+
+    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
+        assert isinstance(new_row.name, pd.Timestamp)
+        new_date = new_row.name.date()
+        if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
+            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            self._last_days[symbol] = new_row[self.column_name()]
+            self._last_date[symbol] = new_date
+
+        new_row[self.column_name()] = self._last_days.get(symbol, np.nan)
+        return new_row

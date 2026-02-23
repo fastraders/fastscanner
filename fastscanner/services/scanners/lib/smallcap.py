@@ -53,8 +53,15 @@ class SmallCapUpScanner:
         self._gap = GapIndicator(C.HIGH)
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         # The order of the periods defines the priority of the alerts.
-        self._shift_periods = [15, 10, 2]
-        self._shift_min_change = [0.16, 0.14, 0.12]
+
+        #smallcap shorts
+        # self._shift_periods = [2]
+        # self._shift_min_change = [0.12]
+
+        #smallcap longs
+        self._shift_periods = [1]
+        self._shift_min_change = [0.06]
+
         self._shift_indicators = [
             ShiftIndicator(C.LOW, period) for period in self._shift_periods
         ]
@@ -99,8 +106,9 @@ class SmallCapUpScanner:
             df = await shift_indicator.extend(symbol, df)
 
         # Comment out for highest high from 4am logic
-        # df = await self._cum_high.extend(symbol, df)
-        # df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
+        df[C.HIGH] = pd.to_numeric(df[C.HIGH], errors='coerce')
+        df = await self._cum_high.extend(symbol, df)
+        df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
         df = df.loc[(df.index.time >= self._start_time) & (df.index.time <= self._end_time)]  # type: ignore
 
@@ -145,8 +153,9 @@ class SmallCapUpScanner:
 
         df.loc[:, "date"] = df.index.date  # type: ignore
         daily_df = daily_df.set_index(daily_df.index.date)[  # type: ignore
-            [self._market_cap.column_name()]
+            [self._market_cap.column_name(), C.VOLUME]
         ]
+        daily_df = daily_df.rename(columns={C.VOLUME: "d_vol"})
         df = df.join(daily_df, on="date", how="inner")
         df = df.drop(columns=["date"])
         if df.empty:
