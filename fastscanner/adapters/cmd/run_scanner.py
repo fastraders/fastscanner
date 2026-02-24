@@ -25,12 +25,10 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRGapIndicator,
     DailyATRIndicator,
     DailyGapIndicator,
-
 )
 from fastscanner.services.indicators.lib.fundamental import (
     DaysFromEarningsIndicator,
     DaysToEarningsIndicator,
-    DaysSinceIPOIndicator,
 )
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
@@ -38,10 +36,8 @@ from fastscanner.services.scanners.lib.day2 import Day2GapScanner
 from fastscanner.services.scanners.lib.gap import ATRGapDownScanner, ATRGapUpScanner
 from fastscanner.services.scanners.lib.parabolic import (
     ATRParabolicDownScanner,
-    ATRParabolicUpScanner,
     DailyATRParabolicDownScanner,
     DailyATRParabolicUpScanner,
-
 )
 from fastscanner.services.scanners.lib.range_gap import (
     HighRangeGapUpScanner,
@@ -72,31 +68,10 @@ async def _add_report_indicators(
     df.loc[:, "beta"] = fundamental_data.beta
     df.loc[:, "percent_insiders"] = fundamental_data.insiders_ownership_perc
     df.loc[:, "percent_institutions"] = fundamental_data.institutional_ownership_perc
-    df.loc[:, "ipo_date"] = fundamental_data.ipo_date
-
-    # Get CEO and CFO from officers list
-    officers = getattr(fundamental_data, "officers", None) or []
-    ceo_name = None
-    cfo_name = None
-    for officer in officers:
-        if officer is None:
-            continue
-        title = officer.get("Title", "") if isinstance(officer, dict) else getattr(officer, "Title", "")
-        name = officer.get("Name", "") if isinstance(officer, dict) else getattr(officer, "Name", "")
-        if pd.isna(title) or pd.isna(name):
-            continue
-        if "CEO" in str(title).upper() and ceo_name is None:
-            ceo_name = name
-        if "CFO" in str(title).upper() and cfo_name is None:
-            cfo_name = name
-
-    df.loc[:, "ceo_name"] = fundamental_data.ceo_name
-    df.loc[:, "cfo_name"] = fundamental_data.cfo_name
 
     indicators: list[Indicator] = [
         DaysFromEarningsIndicator(),
         DaysToEarningsIndicator(),
-        DaysSinceIPOIndicator(),
         DailyGapIndicator(),
         DailyATRGapIndicator(period=14),
         DailyATRIndicator(period=14),
@@ -216,70 +191,70 @@ async def run_scanner():
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
 
     all_symbols = await polygon.all_symbols()
-    # all_symbols = ["A", "AA", "AABB", "AACT", "AADI", "AAGC", "AAGH", "AAGR", "AAL", "AAM", "AMAL", "AMAT", "AMBA", "AMBC", "AMBI", "AMBK", "AMBP", "AMBS", "AMBZ", "AMC", "AMCR", "AWAW", "AWCA", "AWH", "AWI", "AWIN", "AWK", "AWON", "AWR", "AWRE", "AWSL", "AWX", "AX", "AXCG", "AXDX", "BPYPM", "BPYPN", "BPYPO", "BQ", "BQST", "BR", "BRAC", "BRAG", "BRAV", "BRBL", "BRBR", "BRBS", "BRC", "BRCC", "CGC", "CGEM", "CGEN", "CGIP", "CSBB", "CSBR", "CSCI", "CSCO", "CSDX", "CSGH", "CSGP", "CSGS", "CSHX", "CSIQ", "CSL", "CSLI", "CSLM", "CSLR", "CSOC", "DRTS", "DRUG", "DRVN", "EUSP", "EVBN", "EVC", "EVCM", "EVER", "EVEX", "EVFM", "EVGN", "EVGO", "EVGR", "EVH", "EVI", "EVIO", "EVKG", "EVLI", "EVLO", "EVLV", "FTDR", "FTEG", "FTEK", "FTEL", "FTFI", "FTFT", "GRWG", "GRYEF", "GRYP", "GS", "GSAC", "GSAT", "GSBC", "GSBD", "GSBX", "GSDC", "GSDT", "GSFD", "GSFI", "GSHD", "HWAL", "HWBK", "HWC", "HWCPZ", "JAKK", "JAMF", "JAMN", "MGIC", "MGIH", "MGLD", "MGM", "MGNI", "MGNX", "MGOL", "MGPI", "MGRC", "MGRM", "MGRX", "MGSD", "MGTI", "NECB", "NEE", "NEFB", "NEGG", "NEHC", "NEM", "NEN", "NEO", "NEOG", "NEOM", "NEON", "NEOV", "NEP", "NEPH", "ODC", "ODD", "ODFL", "ODP", "RAHGF", "RAIL", "RAKR", "RAMP", "RAND", "RANI", "RAPP", "RAPT", "RARE", "SBNC", "SBNY", "SPBV", "SPCB", "SPCE", "SPCO", "TETE", "UCSO", "UCTT", "UDMY", "UDR", "WCC", "WCCP", "WCFB", "WCHD", "WCIG", "WCN"] # fmt: skip
-    start_date = date(2018, 1, 1)
-    end_date = date(2026, 1, 2)
-    freq = "1d"
-    # scanner = ATRGapDownScanner(
-    #     min_adv=500_00,
-    #     min_adr=0.005,
-    #     min_volume=5_000,
-    #     atr_multiplier=2,
-    #     start_time=time(9, 20),
-    #     end_time=time(9, 29),
-    #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
-    # )
+    # all_symbols = ["ROLR"] # fmt: skip
+    start_date = date(2026, 1, 12)
+    end_date = date(2026, 1, 16)
+    freq = "1min"
     # scanner = ATRGapUpScanner(
     #     min_adv=500_000,
     #     min_adr=0.005,
     #     min_volume=5_000,
     #     atr_multiplier=2,
     #     start_time=time(9, 20),
-    #     end_time=time(9, 29),
+    #     end_time=time(9, 25),
     #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
+    #     min_days_from_earnings=0,
+    #     max_days_from_earnings=0,
+    #     days_of_week=[1, 3, 4],  # 0=Monday ... 6=Sunday
     # )
+    # Min_avd					500_000
+    # Min_adr					0.005
+    # Start_time					9:20:00
+    # End_time					9:29:00
+    # Min_volume					5_000
+    # atr_gap					>=2
+    # Min_marketcap				500_000_000
 
-
+    # Days_of_the_week				mon,tue,thu
+    scanner = ATRGapDownScanner(
+        min_adv=500_000,
+        min_adr=0.005,
+        min_volume=5_000,
+        atr_multiplier=2,
+        start_time=time(9, 20),
+        end_time=time(9, 29),
+        min_market_cap=500_000_000,
+        days_of_week=[0, 1, 3],  # 0=Monday ... 6=Sunday
+    )
     # scanner = ATRParabolicDownScanner(
-    #     min_adv=500_000,
+    #     min_adv=2_000_000,
     #     min_adr=0.005,
-    #     atr_multiplier=1,
-    #     min_volume=5_000,
+    #     atr_multiplier=0.5,
+    #     min_volume=50_000,
     #     start_time=time(9, 30),
     #     end_time=time(15, 59),
-    #     min_market_cap=500_000_000,
     #     include_null_market_cap=True,
     # )
-    # scanner = ATRParabolicUpScanner(
+    # scanner = DailyATRParabolicDownScanner(
+    #     min_adv=2_000_000,
+    #     min_adr=0.005,
+    #     atr_multiplier=0.5,
+    #     include_null_market_cap=True,
+    # )
+    # scanner = LowRangeGapDownScanner(
     #     min_adv=500_000,
-    #     min_adr=0.005,
-    #     atr_multiplier=1,
-    #     min_volume=10_000,
-    #     start_time=time(9, 30),
-    #     end_time=time(15, 30),
+    #     min_adr=0.03,
+    #     max_adr=0.07,
+    #     start_time=time(9, 20),
+    #     end_time=time(9, 29),
+    #     min_volume=5_000,
+    #     n_days=20,
     #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
+    #     min_atr_gap=-2,
+    #     min_days_from_earnings=50,
+    #     max_days_from_earnings=100,
+    #     # include_null_market_cap=True,
     # )
-
-
-    scanner = DailyATRParabolicDownScanner(
-        min_adv=1_000_000,
-        min_adr=0.005,
-        atr_multiplier=2,
-        min_market_cap=500_000_000,
-        include_null_market_cap=True,
-    )
-    # scanner = DailyATRParabolicUpScanner(
-    #     min_adv=1_000_000,
-    #     min_adr=0.005,
-    #     atr_multiplier=2,
-    #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
-    # )
-
-
     # scanner = HighRangeGapUpScanner(
     #     min_adv=500_000,
     #     min_adr=0.005,
@@ -288,38 +263,29 @@ async def run_scanner():
     #     min_volume=5_000,
     #     n_days=20,
     #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
+    #     min_days_from_earnings=50,
+    #     max_days_from_earnings=100,
+    #     days_of_week=[1, 3, 4],  # 0=Monday ... 6=Sunday
+    #     # include_null_market_cap=True,
     # )
-    # scanner = LowRangeGapDownScanner(
-    #     min_adv=500_000,
-    #     min_adr=0.005,
-    #     start_time=time(9, 00),
-    #     end_time=time(9, 29),
-    #     min_volume=5_000,
-    #     n_days=20,
-    #     min_market_cap=500_000_000,
-    #     max_market_cap=math.inf,
-    # )
-
-
     # scanner = SmallCapUpScanner(
     #     min_volume=10_000,
     #     min_gap=0.10,
     #     min_price=0.3,
-    #     # min_market_cap=100_000,
-    #     # max_market_cap=100_000_000,
+    #     min_market_cap=100_000,
+    #     max_market_cap=100_000_000,
     #     include_null_market_cap=True,
-    #     start_time=time(16, 00),
-    #     end_time=time(19, 30),
+    #     start_time=time(4, 00),
+    #     end_time=time(12, 00),
     # )
-
-
     # scanner = Day2GapScanner(
     #     min_adv=0,
     #     min_adr=0,
-    #     min_gap=0.5,
-    #     # min_market_cap=100_000,
-    #     # max_market_cap=1_000_000_000_000,
+    #     min_gap=0.05,
+    #     min_retrace=0.1,
+    #     min_price=0.1,
+    #     min_market_cap=100_000,
+    #     max_market_cap=1_000_000_000,
     #     include_null_market_cap=True,
     # )
 
