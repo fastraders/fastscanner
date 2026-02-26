@@ -88,7 +88,7 @@ class PrevDayIndicator:
                 self._prev_day[symbol] = float(candles[self._candle_col].values[0])
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._prev_day.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._prev_day.get(symbol)
         return new_row
 
 
@@ -181,7 +181,7 @@ class DailyGapIndicator:
         if day_open is not None and day_close is not None:
             new_row[self.column_name()] = (day_open - day_close) / day_close
         else:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
 
         return new_row
 
@@ -260,7 +260,7 @@ class DailyATRIndicator:
             if pd.notna(value := result[self.column_name()]):
                 self._daily_atr[symbol] = float(value)
 
-        new_row[self.column_name()] = self._daily_atr.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._daily_atr.get(symbol)
         return new_row
 
 
@@ -353,7 +353,7 @@ class DailyATRGapIndicator:
             if pd.notna(value := new_row[self.column_name()]):
                 self._daily_gap[symbol] = float(value)
 
-        new_row[self.column_name()] = self._daily_gap.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._daily_gap.get(symbol)
         return new_row
 
 
@@ -435,7 +435,7 @@ class ADRIndicator:
             if pd.notna(value := result[self.column_name()]):
                 self._last_value[symbol] = float(value)
 
-        new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._last_value.get(symbol)
         return new_row
 
 
@@ -512,7 +512,7 @@ class ADVIndicator:
             self._last_value.pop(symbol, None)
             if pd.notna(value := result[self.column_name()]):
                 self._last_value[symbol] = float(value)
-        new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._last_value.get(symbol)
         return new_row
 
 
@@ -645,5 +645,5 @@ class DayOpenIndicator:
             day_open = float(new_row[C.OPEN])
             self._day_open[symbol] = day_open
 
-        new_row[self.column_name()] = day_open if day_open is not None else pd.NA
+        new_row[self.column_name()] = day_open
         return new_row

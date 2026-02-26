@@ -170,7 +170,7 @@ class PremarketCumulativeIndicator:
         values = df[self._candle_col]
         assert isinstance(values.index, pd.DatetimeIndex)
         cum_values = values.groupby(values.index.date).agg(self._op.pandas_func())
-        cum_values[cum_values.index.time >= time(9, 30)] = pd.NA  # type: ignore
+        cum_values[cum_values.index.time >= time(9, 30)] = None  # type: ignore
         cum_values = cum_values.ffill()
         df[self.column_name()] = cum_values
         return df
@@ -180,7 +180,7 @@ class PremarketCumulativeIndicator:
         last_value = self._last_value.get(symbol)
         if new_row.timestamp.time() >= time(9, 30):
             if last_date is None or last_date != new_row.timestamp.date():
-                new_row[self.column_name()] = pd.NA
+                new_row[self.column_name()] = None
             else:
                 new_row[self.column_name()] = last_value
             return new_row
@@ -420,7 +420,7 @@ class PositionInRangeIndicator:
         low = new_row[low_col]
         close = new_row[CandleCol.CLOSE]
         if pd.isna(high) or pd.isna(low) or high == low:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
         else:
             new_row[self.column_name()] = (close - low) / (high - low)
 
@@ -502,7 +502,7 @@ class DailyRollingIndicator:
 
         daily_df = await self._get_data_for_n_days(symbol, df)
         if daily_df.empty:
-            df[self.column_name()] = pd.NA
+            df[self.column_name()] = None
             return df
 
         rolling_df = (
@@ -513,7 +513,7 @@ class DailyRollingIndicator:
             .set_index(daily_df.index.date)  # type: ignore
         )
 
-        rolling_df.loc[df.index[-1].date(), self.column_name()] = pd.NA
+        rolling_df.loc[df.index[-1].date(), self.column_name()] = None
         rolling_df = rolling_df.shift(1)
 
         df.loc[:, "date"] = df.index.date  # type: ignore
@@ -534,7 +534,7 @@ class DailyRollingIndicator:
 
         values = self._rolling_values.get(symbol, [])
         if not values:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         if self._operation == "min":
@@ -544,7 +544,7 @@ class DailyRollingIndicator:
         elif self._operation == "sum":
             agg_val = sum(values)
         else:
-            agg_val = pd.NA
+            agg_val = None
 
         new_row[self.column_name()] = agg_val
         return new_row
@@ -647,7 +647,7 @@ class ATRGapIndicator:
                 / new_row[self._atr.column_name()]
             )
         else:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
 
         return new_row.drop(cols_to_drop)
 
@@ -695,7 +695,7 @@ class ShiftIndicator:
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
-            df[self.column_name()] = pd.NA
+            df[self.column_name()] = None
             return df
         df[self.column_name()] = df[self._candle_col].groupby(df.index.date).shift(self._shift)  # type: ignore
         return df
@@ -710,7 +710,7 @@ class ShiftIndicator:
         values = self._last_values.setdefault(symbol, [])
         values.append(new_row[self._candle_col])
         if len(values) < self._shift + 1:
-            new_row[self.column_name()] = pd.NA
+            new_row[self.column_name()] = None
             return new_row
 
         new_row[self.column_name()] = values.pop(0)

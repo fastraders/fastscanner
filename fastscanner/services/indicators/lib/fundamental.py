@@ -82,7 +82,7 @@ class DaysToEarningsIndicator:
             if pd.notna(value := result[self.column_name()]):
                 self._last_days[symbol] = int(value)
 
-        new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._last_days.get(symbol)
         return new_row
 
 
@@ -158,7 +158,7 @@ class DaysFromEarningsIndicator:
             if pd.notna(value := result[self.column_name()]):
                 self._last_days[symbol] = int(value)
 
-        new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._last_days.get(symbol)
         return new_row
 
 
@@ -234,7 +234,7 @@ class MarketCapIndicator:
             if pd.notna(value := result[self.column_name()]):
                 self._last_market_cap[symbol] = float(value)
 
-        new_row[self.column_name()] = self._last_market_cap.get(symbol, pd.NA)
+        new_row[self.column_name()] = self._last_market_cap.get(symbol)
         return new_row
 
 class DaysSinceIPOIndicator:
@@ -270,13 +270,12 @@ class DaysSinceIPOIndicator:
         df = df.join(days_since_ipo, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, pd.Timestamp)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_days[symbol] = new_row[self.column_name()]
+            result = await self.extend(symbol, new_row.to_dataframe())
+            self._last_days[symbol] = result[self.column_name()].iloc[0]
             self._last_date[symbol] = new_date
 
-        new_row[self.column_name()] = self._last_days.get(symbol, np.nan)
+        new_row[self.column_name()] = self._last_days.get(symbol)
         return new_row

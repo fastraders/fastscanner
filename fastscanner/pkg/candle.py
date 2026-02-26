@@ -11,7 +11,9 @@ class Candle(dict):
     __slots__ = ("timestamp",)
 
     def __init__(self, data: dict | None = None, *, timestamp: pd.Timestamp):
-        super().__init__(data or {})
+        super().__init__()
+        for k, v in (data or {}).items():
+            self[k] = v
         self.timestamp = timestamp
 
     @property
@@ -33,6 +35,14 @@ class Candle(dict):
     @property
     def volume(self) -> float:
         return self[C.VOLUME]
+
+    def __setitem__(self, key, value):
+        try:
+            if pd.isna(value):
+                value = None
+        except (ValueError, TypeError):
+            pass
+        super().__setitem__(key, value)
 
     def copy(self) -> "Candle":
         return Candle(dict.copy(self), timestamp=self.timestamp)
