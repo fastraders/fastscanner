@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import get_scanner_service
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry, FixedClock
 from fastscanner.services.indicators.ports import (
     Cache,
@@ -38,13 +39,11 @@ class DummyScanner:
         return pd.DataFrame()
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-        # Add a test indicator to the row to verify processing
-        enhanced_row = new_row.copy()
-        enhanced_row["test_indicator"] = new_row.get("close", 0) * 2
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
+        new_row["test_indicator"] = new_row.get("close", 0) * 2
         passed = new_row.get("close", 0) > self._min_value
-        return enhanced_row, passed
+        return new_row, passed
 
 
 class MockSymbolsProvider:
@@ -94,7 +93,7 @@ class MockSubscriptionHandler(SubscriptionHandler):
         self.handled_rows = []
         self.handled_passed = []
 
-    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+    async def handle(self, symbol: str, new_row: Candle, passed: bool) -> Candle:
         self.handled_symbols.append(symbol)
         self.handled_rows.append(new_row)
         self.handled_passed.append(passed)

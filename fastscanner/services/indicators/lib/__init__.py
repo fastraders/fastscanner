@@ -1,8 +1,11 @@
 from contextvars import ContextVar
 from datetime import date, datetime
-from typing import Any, Hashable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Hashable, Protocol, runtime_checkable
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from fastscanner.pkg.candle import Candle
 
 from .candle import (
     ATRGapIndicator,
@@ -57,7 +60,7 @@ class Indicator(Protocol):
 
     def column_name(self) -> str: ...
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    async def extend_realtime(self, symbol: str, new_row: "Candle") -> "Candle": ...
 
 
 @runtime_checkable

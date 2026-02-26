@@ -13,6 +13,7 @@ from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
 from fastscanner.pkg import config
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.indicators.service import IndicatorParams as Params
 from fastscanner.services.indicators.service import (
@@ -75,13 +76,12 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
         self._websocket = websocket
         self._subscription_id = subscription_id
 
-    async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        candle = new_row.to_dict()
+    async def handle(self, symbol: str, new_row: Candle) -> Candle:
         message = IndicatorMessage(
             subscription_id=self._subscription_id,
             symbol=symbol,
-            timestamp=new_row.name,  # type: ignore
-            candle=candle,
+            timestamp=new_row.timestamp,
+            candle=dict(new_row),
         )
 
         await self._send_message(message)

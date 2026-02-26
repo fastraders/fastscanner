@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.adapters.rest.indicators import (
     ActionType,
     StatusType,
@@ -32,10 +33,9 @@ class DummyIndicator(Indicator):
         df["dummy_value"] = df["close"] * self._multiplier
         return df
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        enhanced_row = new_row.copy()
-        enhanced_row["dummy_value"] = new_row.get("close", 0) * self._multiplier
-        return enhanced_row
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_row["dummy_value"] = new_row.get("close", 0) * self._multiplier
+        return new_row
 
 
 class MockChannel:

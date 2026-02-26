@@ -1,9 +1,10 @@
 import math
 import uuid
-from datetime import date, datetime, time
+from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
@@ -180,13 +181,11 @@ class SmallCapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-        assert isinstance(new_row.name, pd.Timestamp)
-
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
         if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
+            new_row.timestamp.time() > self._end_time
+            or new_row.timestamp.time() < self._start_time
         ):
             new_row["triggered_alert"] = pd.NA
             return new_row, False

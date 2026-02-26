@@ -4,6 +4,8 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from fastscanner.pkg.candle import Candle
+
 from ...registry import ApplicationRegistry
 
 
@@ -71,14 +73,13 @@ class DaysToEarningsIndicator:
         df = df.join(date_to_earnings, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, pd.Timestamp)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
             self._last_date[symbol] = new_date
             self._last_days.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._last_days[symbol] = int(value)
 
         new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
@@ -148,14 +149,13 @@ class DaysFromEarningsIndicator:
         df = df.join(date_from_earnings, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, pd.Timestamp)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
             self._last_date[symbol] = new_date
             self._last_days.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._last_days[symbol] = int(value)
 
         new_row[self.column_name()] = self._last_days.get(symbol, pd.NA)
@@ -224,15 +224,14 @@ class MarketCapIndicator:
         df = df.join(date_to_market_cap, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, pd.Timestamp)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
 
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
             self._last_date[symbol] = new_date
             self._last_market_cap.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._last_market_cap[symbol] = float(value)
 
         new_row[self.column_name()] = self._last_market_cap.get(symbol, pd.NA)

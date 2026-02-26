@@ -12,6 +12,7 @@ from fastscanner.adapters.rest.services import (
     get_scanner_service,
     get_scanner_service_ws,
 )
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.scanners.ports import ScannerParams
@@ -38,12 +39,12 @@ class WebSocketScannerHandler:
         self._websocket = websocket
         self._scanner_id = scanner_id
 
-    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+    async def handle(self, symbol: str, new_row: Candle, passed: bool) -> Candle:
         if not passed:
             return new_row
 
-        candle = new_row.to_dict()
-        scan_time = new_row.name.strftime("%H:%M")  # type: ignore
+        candle = dict(new_row)
+        scan_time = new_row.timestamp.strftime("%H:%M")
         message = ScannerMessage(
             symbol=symbol,
             scan_time=scan_time,

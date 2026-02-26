@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from fastscanner.pkg.candle import Candle
 
 
 @dataclass
@@ -35,8 +38,8 @@ class ScannerRealtime(Protocol):
     def type(cls) -> str: ...
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]: ...
+        self, symbol: str, new_row: "Candle"
+    ) -> tuple["Candle", bool]: ...
 
 
 class SymbolsProvider(Protocol):

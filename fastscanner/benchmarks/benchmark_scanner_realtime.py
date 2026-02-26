@@ -19,6 +19,7 @@ from fastscanner.adapters.holiday.exchange_calendars import (
 )
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.registry import ApplicationRegistry
@@ -39,17 +40,17 @@ total_messages = 0
 
 
 class BenchmarkScannerHandler:
-    async def handle(self, symbol: str, new_row: pd.Series, passed: bool) -> pd.Series:
+    async def handle(self, symbol: str, new_row: Candle, passed: bool) -> Candle:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = new_row.name
+        ts = new_row.timestamp
 
         log_ts = datetime.now().strftime("%H:%M:%S")
-        candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
+        candle_ts = ts.strftime("%H:%M:%S")
         if passed:
             logger.info(
-                f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {new_row.to_dict()}"
+                f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Passed: {passed} | Data: {dict(new_row)}"
             )
         if batch_start_time is None:
             batch_start_time = now

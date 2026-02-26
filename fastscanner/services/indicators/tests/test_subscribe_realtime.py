@@ -7,6 +7,7 @@ import pytest
 import pytz
 from httpx import patch
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, FixedClock
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
@@ -51,7 +52,7 @@ class HandlerTest(SubscriptionHandler):
     def __init__(self):
         self.received = []
 
-    async def handle(self, symbol: str, new_row: pd.Series):
+    async def handle(self, symbol: str, new_row: Candle):
         self.received.append((symbol, new_row))
 
 
@@ -287,9 +288,9 @@ async def test_atr_indicator(setup):
     ]
 
     for msg in historical_rows:
-        row = pd.Series(
+        row = Candle(
             {k: float(v) for k, v in msg.items() if k != "timestamp"},
-            name=pd.to_datetime(int(msg["timestamp"]), unit="ms", utc=True).tz_convert(
+            timestamp=pd.to_datetime(int(msg["timestamp"]), unit="ms", utc=True).tz_convert(
                 LOCAL_TIMEZONE_STR
             ),
         )
@@ -455,7 +456,7 @@ async def test_candle_aggregation(setup):
         assert row[CandleCol.CLOSE] == 108
         assert row[CandleCol.VOLUME] == 1500
 
-        assert row.name == ts_start
+        assert row.timestamp == ts_start
     finally:
         ClockRegistry.unset()
 

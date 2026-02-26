@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from fastscanner.pkg.candle import CandleBuffer
+from fastscanner.pkg.candle import Candle, CandleBuffer
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, FixedClock
 from fastscanner.services.indicators.lib import Cacheable
 from fastscanner.services.indicators.ports import CandleCol as C
@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 class SubscriptionHandler(Protocol):
     async def handle(
-        self, symbol: str, new_row: pd.Series, passed: bool
-    ) -> pd.Series: ...
+        self, symbol: str, new_row: Candle, passed: bool
+    ) -> Candle: ...
 
 
 class ScannerChannelHandler:
@@ -51,7 +51,7 @@ class ScannerChannelHandler:
         self._unsubscribe = unsubscribe
 
     def _new_buffer(self, symbol: str) -> CandleBuffer:
-        async def _handle(row: pd.Series) -> None:
+        async def _handle(row: Candle) -> None:
             new_row, passed = await self._scanner.scan_realtime(symbol, row)
             try:
                 await self._handler.handle(symbol, new_row, passed)
@@ -71,7 +71,7 @@ class ScannerChannelHandler:
         ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
             LOCAL_TIMEZONE_STR
         )
-        row = pd.Series(data, name=ts)
+        row = Candle(data, timestamp=ts)
 
         if self._freq == "1min":
             new_row, passed = await self._scanner.scan_realtime(symbol, row)

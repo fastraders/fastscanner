@@ -33,6 +33,7 @@ from fastscanner.services.indicators.lib.daily import (
     PrevDayIndicator,
 )
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.ports import CandleCol
 from fastscanner.services.indicators.service import (
     IndicatorParams,
@@ -56,16 +57,16 @@ ClockRegistry.set(LocalClock())
 
 
 class BenchmarkHandler(SubscriptionHandler):
-    def handle(self, symbol: str, new_row: pd.Series) -> None:
+    def handle(self, symbol: str, new_row: Candle) -> None:
         global batch_start_time, last_received_time, total_messages
 
         now = time.time()
-        ts = new_row.name
+        ts = new_row.timestamp
 
         log_ts = datetime.now().strftime("%H:%M:%S")
-        candle_ts = ts.strftime("%H:%M:%S")  # type: ignore
+        candle_ts = ts.strftime("%H:%M:%S")
         logger.info(
-            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {new_row.to_dict()}"
+            f"[{symbol}] LogTime: {log_ts} | CandleTime: {candle_ts} | Data: {dict(new_row)}"
         )
         if batch_start_time is None:
             batch_start_time = now

@@ -28,6 +28,7 @@ from fastscanner.services.indicators.lib.daily import (
     DailyGapIndicator,
     PrevDayIndicator,
 )
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.ports import CandleCol
 from fastscanner.services.indicators.service import (
     IndicatorParams,
@@ -41,9 +42,9 @@ logging.basicConfig(level=logging.INFO)
 
 
 class PrintHandler(SubscriptionHandler):
-    def handle(self, symbol: str, new_row: pd.Series) -> None:
+    def handle(self, symbol: str, new_row: Candle) -> None:
         logger.info(f"\n[PrintHandler] Enriched row for {symbol}:")
-        logger.info(new_row.to_frame().T)
+        logger.info(new_row.to_dataframe())
 
 
 async def main():

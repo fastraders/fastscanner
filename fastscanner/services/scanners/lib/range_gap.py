@@ -5,6 +5,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.lib.candle import ATRGapIndicator
 from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
 from fastscanner.services.indicators.lib.candle import (
@@ -169,19 +170,17 @@ class HighRangeGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-
-        assert isinstance(new_row.name, pd.Timestamp)
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
         if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
+            new_row.timestamp.time() > self._end_time
+            or new_row.timestamp.time() < self._start_time
         ):
             new_row["signal"] = pd.NA
             return new_row, False
         if (
             self._days_of_week is not None
-            and new_row.name.dayofweek not in self._days_of_week
+            and new_row.timestamp.dayofweek not in self._days_of_week
         ):
             new_row["signal"] = pd.NA
             return new_row, False
@@ -389,19 +388,17 @@ class LowRangeGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-
-        assert isinstance(new_row.name, pd.Timestamp)
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
         if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
+            new_row.timestamp.time() > self._end_time
+            or new_row.timestamp.time() < self._start_time
         ):
             new_row["signal"] = pd.NA
             return new_row, False
         if (
             self._days_of_week is not None
-            and new_row.name.dayofweek not in self._days_of_week
+            and new_row.timestamp.dayofweek not in self._days_of_week
         ):
             new_row["signal"] = pd.NA
             return new_row, False

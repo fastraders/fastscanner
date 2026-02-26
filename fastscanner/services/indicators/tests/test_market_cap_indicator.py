@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
 from fastscanner.services.indicators.ports import (
@@ -139,11 +140,11 @@ async def test_market_cap_indicator_extend_realtime(fundamentals):
 
     indicator = MarketCapIndicator()
 
-    new_row = df.iloc[0]
-    new_row.name = df.index[0]
+    new_row = Candle.from_series(df.iloc[0])
+    new_row.timestamp = df.index[0]
 
     extended_row = await indicator.extend_realtime("GOOG", new_row)
 
-    assert indicator._last_date["GOOG"] == new_row.name.date()
+    assert indicator._last_date["GOOG"] == new_row.timestamp.date()
     assert indicator._last_market_cap["GOOG"] == 1000.0
     assert extended_row[indicator.column_name()] == 1000.0

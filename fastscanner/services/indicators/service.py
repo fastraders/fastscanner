@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from fastscanner.pkg.candle import CandleBuffer
+from fastscanner.pkg.candle import Candle, CandleBuffer
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
 from fastscanner.services.exceptions import UnsubscribeSignal
 
@@ -220,7 +220,7 @@ class IndicatorsService:
 
 
 class SubscriptionHandler(Protocol):
-    async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series: ...
+    async def handle(self, symbol: str, new_row: Candle) -> Candle: ...
 
 
 class CandleChannelHandler:
@@ -240,7 +240,7 @@ class CandleChannelHandler:
         self._buffers: dict[str, CandleBuffer] = {}
         self._unsubscribe = unsubscribe
 
-    async def _handle(self, symbol: str, new_row: pd.Series) -> None:
+    async def _handle(self, symbol: str, new_row: Candle) -> None:
         for ind in self._indicators:
             new_row = await ind.extend_realtime(symbol, new_row)
         try:
@@ -250,7 +250,7 @@ class CandleChannelHandler:
             return
 
     def _new_buffer(self, symbol: str) -> CandleBuffer:
-        async def _handle(new_row: pd.Series) -> None:
+        async def _handle(new_row: Candle) -> None:
             await self._handle(symbol, new_row)
 
         buffer = CandleBuffer(symbol, self._freq, _handle)
@@ -265,7 +265,7 @@ class CandleChannelHandler:
         ts = pd.to_datetime(int(data["timestamp"]), unit="ms", utc=True).tz_convert(
             LOCAL_TIMEZONE_STR
         )
-        new_row = pd.Series(data, name=ts)
+        new_row = Candle(data, timestamp=ts)
         if self._freq == "1min":
             return await self._handle(symbol, new_row)
         agg = await buffer.add(new_row)
@@ -283,12 +283,12 @@ class LatencyMeasurementHandler(SubscriptionHandler):
         self._latest_timestamp: datetime | None = None
         self._current_minute: datetime | None = None
 
-    async def handle(self, symbol: str, new_row: pd.Series) -> pd.Series:
+    async def handle(self, symbol: str, new_row: Candle) -> Candle:
         if self._current_minute is None or self._latest_timestamp is None:
-            self._current_minute = new_row.name + pd.Timedelta(self._freq)  # type: ignore
+            self._current_minute = new_row.timestamp + pd.Timedelta(self._freq)
             self._latest_timestamp = ClockRegistry.clock.now()
             return new_row
-        new_minute = new_row.name + pd.Timedelta(self._freq)  # type: ignore
+        new_minute = new_row.timestamp + pd.Timedelta(self._freq)
         if new_minute > self._current_minute:
             latency = self._latest_timestamp - self._current_minute
             logger.info(

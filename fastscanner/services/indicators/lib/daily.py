@@ -1,8 +1,10 @@
 import json
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 from typing import TYPE_CHECKING
 
 import pandas as pd
+
+from fastscanner.pkg.candle import Candle
 
 from ...registry import ApplicationRegistry
 from ..ports import CandleCol as C
@@ -76,9 +78,8 @@ class PrevDayIndicator:
         df = df.join(daily[[self.column_name()]], on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             start = lookback_days(new_date, self._n_days_offset)
             candles = await ApplicationRegistry.candles.get(symbol, start, start, "1d")
@@ -161,9 +162,8 @@ class DailyGapIndicator:
 
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             yday = lookback_days(new_date, 1)
             self._daily_open.pop(symbol, None)
@@ -173,7 +173,7 @@ class DailyGapIndicator:
                 self._daily_close[symbol] = float(close[C.CLOSE].values[0])
 
         day_open = self._daily_open.get(symbol)
-        if day_open is None and new_row.name.time() >= time(9, 30):
+        if day_open is None and new_row.timestamp.time() >= time(9, 30):
             day_open = float(new_row[C.OPEN])
             self._daily_open[symbol] = day_open
 
@@ -251,14 +251,13 @@ class DailyATRIndicator:
         df = df.join(atr.rename(self.column_name()), on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
             self._last_date[symbol] = new_date
             self._daily_atr.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._daily_atr[symbol] = float(value)
 
         new_row[self.column_name()] = self._daily_atr.get(symbol, pd.NA)
@@ -329,29 +328,28 @@ class DailyATRGapIndicator:
         )
         return df.drop(columns=cols_to_drop)
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             self._daily_gap.pop(symbol, None)
 
         if (
             (last_date := self._last_date.get(symbol)) is None or last_date != new_date
-        ) and (new_row.name.time() >= time(9, 30)):
+        ) and (new_row.timestamp.time() >= time(9, 30)):
             self._last_date[symbol] = new_date
             cols_to_drop = []
             for ind in self._aux_indicators:
-                if ind.column_name() in new_row.index:
+                if ind.column_name() in new_row:
                     continue
                 new_row = await ind.extend_realtime(symbol, new_row)
                 cols_to_drop.append(ind.column_name())
 
-            new_row.loc[self.column_name()] = (
+            new_row[self.column_name()] = (
                 new_row[self._gap.column_name()]
                 * new_row[self._prev_day.column_name()]
                 / new_row[self._atr.column_name()]
             )
-            new_row = new_row.drop(columns=cols_to_drop)
+            new_row.drop(cols_to_drop)
             if pd.notna(value := new_row[self.column_name()]):
                 self._daily_gap[symbol] = float(value)
 
@@ -428,14 +426,13 @@ class ADRIndicator:
         df = df.join(adr, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
         last_date = self._last_date.get(symbol)
-        if last_date is None or last_date != new_row.name.date():
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_date[symbol] = new_row.name.date()  # type: ignore
+        if last_date is None or last_date != new_row.timestamp.date():
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
+            self._last_date[symbol] = new_row.timestamp.date()
             self._last_value.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._last_value[symbol] = float(value)
 
         new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
@@ -507,14 +504,13 @@ class ADVIndicator:
         df = df.join(daily_vol, on="date")
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
         last_date = self._last_date.get(symbol)
-        if last_date is None or last_date != new_row.name.date():
-            new_row = (await self.extend(symbol, new_row.to_frame().T)).iloc[0]
-            self._last_date[symbol] = new_row.name.date()  # type: ignore
+        if last_date is None or last_date != new_row.timestamp.date():
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
+            self._last_date[symbol] = new_row.timestamp.date()
             self._last_value.pop(symbol, None)
-            if pd.notna(value := new_row[self.column_name()]):
+            if pd.notna(value := result[self.column_name()]):
                 self._last_value[symbol] = float(value)
         new_row[self.column_name()] = self._last_value.get(symbol, pd.NA)
         return new_row
@@ -638,15 +634,14 @@ class DayOpenIndicator:
         df.loc[df.index.time < time(9, 30), self.column_name()] = pd.NA  # type: ignore
         return df.drop(columns=["date"])
 
-    async def extend_realtime(self, symbol: str, new_row: pd.Series) -> pd.Series:
-        assert isinstance(new_row.name, datetime)
-        new_date = new_row.name.date()
+    async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
             self._day_open.pop(symbol, None)
             self._last_date[symbol] = new_date
 
         day_open = self._day_open.get(symbol)
-        if day_open is None and new_row.name.time() >= time(9, 30):
+        if day_open is None and new_row.timestamp.time() >= time(9, 30):
             day_open = float(new_row[C.OPEN])
             self._day_open[symbol] = day_open
 

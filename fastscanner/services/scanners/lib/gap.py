@@ -4,6 +4,7 @@ from datetime import date, time
 
 import pandas as pd
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.lib.candle import (
     ATRGapIndicator,
     ATRIndicator,
@@ -150,24 +151,17 @@ class ATRGapDownScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-        """
-        Realtime scan implementation that enriches the new_row with indicators
-        and returns whether it passes the filter criteria.
-        """
-
-        # Check time filter first
-        assert isinstance(new_row.name, pd.Timestamp)
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
         if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
+            new_row.timestamp.time() > self._end_time
+            or new_row.timestamp.time() < self._start_time
         ):
             new_row["signal"] = pd.NA
             return new_row, False
         if (
             self._days_of_week is not None
-            and new_row.name.dayofweek not in self._days_of_week
+            and new_row.timestamp.dayofweek not in self._days_of_week
         ):
             new_row["signal"] = pd.NA
             return new_row, False
@@ -357,24 +351,17 @@ class ATRGapUpScanner:
         return df
 
     async def scan_realtime(
-        self, symbol: str, new_row: pd.Series
-    ) -> tuple[pd.Series, bool]:
-        """
-        Realtime scan implementation that enriches the new_row with indicators
-        and returns whether it passes the filter criteria.
-        """
-
-        # Check time filter first
-        assert isinstance(new_row.name, pd.Timestamp)
+        self, symbol: str, new_row: Candle
+    ) -> tuple[Candle, bool]:
         if (
-            new_row.name.time() > self._end_time
-            or new_row.name.time() < self._start_time
+            new_row.timestamp.time() > self._end_time
+            or new_row.timestamp.time() < self._start_time
         ):
             new_row["signal"] = pd.NA
             return new_row, False
         if (
             self._days_of_week is not None
-            and new_row.name.dayofweek not in self._days_of_week
+            and new_row.timestamp.dayofweek not in self._days_of_week
         ):
             new_row["signal"] = pd.NA
             return new_row, False
