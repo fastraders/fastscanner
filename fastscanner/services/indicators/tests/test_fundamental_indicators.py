@@ -62,6 +62,9 @@ def create_fundamental_data(earnings_dates: list[date]) -> FundamentalData:
         institutional_ownership_perc=70.0,
         shares_float=1000000.0,
         beta=1.2,
+        ipo_date=None,
+        ceo_name=None,
+        cfo_name=None,
     )
 
 

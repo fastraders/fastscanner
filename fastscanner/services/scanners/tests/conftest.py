@@ -38,9 +38,7 @@ class DummyScanner:
     async def scan(self, symbol: str, start, end, freq: str) -> pd.DataFrame:
         return pd.DataFrame()
 
-    async def scan_realtime(
-        self, symbol: str, new_row: Candle
-    ) -> tuple[Candle, bool]:
+    async def scan_realtime(self, symbol: str, new_row: Candle) -> tuple[Candle, bool]:
         new_row["test_indicator"] = new_row.get("close", 0) * 2
         passed = new_row.get("close", 0) > self._min_value
         return new_row, passed
@@ -171,6 +169,9 @@ class MockFundamentalDataStore:
             "",
             pd.Series([1000000000.0, 1000000000.0, 1000000000.0], index=date_index),
             pd.DatetimeIndex([]),
+            None,
+            None,
+            None,
             None,
             None,
             None,

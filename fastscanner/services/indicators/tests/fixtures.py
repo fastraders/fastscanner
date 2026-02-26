@@ -44,6 +44,9 @@ class MockFundamentalDataStore:
             None,
             None,
             None,
+            None,
+            None,
+            None,
         )
 
 

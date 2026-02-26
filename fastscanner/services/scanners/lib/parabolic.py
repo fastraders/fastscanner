@@ -136,9 +136,7 @@ class ATRParabolicDownScanner:
 
         return df
 
-    async def scan_realtime(
-        self, symbol: str, new_row: Candle
-    ) -> tuple[Candle, bool]:
+    async def scan_realtime(self, symbol: str, new_row: Candle) -> tuple[Candle, bool]:
 
         if (
             new_row.timestamp.time() > self._end_time
@@ -178,12 +176,18 @@ class ATRParabolicDownScanner:
             and self._min_market_cap <= market_cap_value <= self._max_market_cap
         ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
 
+        cum_low_value = new_row[self._cum_low.column_name()]
+        is_new_low = (
+            not pd.isna(cum_low_value) and abs(cum_low_value - new_row[C.LOW]) < 0.0001
+        )
+
         passes_filter = (
             adv_value >= self._min_adv
             and adr_value >= self._min_adr
             and market_cap_passes
             and signal_value > self._atr_multiplier
             and cum_volume_value >= self._min_volume
+            and is_new_low
         )
 
         return new_row, passes_filter
@@ -294,9 +298,7 @@ class ATRParabolicUpScanner:
 
         return df
 
-    async def scan_realtime(
-        self, symbol: str, new_row: Candle
-    ) -> tuple[Candle, bool]:
+    async def scan_realtime(self, symbol: str, new_row: Candle) -> tuple[Candle, bool]:
 
         if (
             new_row.timestamp.time() > self._end_time

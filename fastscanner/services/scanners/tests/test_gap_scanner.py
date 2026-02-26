@@ -4,7 +4,8 @@ import pandas as pd
 import pytest
 
 from fastscanner.pkg.candle import Candle
-from fastscanner.services.indicators.ports import CandleCol as C, FundamentalData
+from fastscanner.services.indicators.ports import CandleCol as C
+from fastscanner.services.indicators.ports import FundamentalData
 from fastscanner.services.indicators.tests.fixtures import (
     MockCache,
     MockPublicHolidaysStore,
@@ -20,16 +21,12 @@ class MultiFreqCandleStore:
     def set_data(self, symbol: str, freq: str, data: pd.DataFrame):
         self._data[(symbol, freq)] = data
 
-    async def get(self, symbol, start_date, end_date, freq, adjusted=True):
+    async def get(self, symbol, start, end, freq, adjusted=True):
         key = (symbol, freq)
         if key not in self._data:
-            return pd.DataFrame(
-                index=pd.DatetimeIndex([]), columns=C.COLUMNS
-            )
+            return pd.DataFrame(index=pd.DatetimeIndex([]), columns=C.COLUMNS)
         df = self._data[key]
-        return df[
-            (df.index.date >= start_date) & (df.index.date <= end_date)
-        ]
+        return df[(df.index.date >= start) & (df.index.date <= end)]  # type: ignore
 
 
 class MockFundamentalDataStore:
@@ -47,6 +44,9 @@ class MockFundamentalDataStore:
             "",
             pd.Series([self._market_cap] * 30, index=date_index),
             pd.DatetimeIndex([]),
+            None,
+            None,
+            None,
             None,
             None,
             None,

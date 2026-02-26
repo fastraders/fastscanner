@@ -4,7 +4,8 @@ import pandas as pd
 import pytest
 
 from fastscanner.pkg.candle import Candle
-from fastscanner.services.indicators.ports import CandleCol as C, FundamentalData
+from fastscanner.services.indicators.ports import CandleCol as C
+from fastscanner.services.indicators.ports import FundamentalData
 from fastscanner.services.indicators.tests.fixtures import (
     MockCache,
     MockPublicHolidaysStore,
@@ -23,16 +24,12 @@ class MultiFreqCandleStore:
     def set_data(self, symbol: str, freq: str, data: pd.DataFrame):
         self._data[(symbol, freq)] = data
 
-    async def get(self, symbol, start_date, end_date, freq, adjusted=True):
+    async def get(self, symbol, start, end, freq, adjusted=True) -> pd.DataFrame:
         key = (symbol, freq)
         if key not in self._data:
-            return pd.DataFrame(
-                index=pd.DatetimeIndex([]), columns=C.COLUMNS
-            )
+            return pd.DataFrame(index=pd.DatetimeIndex([]), columns=C.COLUMNS)
         df = self._data[key]
-        return df[
-            (df.index.date >= start_date) & (df.index.date <= end_date)
-        ]
+        return df[(df.index.date >= start) & (df.index.date <= end)]  # type: ignore
 
 
 class MockFundamentalDataStore:
@@ -50,6 +47,9 @@ class MockFundamentalDataStore:
             "",
             pd.Series([self._market_cap] * 30, index=date_index),
             pd.DatetimeIndex([]),
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -106,17 +106,22 @@ def _make_minute_data(
 ) -> pd.DataFrame:
     from datetime import datetime, timedelta
 
-    times = [datetime(day.year, day.month, day.day, 9, 30) + timedelta(minutes=i) for i in range(n_bars)]
+    times = [
+        datetime(day.year, day.month, day.day, 9, 30) + timedelta(minutes=i)
+        for i in range(n_bars)
+    ]
     rows = []
     for i, t in enumerate(times):
         o = base_open + i
-        rows.append({
-            C.OPEN: o,
-            C.HIGH: o + 2,
-            C.LOW: o - 1,
-            C.CLOSE: o + 0.5,
-            C.VOLUME: 50000 + i * 10000,
-        })
+        rows.append(
+            {
+                C.OPEN: o,
+                C.HIGH: o + 2,
+                C.LOW: o - 1,
+                C.CLOSE: o + 0.5,
+                C.VOLUME: 50000 + i * 10000,
+            }
+        )
     return pd.DataFrame(rows, index=pd.DatetimeIndex(times))
 
 
@@ -155,7 +160,9 @@ async def test_parabolic_down_scan_realtime_passes(store: MultiFreqCandleStore):
 
 
 @pytest.mark.asyncio
-async def test_parabolic_down_scan_realtime_fails_low_signal(store: MultiFreqCandleStore):
+async def test_parabolic_down_scan_realtime_fails_low_signal(
+    store: MultiFreqCandleStore,
+):
     daily = _make_daily_data()
     store.set_data("AAPL", "1d", daily)
 
@@ -184,7 +191,9 @@ async def test_parabolic_down_scan_realtime_fails_low_signal(store: MultiFreqCan
 
 
 @pytest.mark.asyncio
-async def test_parabolic_down_scan_realtime_outside_time_window(store: MultiFreqCandleStore):
+async def test_parabolic_down_scan_realtime_outside_time_window(
+    store: MultiFreqCandleStore,
+):
     daily = _make_daily_data()
     store.set_data("AAPL", "1d", daily)
 
@@ -243,7 +252,9 @@ async def test_parabolic_down_scan_realtime_fails_min_adv(store: MultiFreqCandle
 
 
 @pytest.mark.asyncio
-async def test_parabolic_down_scan_realtime_market_cap_filter(store: MultiFreqCandleStore):
+async def test_parabolic_down_scan_realtime_market_cap_filter(
+    store: MultiFreqCandleStore,
+):
     daily = _make_daily_data()
     store.set_data("AAPL", "1d", daily)
 
@@ -393,7 +404,9 @@ async def test_parabolic_up_scan_realtime_fails_low_signal(store: MultiFreqCandl
 
 
 @pytest.mark.asyncio
-async def test_parabolic_up_scan_realtime_outside_time_window(store: MultiFreqCandleStore):
+async def test_parabolic_up_scan_realtime_outside_time_window(
+    store: MultiFreqCandleStore,
+):
     daily = _make_daily_data()
     store.set_data("AAPL", "1d", daily)
 
@@ -479,7 +492,9 @@ async def test_parabolic_up_scan(store: MultiFreqCandleStore):
 
 
 @pytest.mark.asyncio
-async def test_parabolic_up_scan_realtime_min_volume_filter(store: MultiFreqCandleStore):
+async def test_parabolic_up_scan_realtime_min_volume_filter(
+    store: MultiFreqCandleStore,
+):
     daily = _make_daily_data()
     store.set_data("AAPL", "1d", daily)
 

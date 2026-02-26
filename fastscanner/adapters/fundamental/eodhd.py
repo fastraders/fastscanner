@@ -129,9 +129,9 @@ class EODHDFundamentalStore:
             institutional_ownership_perc=data["institutional_ownership_perc"],
             shares_float=data["shares_float"],
             beta=data["beta"],
-            ipo_date=data["ipo_date"],
-            ceo_name=data["ceo_name"],
-            cfo_name=data["cfo_name"],
+            ipo_date=data.get("ipo_date"),
+            ceo_name=data.get("ceo_name"),
+            cfo_name=data.get("cfo_name"),
         )
 
     def _load_raw_cached(self, symbol: str) -> dict | None:

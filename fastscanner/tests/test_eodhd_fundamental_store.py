@@ -69,6 +69,9 @@ async def test_get_from_cache(store):
         institutional_ownership_perc=65.4,
         shares_float=123456789,
         beta=1,
+        ipo_date=None,
+        ceo_name=None,
+        cfo_name=None,
     )
 
     cache_path = os.path.join(store.CACHE_DIR, "AAPL.json")
@@ -88,6 +91,9 @@ async def test_get_from_cache(store):
                 "institutional_ownership_perc": expected.institutional_ownership_perc,
                 "shares_float": expected.shares_float,
                 "beta": expected.beta,
+                "ipo_date": expected.ipo_date,
+                "ceo_name": expected.ceo_name,
+                "cfo_name": expected.cfo_name,
             },
             f,
         )

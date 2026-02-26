@@ -2,10 +2,9 @@ from datetime import date, datetime, time
 from typing import Any, Protocol
 
 import pandas as pd
-
-from fastscanner.pkg.candle import Candle
 import pytest
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.services.indicators.ports import (
     Cache,
     CandleCol,
@@ -203,8 +202,10 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
 
         realtime_passed_timestamps = set()
         for timestamp, row in intraday_data.iterrows():
-            candle = Candle(row.to_dict(), timestamp=timestamp)
-            _, passes_filter = await scanner.scan_realtime(symbol=symbol, new_row=candle)
+            candle = Candle(row.to_dict(), timestamp=timestamp)  # type: ignore
+            _, passes_filter = await scanner.scan_realtime(
+                symbol=symbol, new_row=candle
+            )
             if passes_filter:
                 realtime_passed_timestamps.add(timestamp)
 
