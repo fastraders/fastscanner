@@ -23,6 +23,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     def __init__(self, store: CandleStore):
         self._store = store
         self._base_dir = os.path.join(config.DATA_BASE_DIR, "data")
+        self._expirations_last_updated: dict[str, date] = {}
 
     async def get(
         self,
@@ -116,25 +117,8 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     async def collect_expired_data(self, symbol: str, freqs: list[str]) -> None:
         today = ClockRegistry.clock.today()
         yday = today - timedelta(days=1)
-        self._load_expirations(symbol)
+        self._load_expirations(symbol, today)
         expirations = self._expirations.get(symbol, {})
-
-        # Delete after some days
-        if any(
-            exp_key.split("_", 1)[1] in ("d", "min", "h") for exp_key in expirations
-        ):
-            expirations = {
-                "2026_1d": today,
-                "2026-01-26_1min": today,
-                "2026-01-26_2min": today,
-            }
-            self._expirations[symbol] = expirations
-            with open(
-                os.path.join(self.CACHE_DIR, symbol, "expirations.json"), "w"
-            ) as f:
-                json.dump(
-                    {key: value.isoformat() for key, value in expirations.items()}, f
-                )
 
         freq_to_partition_key: dict[str, str] = {
             freq: self._partition_key(yday, freq) for freq in freqs
@@ -274,7 +258,7 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     _expirations: dict[str, dict[str, date]]
 
     def _is_expired(self, symbol: str, key: str, freq: str, today: date) -> bool:
-        self._load_expirations(symbol)
+        self._load_expirations(symbol, today)
 
         expiration_key = self._expiration_key(key, freq)
         expirations = self._expirations.get(symbol, {})
@@ -284,7 +268,8 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
         return expirations[expiration_key] <= today
 
     def _mark_expiration(self, symbol: str, key: str, freq: str, today: date) -> None:
-        self._load_expirations(symbol)
+        self._expirations_last_updated.pop(symbol, None)
+        self._load_expirations(symbol, today)
 
         _, end = self._range_from_key(key, freq)
         expiration_key = self._expiration_key(key, freq)
@@ -304,25 +289,21 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
     def _expiration_key(self, key: str, freq: str) -> str:
         return f"{key}_{freq}"
 
-    def _load_expirations(self, symbol: str):
+    def _load_expirations(self, symbol: str, today: date):
         if not hasattr(self, "_expirations"):
             self._expirations = {}
 
-        if symbol in self._expirations:
+        last_updated = self._expirations_last_updated.get(symbol)
+        if symbol in self._expirations and last_updated == today:
             return
 
         try:
             with open(os.path.join(self.CACHE_DIR, symbol, "expirations.json")) as f:
-                # self._expirations[symbol] = {
-                #     "2026_1d": date(2026, 1, 28),
-                #     "2026-01-26_1min": date(2026, 1, 28),
-                #     "2026-01-26_2min": date(2026, 1, 28),
-                # }
-
                 self._expirations[symbol] = {
                     key: date.fromisoformat(value)
                     for key, value in json.load(f).items()
                 }
+                self._expirations_last_updated[symbol] = today
         except FileNotFoundError:
             self._expirations[symbol] = {}
         except json.JSONDecodeError as e:
