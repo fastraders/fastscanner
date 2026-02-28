@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -21,12 +20,6 @@ def sample_fundamental_data():
             "GicIndustry": "Tech Hardware",
             "GicSector": "Information Technology",
         },
-        "Earnings": {
-            "History": {
-                "2023-12-31": {"reportDate": "2023-12-31"},
-                "2023-09-30": {"reportDate": "2023-09-30"},
-            }
-        },
         "SharesStats": {
             "PercentInsiders": 1.23,
             "PercentInstitutions": 65.4,
@@ -44,11 +37,25 @@ def sample_market_cap():
 
 
 @pytest.fixture
+def sample_earnings_calendar_response():
+    return {
+        "earnings": [
+            {"code": "AAPL.US", "report_date": "2023-10-26", "date": "2023-09-30"},
+            {"code": "AAPL.US", "report_date": "2024-01-25", "date": "2023-12-31"},
+            {"code": "MSFT.US", "report_date": "2023-10-24", "date": "2023-09-30"},
+        ]
+    }
+
+
+@pytest.fixture
 def store(tmp_path):
     BASE_URL = "api/demo"
     API_KEY = "demo"
     store = EODHDFundamentalStore(BASE_URL, API_KEY)
-    store.CACHE_DIR = tmp_path
+    store.CACHE_DIR = tmp_path / "fundamentals"
+    store.RAW_CACHE_DIR = tmp_path / "fundamentals_raw"
+    os.makedirs(store.CACHE_DIR, exist_ok=True)
+    os.makedirs(store.RAW_CACHE_DIR, exist_ok=True)
     return store
 
 
@@ -123,13 +130,23 @@ async def test_get_fetch_and_store(
     mock_marketcap.status_code = 200
     mock_marketcap.json.return_value = sample_market_cap
 
-    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
+    mock_earnings = MagicMock()
+    mock_earnings.status_code = 200
+    mock_earnings.json.return_value = {
+        "earnings": [
+            {"code": "AAPL.US", "report_date": "2023-10-26"},
+            {"code": "AAPL.US", "report_date": "2024-01-25"},
+        ]
+    }
+
+    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap, mock_earnings]
 
     result = await store.get("AAPL")
 
     assert result.exchange == "NASDAQ"
     assert result.city == "Cupertino"
     assert result.historical_market_cap[pd.Timestamp("2023-12-31").date()] == 1e9
+    assert len(result.earnings_dates) == 2
 
     path = store._get_cache_path("AAPL")
     assert os.path.exists(path)
@@ -148,7 +165,10 @@ def test_load_cached_bad_json(store):
 
 
 def test_store_and_load_roundtrip(store, sample_fundamental_data, sample_market_cap):
-    data = store._parse_data(sample_fundamental_data, sample_market_cap)
+    earnings_dates = pd.DatetimeIndex(
+        pd.to_datetime(["2023-10-26", "2024-01-25"]), name="report_date"
+    )
+    data = store._parse_data(sample_fundamental_data, sample_market_cap, earnings_dates)
     store._store("AAPL", data)
 
     loaded = store._load_cached("AAPL")
@@ -184,7 +204,15 @@ async def test_reload_stores_and_returns_fresh_data(
     mock_marketcap.status_code = 200
     mock_marketcap.json.return_value = sample_market_cap
 
-    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap]
+    mock_earnings = MagicMock()
+    mock_earnings.status_code = 200
+    mock_earnings.json.return_value = {
+        "earnings": [
+            {"code": "AAPL.US", "report_date": "2023-10-26"},
+        ]
+    }
+
+    mock_retry_request.side_effect = [mock_fundamentals, mock_marketcap, mock_earnings]
 
     result = await store.reload("AAPL")
 
@@ -192,6 +220,7 @@ async def test_reload_stores_and_returns_fresh_data(
     assert result.exchange == "NASDAQ"
     assert result.city == "Cupertino"
     assert result.historical_market_cap[pd.Timestamp("2023-12-31").date()] == 1e9
+    assert len(result.earnings_dates) == 1
 
     cache_path = store._get_cache_path("AAPL")
     assert os.path.exists(cache_path)
@@ -199,3 +228,108 @@ async def test_reload_stores_and_returns_fresh_data(
     with open(cache_path) as f:
         saved_data = json.load(f)
         assert saved_data["exchange"] == "NASDAQ"
+
+
+def test_parse_earnings_records(store):
+    records = [
+        {"code": "AAPL.US", "report_date": "2023-10-26"},
+        {"code": "AAPL.US", "report_date": "2024-01-25"},
+        {"code": "AAPL.US", "report_date": "2023-10-26"},
+    ]
+    result = store._parse_earnings_records(records)
+
+    assert len(result) == 2
+    assert result[0] == pd.Timestamp("2023-10-26")
+    assert result[1] == pd.Timestamp("2024-01-25")
+
+
+def test_parse_earnings_records_empty(store):
+    result = store._parse_earnings_records([])
+    assert len(result) == 0
+
+
+def test_group_earnings_by_symbol(store):
+    records = [
+        {"code": "AAPL.US", "report_date": "2023-10-26"},
+        {"code": "MSFT.US", "report_date": "2023-10-24"},
+        {"code": "AAPL.US", "report_date": "2024-01-25"},
+    ]
+    result = store._group_earnings_by_symbol(records)
+
+    assert len(result) == 2
+    assert len(result["AAPL"]) == 2
+    assert len(result["MSFT"]) == 1
+
+
+def test_update_cached_earnings(store, sample_fundamental_data, sample_market_cap):
+    earnings_dates = pd.DatetimeIndex(
+        pd.to_datetime(["2023-10-26"]), name="report_date"
+    )
+    data = store._parse_data(sample_fundamental_data, sample_market_cap, earnings_dates)
+    store._store("AAPL", data)
+
+    new_dates = pd.DatetimeIndex(
+        pd.to_datetime(["2023-10-26", "2024-01-25"]), name="report_date"
+    )
+    store._update_cached_earnings("AAPL", new_dates)
+
+    loaded = store._load_cached("AAPL")
+    assert len(loaded.earnings_dates) == 2
+
+
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
+async def test_reload_earnings_no_cache(
+    mock_retry_request, store, sample_fundamental_data, sample_market_cap
+):
+    earnings_dates = pd.DatetimeIndex(
+        pd.to_datetime(["2023-10-26"]), name="report_date"
+    )
+    fd = store._parse_data(sample_fundamental_data, sample_market_cap, earnings_dates)
+    store._store("AAPL", fd)
+    store._store("MSFT", fd)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "earnings": [
+            {"code": "GOOG.US", "report_date": "2024-04-25"},
+            {"code": "GOOG.US", "report_date": "2024-07-23"},
+        ]
+    }
+    mock_retry_request.return_value = mock_response
+
+    await store.reload_earnings(["GOOG"])
+
+    raw_path = os.path.join(store.RAW_CACHE_DIR, "GOOG_earnings.json")
+    assert os.path.exists(raw_path)
+
+
+@pytest.mark.asyncio
+@patch("fastscanner.adapters.fundamental.eodhd.async_retry_request")
+async def test_reload_earnings_with_existing_cache_merges(
+    mock_retry_request, store, sample_fundamental_data, sample_market_cap
+):
+    earnings_dates = pd.DatetimeIndex(
+        pd.to_datetime(["2023-10-26"]), name="report_date"
+    )
+    fd = store._parse_data(sample_fundamental_data, sample_market_cap, earnings_dates)
+    store._store("AAPL", fd)
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "earnings": [
+            {"code": "AAPL.US", "report_date": "2024-01-25"},
+            {"code": "AAPL.US", "report_date": "2024-04-25"},
+        ]
+    }
+    mock_retry_request.return_value = mock_response
+
+    await store.reload_earnings(["AAPL"])
+
+    loaded = store._load_cached("AAPL")
+    assert len(loaded.earnings_dates) == 3
+    expected_dates = pd.to_datetime(["2023-10-26", "2024-01-25", "2024-04-25"])
+    for expected in expected_dates:
+        assert expected in loaded.earnings_dates

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from dataclasses import asdict
+from datetime import date, timedelta
 from typing import Dict
 
 import httpx
@@ -15,6 +16,8 @@ from fastscanner.services.exceptions import NotFound
 from fastscanner.services.indicators.ports import FundamentalData
 
 logger = logging.getLogger(__name__)
+
+EARNINGS_BATCH_SIZE = 50
 
 
 class EODHDFundamentalStore:
@@ -47,29 +50,38 @@ class EODHDFundamentalStore:
         logger.info(f"Fetching fundamentals for {symbol} from EODHD")
         fundamentals = {}
         market_cap = {}
-        async with self._semaphore, self._rate_limiter:
-            try:
-                fundamentals = await self._fetch_fundamentals(symbol)
-                market_cap = await self._fetch_market_cap(symbol)
-                fd = self._parse_data(fundamentals, market_cap)
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code != 404:
-                    logger.error(
-                        f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
-                    )
-                    raise e
-                logger.warning(f"Symbol {symbol} not found in EODHD")
-                fd = self._empty_data()
+        earnings_records = []
+        try:
+            fundamentals, market_cap, earnings_records = await asyncio.gather(
+                self._fetch_fundamentals(symbol),
+                self._fetch_market_cap(symbol),
+                self._fetch_earnings_calendar(
+                    [symbol],
+                    from_date=date(2005, 1, 1),
+                    to_date=date.today() + timedelta(days=365),
+                ),
+            )
+            earnings_dates = self._parse_earnings_records(earnings_records)
+            fd = self._parse_data(fundamentals, market_cap, earnings_dates)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 404:
+                logger.error(
+                    f"Failed to fetch fundamentals for {symbol}: {e.response.text}"
+                )
+                raise e
+            logger.warning(f"Symbol {symbol} not found in EODHD")
+            fd = self._empty_data()
 
         self._store(symbol, fd)
         self._store_raw(symbol, fundamentals, market_cap)
+        self._store_earnings_raw(symbol, earnings_records)
         logger.info(f"Stored fundamental data for {symbol}")
         return fd
 
     async def _fetch_fundamentals(self, symbol: str) -> Dict:
         url = f"{self._base_url}/fundamentals/{symbol}"
         params = {
-            "filter": "General::Code,General,Earnings,SharesStats,Technicals",
+            "filter": "General::Code,General,SharesStats,Technicals",
             "api_token": self._api_key,
             "fmt": "json",
         }
@@ -80,12 +92,150 @@ class EODHDFundamentalStore:
         params = {"api_token": self._api_key, "fmt": "json"}
         return await self._fetch_json(url, params=params)
 
+    async def _fetch_earnings_calendar(
+        self,
+        symbols: list[str],
+        from_date: date,
+        to_date: date,
+    ) -> list[dict]:
+        url = f"{self._base_url}/calendar/earnings"
+        params = {
+            "api_token": self._api_key,
+            "symbols": ",".join(symbols),
+            "from": from_date.isoformat(),
+            "to": to_date.isoformat(),
+            "fmt": "json",
+        }
+        data = await self._fetch_json(url, params=params)
+        return data.get("earnings", [])
+
     async def _fetch_json(self, url: str, params: Dict) -> dict:
-        async with httpx.AsyncClient() as client:
-            response = await async_retry_request(client, "GET", url, params=params)
-            response.raise_for_status()
-            return response.json()
-        return {}
+        async with self._semaphore, self._rate_limiter:
+            async with httpx.AsyncClient() as client:
+                response = await async_retry_request(client, "GET", url, params=params)
+                response.raise_for_status()
+                return response.json()
+
+    async def reload(self, symbol: str) -> FundamentalData:
+        return await self._fetch(symbol)
+
+    async def reload_earnings(self, symbols: list[str]) -> None:
+        today = date.today()
+        has_cache = [s for s in symbols if os.path.exists(self._get_cache_path(s))]
+        no_cache = [s for s in symbols if not os.path.exists(self._get_cache_path(s))]
+
+        if no_cache:
+            await self._batch_fetch_earnings(
+                no_cache,
+                from_date=date(2005, 1, 1),
+                to_date=today + timedelta(days=365),
+            )
+
+        if has_cache:
+            await self._batch_fetch_earnings(
+                has_cache,
+                from_date=today - timedelta(days=7),
+                to_date=today + timedelta(days=365),
+            )
+
+    async def _batch_fetch_earnings(
+        self,
+        symbols: list[str],
+        from_date: date,
+        to_date: date,
+    ) -> None:
+        batches = [
+            symbols[i : i + EARNINGS_BATCH_SIZE]
+            for i in range(0, len(symbols), EARNINGS_BATCH_SIZE)
+        ]
+        tasks = [
+            asyncio.create_task(
+                self._fetch_and_store_earnings_batch(batch, from_date, to_date)
+            )
+            for batch in batches
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _fetch_and_store_earnings_batch(
+        self,
+        batch: list[str],
+        from_date: date,
+        to_date: date,
+    ) -> None:
+        try:
+            records = await self._fetch_earnings_calendar(batch, from_date, to_date)
+        except (httpx.HTTPStatusError, MaxRetryError) as e:
+            logger.error(f"Failed to fetch earnings calendar for batch: {e}")
+            return
+
+        by_symbol = self._group_earnings_by_symbol(records)
+
+        for symbol in batch:
+            symbol_records = by_symbol.get(symbol, [])
+            new_dates = self._parse_earnings_records(symbol_records)
+            cached = self._load_cached(symbol)
+            if cached is not None:
+                new_dates = cached.earnings_dates.union(new_dates).sort_values()
+
+            self._store_earnings_raw(symbol, symbol_records)
+            self._update_cached_earnings(symbol, new_dates)
+
+    def _group_earnings_by_symbol(self, records: list[dict]) -> dict[str, list[dict]]:
+        by_symbol: dict[str, list[dict]] = {}
+        for record in records:
+            code = record.get("code", "")
+            symbol = code.split(".")[0] if "." in code else code
+            by_symbol.setdefault(symbol, []).append(record)
+        return by_symbol
+
+    def _parse_earnings_records(self, records: list[dict]) -> pd.DatetimeIndex:
+        dates = []
+        for r in records:
+            report_date = r.get("report_date")
+            if report_date:
+                dates.append(report_date)
+        if not dates:
+            return pd.DatetimeIndex([], dtype="datetime64[ns]", name="report_date")
+        return (
+            pd.DatetimeIndex(pd.to_datetime(dates), name="report_date")
+            .drop_duplicates()
+            .sort_values()
+        )
+
+    def _update_cached_earnings(
+        self, symbol: str, earnings_dates: pd.DatetimeIndex
+    ) -> None:
+        path = self._get_cache_path(symbol)
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            return
+        data["earnings_dates"] = [dt.date().isoformat() for dt in earnings_dates]
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    def _store_earnings_raw(self, symbol: str, records: list[dict]) -> None:
+        os.makedirs(self.RAW_CACHE_DIR, exist_ok=True)
+        path = os.path.join(self.RAW_CACHE_DIR, f"{symbol}_earnings.json")
+
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    existing = json.load(f)
+            except json.JSONDecodeError:
+                existing = []
+            seen = {r.get("report_date") for r in existing}
+            for r in records:
+                if r.get("report_date") not in seen:
+                    existing.append(r)
+                    seen.add(r.get("report_date"))
+            records = existing
+
+        with open(path, "w") as f:
+            json.dump(records, f)
 
     def _load_cached(self, symbol: str) -> FundamentalData | None:
         path = self._get_cache_path(symbol)
@@ -96,8 +246,9 @@ class EODHDFundamentalStore:
 
             fundamentals = raw_data.get("fundamentals", {})
             market_cap = raw_data.get("market_cap", {})
-            fd = self._parse_data(fundamentals, market_cap)
-            self._store(symbol, fd)
+            earnings_dates = self._load_raw_earnings_cached(symbol)
+            fd = self._parse_data(fundamentals, market_cap, earnings_dates)
+            return fd
 
         try:
             with open(path, "r") as f:
@@ -146,16 +297,28 @@ class EODHDFundamentalStore:
             logger.warning(f"Raw cache for {symbol} is corrupted (JSON error): {e}")
             return None
 
-    async def reload(self, symbol: str) -> FundamentalData:
-        return await self._fetch(symbol)
+    def _load_raw_earnings_cached(self, symbol: str) -> pd.DatetimeIndex | None:
+        path = os.path.join(self.RAW_CACHE_DIR, f"{symbol}_earnings.json")
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r") as f:
+                records = json.load(f)
+        except json.JSONDecodeError:
+            return None
+        return self._parse_earnings_records(records)
 
-    def _parse_data(self, fundamentals: dict, market_cap: dict) -> FundamentalData:
+    def _parse_data(
+        self,
+        fundamentals: dict,
+        market_cap: dict,
+        earnings_dates: pd.DatetimeIndex | None = None,
+    ) -> FundamentalData:
         fundamentals = {
             k: v for k, v in fundamentals.items() if v is not None and v != "NA"
         }
         general = fundamentals.get("General") or {}
         shares_stats = fundamentals.get("SharesStats") or {}
-        earnings = fundamentals.get("Earnings") or {}
         technicals = fundamentals.get("Technicals", {}) or {}
 
         market_cap_data = {
@@ -169,26 +332,25 @@ class EODHDFundamentalStore:
             dtype=float,
         ).sort_index()
 
-        earnings_dates = [e["reportDate"] for e in earnings.get("History", {}).values()]
-        earnings_dates = pd.DatetimeIndex(
-            pd.to_datetime(earnings_dates), name="report_date"
-        ).sort_values()
+        if earnings_dates is None:
+            earnings_dates = pd.DatetimeIndex(
+                [], dtype="datetime64[ns]", name="report_date"
+            )
 
         address_data = general.get("AddressData", {}) or {}
         insiders_ownership_perc = None
         institutional_ownership_perc = None
         shares_float = None
         beta = None
-        if shares_stats.get("PercentInstitutions") is not None:
-            insiders_ownership_perc = float(shares_stats["PercentInsiders"])
         if shares_stats.get("PercentInsiders") is not None:
+            insiders_ownership_perc = float(shares_stats["PercentInsiders"])
+        if shares_stats.get("PercentInstitutions") is not None:
             institutional_ownership_perc = float(shares_stats["PercentInstitutions"])
         if shares_stats.get("SharesFloat") is not None:
             shares_float = float(shares_stats["SharesFloat"])
         if technicals.get("Beta") is not None:
             beta = float(technicals["Beta"])
 
-        # NEW: IPO date and officers
         ipo_date = general.get("IPODate")
 
         officers = general.get("Officers", {})
@@ -235,7 +397,7 @@ class EODHDFundamentalStore:
             str(idx): float(val) for idx, val in data.historical_market_cap.items()
         }
         data_dict["earnings_dates"] = [
-            date.date().isoformat() for date in data.earnings_dates
+            date_.date().isoformat() for date_ in data.earnings_dates
         ]
 
         with open(path, "w") as f:
@@ -273,7 +435,7 @@ class EODHDFundamentalStore:
             institutional_ownership_perc=None,
             shares_float=None,
             beta=None,
-            ipo_date=None,  # ADD
-            ceo_name=None,  # ADD
+            ipo_date=None,
+            ceo_name=None,
             cfo_name=None,
         )

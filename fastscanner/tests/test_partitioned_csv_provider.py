@@ -253,6 +253,7 @@ async def test_collect_expired_data_basic(mock_clock_registry, provider):
             "2023-01_1d": yesterday + timedelta(days=10),  # not expired
         }
     }
+    provider._expirations_last_updated = {symbol: today.date()}
 
     dummy_df = pd.DataFrame(
         {"OPEN": [1], "CLOSE": [2]},
