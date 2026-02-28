@@ -119,75 +119,6 @@ class EODHDFundamentalStore:
     async def reload(self, symbol: str) -> FundamentalData:
         return await self._fetch(symbol)
 
-    async def reload_earnings(self, symbols: list[str]) -> None:
-        today = date.today()
-        has_cache = [s for s in symbols if os.path.exists(self._get_cache_path(s))]
-        no_cache = [s for s in symbols if not os.path.exists(self._get_cache_path(s))]
-
-        if no_cache:
-            await self._batch_fetch_earnings(
-                no_cache,
-                from_date=date(2005, 1, 1),
-                to_date=today + timedelta(days=365),
-            )
-
-        if has_cache:
-            await self._batch_fetch_earnings(
-                has_cache,
-                from_date=today - timedelta(days=7),
-                to_date=today + timedelta(days=365),
-            )
-
-    async def _batch_fetch_earnings(
-        self,
-        symbols: list[str],
-        from_date: date,
-        to_date: date,
-    ) -> None:
-        batches = [
-            symbols[i : i + EARNINGS_BATCH_SIZE]
-            for i in range(0, len(symbols), EARNINGS_BATCH_SIZE)
-        ]
-        tasks = [
-            asyncio.create_task(
-                self._fetch_and_store_earnings_batch(batch, from_date, to_date)
-            )
-            for batch in batches
-        ]
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def _fetch_and_store_earnings_batch(
-        self,
-        batch: list[str],
-        from_date: date,
-        to_date: date,
-    ) -> None:
-        try:
-            records = await self._fetch_earnings_calendar(batch, from_date, to_date)
-        except (httpx.HTTPStatusError, MaxRetryError) as e:
-            logger.error(f"Failed to fetch earnings calendar for batch: {e}")
-            return
-
-        by_symbol = self._group_earnings_by_symbol(records)
-
-        for symbol in batch:
-            symbol_records = by_symbol.get(symbol, [])
-            new_dates = self._parse_earnings_records(symbol_records)
-            cached = self._load_cached(symbol)
-            if cached is not None:
-                new_dates = cached.earnings_dates.union(new_dates).sort_values()
-
-            self._store_earnings_raw(symbol, symbol_records)
-            self._update_cached_earnings(symbol, new_dates)
-
-    def _group_earnings_by_symbol(self, records: list[dict]) -> dict[str, list[dict]]:
-        by_symbol: dict[str, list[dict]] = {}
-        for record in records:
-            code = record.get("code", "")
-            symbol = code.split(".")[0] if "." in code else code
-            by_symbol.setdefault(symbol, []).append(record)
-        return by_symbol
-
     def _parse_earnings_records(self, records: list[dict]) -> pd.DatetimeIndex:
         dates = []
         for r in records:
@@ -202,21 +133,6 @@ class EODHDFundamentalStore:
             .sort_values()
         )
 
-    def _update_cached_earnings(
-        self, symbol: str, earnings_dates: pd.DatetimeIndex
-    ) -> None:
-        path = self._get_cache_path(symbol)
-        if not os.path.exists(path):
-            return
-        try:
-            with open(path, "r") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            return
-        data["earnings_dates"] = [dt.date().isoformat() for dt in earnings_dates]
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
-
     def _store_earnings_raw(self, symbol: str, records: list[dict]) -> None:
         os.makedirs(self.RAW_CACHE_DIR, exist_ok=True)
         path = os.path.join(self.RAW_CACHE_DIR, f"{symbol}_earnings.json")
@@ -227,12 +143,20 @@ class EODHDFundamentalStore:
                     existing = json.load(f)
             except json.JSONDecodeError:
                 existing = []
-            seen = {r.get("report_date") for r in existing}
-            for r in records:
-                if r.get("report_date") not in seen:
-                    existing.append(r)
-                    seen.add(r.get("report_date"))
-            records = existing
+            min_record = min(
+                *(
+                    r["report_date"]
+                    for r in records
+                    if r.get("report_date") is not None
+                ),
+                "9999-12-31",
+            )
+            existing = [
+                r
+                for r in existing
+                if r.get("report_date") is not None and r["report_date"] < min_record
+            ]
+            records = sorted(existing + records, key=lambda r: r["report_date"])
 
         with open(path, "w") as f:
             json.dump(records, f)
