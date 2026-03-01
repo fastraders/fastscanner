@@ -2,9 +2,13 @@ import math
 
 import pandas as pd
 
-from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
+from fastscanner.services.indicators.lib.fundamental import (
+    DaysSinceIPOIndicator,
+    MarketCapIndicator,
+)
 
 market_cap_col = MarketCapIndicator().column_name()
+days_since_ipo_col = DaysSinceIPOIndicator().column_name()
 
 
 def filter_by_market_cap(
@@ -21,3 +25,12 @@ def filter_by_market_cap(
         market_cap_filter |= df[market_cap_col].isnull()
 
     return df[market_cap_filter]
+
+
+def filter_by_days_since_ipo(
+    df: pd.DataFrame,
+    min_days_since_ipo: int,
+) -> pd.DataFrame:
+    return df[
+        (df[days_since_ipo_col] >= min_days_since_ipo) | df[days_since_ipo_col].isnull()
+    ]

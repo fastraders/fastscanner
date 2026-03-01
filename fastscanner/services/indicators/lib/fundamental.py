@@ -249,33 +249,58 @@ class DaysSinceIPOIndicator:
     def column_name(self):
         return self.type()
 
+    async def save_to_cache(self):
+        await ApplicationRegistry.cache.save(
+            f"indicator:{self.column_name()}",
+            json.dumps(
+                {
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                    "last_days": self._last_days,
+                }
+            ),
+        )
+
+    async def load_from_cache(self, symbol: str | None = None):
+        indicator_data = await ApplicationRegistry.cache.get(
+            f"indicator:{self.column_name()}"
+        )
+        indicator_data = json.loads(indicator_data)
+        self._last_date = {
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
+        }
+        self._last_days = {
+            k: v
+            for k, v in indicator_data["last_days"].items()
+            if symbol is None or k == symbol
+        }
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         fundamentals = await ApplicationRegistry.fundamentals.get(symbol)
         assert isinstance(df.index, pd.DatetimeIndex)
 
         ipo_date_str = fundamentals.ipo_date
-        unique_dates = np.unique(df.index.date)
+        col = self.column_name()
 
-        days_since_ipo = pd.Series(
-            np.nan, index=unique_dates, dtype=float, name=self.column_name()
-        )
+        if not ipo_date_str:
+            df[col] = np.nan
+            return df
 
-        if ipo_date_str:
-            ipo_date = pd.to_datetime(ipo_date_str).date()
-            for d in unique_dates:
-                if d >= ipo_date:
-                    days_since_ipo[d] = (d - ipo_date).days
+        ipo_date = pd.to_datetime(ipo_date_str)
+        df[col] = (df.index - ipo_date).days
+        df.loc[df[col] < 0, col] = np.nan
 
-        df.loc[:, "date"] = df.index.date
-        df = df.join(days_since_ipo, on="date")
-        return df.drop(columns=["date"])
+        return df
 
     async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
         new_date = new_row.timestamp.date()
         if (last_date := self._last_date.get(symbol)) is None or last_date != new_date:
-            result = await self.extend(symbol, new_row.to_dataframe())
-            self._last_days[symbol] = result[self.column_name()].iloc[0]
+            result = (await self.extend(symbol, new_row.to_dataframe())).iloc[0]
             self._last_date[symbol] = new_date
+            self._last_days.pop(symbol, None)
+            if pd.notna(value := result[self.column_name()]):
+                self._last_days[symbol] = int(value)
 
         new_row[self.column_name()] = self._last_days.get(symbol)
         return new_row

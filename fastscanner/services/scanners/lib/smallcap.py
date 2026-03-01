@@ -18,11 +18,14 @@ from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
     PrevDayIndicator,
 )
-from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
+from fastscanner.services.indicators.lib.fundamental import (
+    DaysSinceIPOIndicator,
+    MarketCapIndicator,
+)
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
-from .utils import filter_by_market_cap
+from .utils import filter_by_days_since_ipo, filter_by_market_cap
 
 
 class SmallCapUpScanner:
@@ -36,20 +39,22 @@ class SmallCapUpScanner:
         max_price: float = math.inf,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_since_ipo: int | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
         self._min_volume = min_volume
         self._min_gap = min_gap
-        self._id = str(uuid.uuid4())
         self._start_time = start_time
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
         self._min_price = min_price
         self._max_price = max_price
+        self._min_days_since_ipo = min_days_since_ipo
         self._include_null_market_cap = include_null_market_cap
         self._market_cap = MarketCapIndicator()
+        self._days_since_ipo = DaysSinceIPOIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.HIGH)
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
@@ -87,6 +92,9 @@ class SmallCapUpScanner:
             return daily_df
 
         daily_df = await self._market_cap.extend(symbol, daily_df)
+        daily_df = await self._days_since_ipo.extend(symbol, daily_df)
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -169,11 +177,13 @@ class SmallCapUpScanner:
         if df.empty:
             return df
 
-        for shift, min_change in zip(self._shift_periods, self._shift_min_change):
+        for shift, min_change, shift_ind in zip(
+            self._shift_periods, self._shift_min_change, self._shift_indicators
+        ):
             change_col = f"change_{shift}"
             df.loc[:, change_col] = (
-                df[C.HIGH] - df[shift_indicator.column_name()]
-            ) / df[shift_indicator.column_name()]
+                df[C.HIGH] - df[shift_ind.column_name()]
+            ) / df[shift_ind.column_name()]
             df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
 
         df = df[df["triggered_alert"].notnull()]
@@ -191,13 +201,20 @@ class SmallCapUpScanner:
             return new_row, False
 
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
 
         for shift_indicator in self._shift_indicators:
             new_row = await shift_indicator.extend_realtime(symbol, new_row)
 
+        new_row = await self._cum_high.extend_realtime(symbol, new_row)
+        if abs(new_row[self._cum_high.column_name()] - new_row[C.HIGH]) >= 0.0001:
+            new_row["triggered_alert"] = pd.NA
+            return new_row, False
+
         market_cap_value = new_row[self._market_cap.column_name()]
+        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
         cum_vol_val = new_row[self._cum_volume.column_name()]
         gap_val = new_row[self._gap.column_name()]
 
@@ -216,11 +233,17 @@ class SmallCapUpScanner:
             not pd.isna(market_cap_value)
             and self._min_market_cap <= market_cap_value <= self._max_market_cap
         ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+        days_since_ipo_passes = (
+            self._min_days_since_ipo is None
+            or pd.isna(days_since_ipo_value)
+            or days_since_ipo_value >= self._min_days_since_ipo
+        )
 
         passes_filter = (
             self._min_price <= new_row[C.CLOSE] <= self._max_price
             and cum_vol_val >= self._min_volume
             and market_cap_passes
+            and days_since_ipo_passes
             and gap_val >= self._min_gap
         )
         if not passes_filter:
@@ -232,7 +255,7 @@ class SmallCapUpScanner:
         ):
             base_val = new_row[shift_indicator.column_name()]
             change_col = f"change_{shift}"
-            if pd.isna(base_val) and base_val == 0:
+            if pd.isna(base_val) or base_val == 0:
                 continue
             change = (new_row[C.HIGH] - base_val) / base_val
             new_row[change_col] = change

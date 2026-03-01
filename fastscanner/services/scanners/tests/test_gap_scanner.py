@@ -30,8 +30,9 @@ class MultiFreqCandleStore:
 
 
 class MockFundamentalDataStore:
-    def __init__(self, market_cap: float = 1e9):
+    def __init__(self, market_cap: float = 1e9, ipo_date: str | None = None):
         self._market_cap = market_cap
+        self._ipo_date = ipo_date
 
     async def get(self, symbol) -> FundamentalData:
         date_index = pd.date_range(start="2023-01-01", periods=30, freq="D").date
@@ -48,7 +49,7 @@ class MockFundamentalDataStore:
             None,
             None,
             None,
-            None,
+            self._ipo_date,
             None,
             None,
         )
@@ -491,3 +492,226 @@ async def test_gap_up_scan_realtime_days_of_week_filter(store: MultiFreqCandleSt
 
     assert passed is False
     assert pd.isna(result["signal"])
+
+
+# --- Days since IPO filter tests ---
+
+
+@pytest.fixture
+def store_recent_ipo():
+    candle_store = MultiFreqCandleStore()
+    fundamental_store = MockFundamentalDataStore(ipo_date="2023-01-25")
+    holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
+
+    ApplicationRegistry.init(
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        holidays=holiday_store,
+        cache=cache,
+    )
+
+    yield candle_store
+    ApplicationRegistry.reset()
+
+
+@pytest.fixture
+def store_null_ipo():
+    candle_store = MultiFreqCandleStore()
+    fundamental_store = MockFundamentalDataStore(ipo_date=None)
+    holiday_store = MockPublicHolidaysStore()
+    cache = MockCache()
+
+    ApplicationRegistry.init(
+        candles=candle_store,
+        fundamentals=fundamental_store,
+        holidays=holiday_store,
+        cache=cache,
+    )
+
+    yield candle_store
+    ApplicationRegistry.reset()
+
+
+@pytest.mark.asyncio
+async def test_gap_down_scan_realtime_filtered_by_days_since_ipo(
+    store_recent_ipo: MultiFreqCandleStore,
+):
+    daily = _make_daily_data()
+    store_recent_ipo.set_data("AAPL", "1d", daily)
+
+    scanner = ATRGapDownScanner(
+        min_adv=0,
+        min_adr=0,
+        atr_multiplier=0.1,
+        min_volume=0,
+        start_time=time(9, 30),
+        end_time=time(16, 0),
+        min_days_since_ipo=30,
+    )
+
+    last_close = daily[C.CLOSE].iloc[-1]
+    gap_down_low = last_close - 20
+
+    row = Candle(
+        {
+            C.OPEN: gap_down_low + 1,
+            C.HIGH: gap_down_low + 3,
+            C.LOW: gap_down_low,
+            C.CLOSE: gap_down_low - 2,
+            C.VOLUME: 500000,
+        },
+        timestamp=pd.Timestamp(2023, 2, 1, 10, 0),
+    )
+    result, passed = await scanner.scan_realtime("AAPL", row)
+
+    assert passed is False
+
+
+@pytest.mark.asyncio
+async def test_gap_down_scan_realtime_passes_with_old_ipo(
+    store: MultiFreqCandleStore,
+):
+    daily = _make_daily_data()
+    store.set_data("AAPL", "1d", daily)
+
+    scanner = ATRGapDownScanner(
+        min_adv=0,
+        min_adr=0,
+        atr_multiplier=0.1,
+        min_volume=0,
+        start_time=time(9, 30),
+        end_time=time(16, 0),
+        min_days_since_ipo=30,
+    )
+
+    last_close = daily[C.CLOSE].iloc[-1]
+    gap_down_low = last_close - 20
+
+    row = Candle(
+        {
+            C.OPEN: gap_down_low + 1,
+            C.HIGH: gap_down_low + 3,
+            C.LOW: gap_down_low,
+            C.CLOSE: gap_down_low - 2,
+            C.VOLUME: 500000,
+        },
+        timestamp=pd.Timestamp(2023, 2, 1, 10, 0),
+    )
+    result, passed = await scanner.scan_realtime("AAPL", row)
+
+    assert passed is True
+
+
+@pytest.mark.asyncio
+async def test_gap_down_scan_realtime_null_ipo_passes(
+    store_null_ipo: MultiFreqCandleStore,
+):
+    daily = _make_daily_data()
+    store_null_ipo.set_data("AAPL", "1d", daily)
+
+    scanner = ATRGapDownScanner(
+        min_adv=0,
+        min_adr=0,
+        atr_multiplier=0.1,
+        min_volume=0,
+        start_time=time(9, 30),
+        end_time=time(16, 0),
+        min_days_since_ipo=30,
+    )
+
+    last_close = daily[C.CLOSE].iloc[-1]
+    gap_down_low = last_close - 20
+
+    row = Candle(
+        {
+            C.OPEN: gap_down_low + 1,
+            C.HIGH: gap_down_low + 3,
+            C.LOW: gap_down_low,
+            C.CLOSE: gap_down_low - 2,
+            C.VOLUME: 500000,
+        },
+        timestamp=pd.Timestamp(2023, 2, 1, 10, 0),
+    )
+    result, passed = await scanner.scan_realtime("AAPL", row)
+
+    assert passed is True
+
+
+@pytest.mark.asyncio
+async def test_gap_down_scan_filtered_by_days_since_ipo(
+    store_recent_ipo: MultiFreqCandleStore,
+):
+    daily = _make_daily_data()
+    store_recent_ipo.set_data("AAPL", "1d", daily)
+
+    scanner = ATRGapDownScanner(
+        min_adv=0,
+        min_adr=0,
+        atr_multiplier=0.1,
+        min_volume=0,
+        start_time=time(9, 30),
+        end_time=time(16, 0),
+        min_days_since_ipo=365,
+    )
+
+    result_df = await scanner.scan(
+        symbol="AAPL",
+        start=date(2023, 1, 1),
+        end=date(2023, 1, 31),
+        freq="5min",
+    )
+
+    assert result_df.empty
+
+
+@pytest.mark.asyncio
+async def test_gap_down_scan_null_ipo_passes_filter(
+    store_null_ipo: MultiFreqCandleStore,
+):
+    from datetime import datetime, timedelta
+
+    daily = _make_daily_data()
+    store_null_ipo.set_data("AAPL", "1d", daily)
+
+    last_daily_date = daily.index[-1].date()
+    scan_day = last_daily_date + timedelta(days=1)
+    while scan_day.weekday() >= 5:
+        scan_day += timedelta(days=1)
+
+    last_close = daily[C.CLOSE].iloc[-1]
+    gap_down = last_close - 20
+    times = [
+        datetime(scan_day.year, scan_day.month, scan_day.day, 9, 30),
+        datetime(scan_day.year, scan_day.month, scan_day.day, 9, 31),
+    ]
+    minute = pd.DataFrame(
+        {
+            C.OPEN: [gap_down + 1, gap_down],
+            C.HIGH: [gap_down + 3, gap_down + 2],
+            C.LOW: [gap_down - 1, gap_down - 2],
+            C.CLOSE: [gap_down - 2, gap_down - 3],
+            C.VOLUME: [500000, 600000],
+        },
+        index=pd.DatetimeIndex(times),
+    )
+    store_null_ipo.set_data("AAPL", "5min", minute)
+
+    scanner = ATRGapDownScanner(
+        min_adv=0,
+        min_adr=0,
+        atr_multiplier=0.1,
+        min_volume=0,
+        start_time=time(9, 30),
+        end_time=time(16, 0),
+        min_days_since_ipo=365,
+    )
+
+    result_df = await scanner.scan(
+        symbol="AAPL",
+        start=date(2023, 1, 1),
+        end=scan_day,
+        freq="5min",
+    )
+
+    assert isinstance(result_df, pd.DataFrame)

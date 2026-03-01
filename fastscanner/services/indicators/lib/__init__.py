@@ -25,6 +25,7 @@ from .daily import (
 )
 from .fundamental import (
     DaysFromEarningsIndicator,
+    DaysSinceIPOIndicator,
     DaysToEarningsIndicator,
     MarketCapIndicator,
 )
@@ -42,6 +43,7 @@ _indicators: list[type["Indicator"]] = [
     DailyATRIndicator,
     DailyATRGapIndicator,
     MarketCapIndicator,
+    DaysSinceIPOIndicator,
     GapIndicator,
     ATRGapIndicator,
     DayOpenIndicator,

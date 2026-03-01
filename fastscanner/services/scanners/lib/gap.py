@@ -19,12 +19,13 @@ from fastscanner.services.indicators.lib.daily import (
 )
 from fastscanner.services.indicators.lib.fundamental import (
     DaysFromEarningsIndicator,
+    DaysSinceIPOIndicator,
     MarketCapIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
-from .utils import filter_by_market_cap
+from .utils import filter_by_days_since_ipo, filter_by_market_cap
 
 
 class ATRGapDownScanner:
@@ -41,6 +42,7 @@ class ATRGapDownScanner:
         max_market_cap: float = math.inf,
         min_days_from_earnings: int | None = None,
         max_days_from_earnings: int | None = None,
+        min_days_since_ipo: int | None = None,
         days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
@@ -56,12 +58,14 @@ class ATRGapDownScanner:
         self._max_market_cap = max_market_cap
         self._min_days_from_earnings = min_days_from_earnings
         self._max_days_from_earnings = max_days_from_earnings
+        self._min_days_since_ipo = min_days_since_ipo
         self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
         self._days_from_earnings = DaysFromEarningsIndicator()
+        self._days_since_ipo = DaysSinceIPOIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.LOW)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.LOW)
@@ -89,6 +93,7 @@ class ATRGapDownScanner:
         daily_df = await self._adr.extend(symbol, daily_df)
         daily_df = await self._market_cap.extend(symbol, daily_df)
         daily_df = await self._days_from_earnings.extend(symbol, daily_df)
+        daily_df = await self._days_since_ipo.extend(symbol, daily_df)
 
         if self._min_days_from_earnings is not None:
             daily_df = daily_df.loc[
@@ -100,6 +105,8 @@ class ATRGapDownScanner:
                 daily_df[self._days_from_earnings.column_name()]
                 <= self._max_days_from_earnings
             ]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         if self._days_of_week is not None:
             daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
@@ -173,12 +180,14 @@ class ATRGapDownScanner:
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
         new_row = await self._days_from_earnings.extend_realtime(symbol, new_row)
+        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
         cum_volume_value = new_row[self._cum_volume.column_name()]
         days_from_earnings_value = new_row[self._days_from_earnings.column_name()]
+        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
 
         gap_value = new_row[self._gap.column_name()]
         atr_gap_value = new_row[self._atr_gap.column_name()]
@@ -210,6 +219,11 @@ class ATRGapDownScanner:
             self._max_days_from_earnings is None
             or days_from_earnings_value <= self._max_days_from_earnings
         )
+        days_since_ipo_passes = (
+            self._min_days_since_ipo is None
+            or pd.isna(days_since_ipo_value)
+            or days_since_ipo_value >= self._min_days_since_ipo
+        )
 
         passes_filter = (
             adv_value >= self._min_adv
@@ -221,6 +235,7 @@ class ATRGapDownScanner:
             and atr_gap_value < 0
             and new_row[C.CLOSE] < new_row[C.OPEN]
             and days_from_earnings_passes
+            and days_since_ipo_passes
         )
 
         return new_row, passes_filter
@@ -240,6 +255,7 @@ class ATRGapUpScanner:
         max_market_cap: float = math.inf,
         min_days_from_earnings: int | None = None,
         max_days_from_earnings: int | None = None,
+        min_days_since_ipo: int | None = None,
         days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
@@ -255,12 +271,14 @@ class ATRGapUpScanner:
         self._max_market_cap = max_market_cap
         self._min_days_from_earnings = min_days_from_earnings
         self._max_days_from_earnings = max_days_from_earnings
+        self._min_days_since_ipo = min_days_since_ipo
         self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
         self._days_from_earnings = DaysFromEarningsIndicator()
+        self._days_since_ipo = DaysSinceIPOIndicator()
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.HIGH)
         self._atr_gap = ATRGapIndicator(period=14, candle_col=C.HIGH)
@@ -288,6 +306,7 @@ class ATRGapUpScanner:
         daily_df = await self._adr.extend(symbol, daily_df)
         daily_df = await self._market_cap.extend(symbol, daily_df)
         daily_df = await self._days_from_earnings.extend(symbol, daily_df)
+        daily_df = await self._days_since_ipo.extend(symbol, daily_df)
 
         if self._min_days_from_earnings is not None:
             daily_df = daily_df.loc[
@@ -299,6 +318,8 @@ class ATRGapUpScanner:
                 daily_df[self._days_from_earnings.column_name()]
                 <= self._max_days_from_earnings
             ]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         if self._days_of_week is not None:
             daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
@@ -373,12 +394,14 @@ class ATRGapUpScanner:
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
         new_row = await self._days_from_earnings.extend_realtime(symbol, new_row)
+        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
         cum_volume_value = new_row[self._cum_volume.column_name()]
         days_from_earnings_value = new_row[self._days_from_earnings.column_name()]
+        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
 
         gap_value = new_row[self._gap.column_name()]
         atr_gap_value = new_row[self._atr_gap.column_name()]
@@ -410,6 +433,11 @@ class ATRGapUpScanner:
             self._max_days_from_earnings is None
             or days_from_earnings_value <= self._max_days_from_earnings
         )
+        days_since_ipo_passes = (
+            self._min_days_since_ipo is None
+            or pd.isna(days_since_ipo_value)
+            or days_since_ipo_value >= self._min_days_since_ipo
+        )
 
         passes_filter = (
             adv_value >= self._min_adv
@@ -421,6 +449,7 @@ class ATRGapUpScanner:
             and atr_gap_value > 0
             and new_row[C.CLOSE] > new_row[C.OPEN]
             and days_from_earnings_passes
+            and days_since_ipo_passes
         )
 
         return new_row, passes_filter

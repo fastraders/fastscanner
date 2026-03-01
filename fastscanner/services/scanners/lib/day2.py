@@ -18,12 +18,15 @@ from fastscanner.services.indicators.lib.daily import (
     PrevAllDayIndicator,
     PrevDayIndicator,
 )
-from fastscanner.services.indicators.lib.fundamental import MarketCapIndicator
+from fastscanner.services.indicators.lib.fundamental import (
+    DaysSinceIPOIndicator,
+    MarketCapIndicator,
+)
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
-from .utils import filter_by_market_cap
+from .utils import filter_by_days_since_ipo, filter_by_market_cap
 
 
 class Day2GapScanner:
@@ -36,6 +39,7 @@ class Day2GapScanner:
         min_price: float,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_since_ipo: int | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
@@ -46,6 +50,7 @@ class Day2GapScanner:
         self._min_price = min_price
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._min_days_since_ipo = min_days_since_ipo
         self._include_null_market_cap = include_null_market_cap
 
     def id(self) -> str:
@@ -64,6 +69,7 @@ class Day2GapScanner:
         adv = ADVIndicator(period=14)
         adr = ADRIndicator(period=14)
         market_cap = MarketCapIndicator()
+        days_since_ipo = DaysSinceIPOIndicator()
         prev_all_day_close = PrevAllDayIndicator(candle_col=C.CLOSE)
         prev_all_day_high = PrevAllDayIndicator(candle_col=C.HIGH)
         prev_2day_close = PrevDayIndicator(candle_col=C.CLOSE, n_days_offset=2)
@@ -86,12 +92,15 @@ class Day2GapScanner:
         daily_df = await prev_all_day_high.extend(symbol, daily_df)
         daily_df = await prev_2day_close.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
+        daily_df = await days_since_ipo.extend(symbol, daily_df)
 
         daily_df = daily_df[
             daily_df[prev_all_day_close.column_name()] >= self._min_price
         ]
         daily_df = daily_df[daily_df[adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[adr.column_name()] >= self._min_adr]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,

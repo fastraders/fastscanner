@@ -20,13 +20,14 @@ from fastscanner.services.indicators.lib.daily import (
 )
 from fastscanner.services.indicators.lib.fundamental import (
     DaysFromEarningsIndicator,
+    DaysSinceIPOIndicator,
     MarketCapIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.utils import lookback_days
 from fastscanner.services.registry import ApplicationRegistry
 
-from .utils import filter_by_market_cap
+from .utils import filter_by_days_since_ipo, filter_by_market_cap
 
 
 class ATRParabolicDownScanner:
@@ -40,6 +41,7 @@ class ATRParabolicDownScanner:
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_since_ipo: int | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
@@ -51,12 +53,14 @@ class ATRParabolicDownScanner:
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._min_days_since_ipo = min_days_since_ipo
         self._include_null_market_cap = include_null_market_cap
 
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._atr = DailyATRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
+        self._days_since_ipo = DaysSinceIPOIndicator()
         self._cum_low = CumulativeIndicator(C.LOW, CumOp.MIN)
         self._cum_volume = CumulativeDailyVolumeIndicator()
 
@@ -83,9 +87,12 @@ class ATRParabolicDownScanner:
         daily_df = await self._adr.extend(symbol, daily_df)
         daily_df = await self._atr.extend(symbol, daily_df)
         daily_df = await self._market_cap.extend(symbol, daily_df)
+        daily_df = await self._days_since_ipo.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -151,12 +158,14 @@ class ATRParabolicDownScanner:
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_low.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
         atr_value = new_row[self._atr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
         cum_volume_value = new_row[self._cum_volume.column_name()]
+        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
 
         mandatory_values = [
             adv_value,
@@ -175,6 +184,11 @@ class ATRParabolicDownScanner:
             not pd.isna(market_cap_value)
             and self._min_market_cap <= market_cap_value <= self._max_market_cap
         ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+        days_since_ipo_passes = (
+            self._min_days_since_ipo is None
+            or pd.isna(days_since_ipo_value)
+            or days_since_ipo_value >= self._min_days_since_ipo
+        )
 
         cum_low_value = new_row[self._cum_low.column_name()]
         is_new_low = (
@@ -185,6 +199,7 @@ class ATRParabolicDownScanner:
             adv_value >= self._min_adv
             and adr_value >= self._min_adr
             and market_cap_passes
+            and days_since_ipo_passes
             and signal_value > self._atr_multiplier
             and cum_volume_value >= self._min_volume
             and is_new_low
@@ -204,6 +219,7 @@ class ATRParabolicUpScanner:
         end_time: time,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
+        min_days_since_ipo: int | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
         self._id = str(uuid.uuid4())
@@ -215,12 +231,14 @@ class ATRParabolicUpScanner:
         self._end_time = end_time
         self._min_market_cap = min_market_cap
         self._max_market_cap = max_market_cap
+        self._min_days_since_ipo = min_days_since_ipo
         self._include_null_market_cap = include_null_market_cap
 
         self._adv = ADVIndicator(period=14)
         self._adr = ADRIndicator(period=14)
         self._atr = DailyATRIndicator(period=14)
         self._market_cap = MarketCapIndicator()
+        self._days_since_ipo = DaysSinceIPOIndicator()
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         self._cum_volume = CumulativeDailyVolumeIndicator()
 
@@ -247,9 +265,12 @@ class ATRParabolicUpScanner:
         daily_df = await self._adr.extend(symbol, daily_df)
         daily_df = await self._atr.extend(symbol, daily_df)
         daily_df = await self._market_cap.extend(symbol, daily_df)
+        daily_df = await self._days_since_ipo.extend(symbol, daily_df)
 
         daily_df = daily_df[daily_df[self._adv.column_name()] >= self._min_adv]
         daily_df = daily_df[daily_df[self._adr.column_name()] >= self._min_adr]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         daily_df = filter_by_market_cap(
             daily_df,
             self._min_market_cap,
@@ -313,12 +334,14 @@ class ATRParabolicUpScanner:
         new_row = await self._market_cap.extend_realtime(symbol, new_row)
         new_row = await self._cum_high.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
+        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
 
         adv_value = new_row[self._adv.column_name()]
         adr_value = new_row[self._adr.column_name()]
         atr_value = new_row[self._atr.column_name()]
         market_cap_value = new_row[self._market_cap.column_name()]
         cum_volume_value = new_row[self._cum_volume.column_name()]
+        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
 
         mandatory_values = [
             adv_value,
@@ -337,11 +360,17 @@ class ATRParabolicUpScanner:
             not pd.isna(market_cap_value)
             and self._min_market_cap <= market_cap_value <= self._max_market_cap
         ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+        days_since_ipo_passes = (
+            self._min_days_since_ipo is None
+            or pd.isna(days_since_ipo_value)
+            or days_since_ipo_value >= self._min_days_since_ipo
+        )
 
         passes_filter = (
             adv_value >= self._min_adv
             and adr_value >= self._min_adr
             and market_cap_passes
+            and days_since_ipo_passes
             and signal_value > self._atr_multiplier
             and cum_volume_value >= self._min_volume
         )
@@ -360,6 +389,7 @@ class DailyATRParabolicUpScanner:
         max_market_cap: float = math.inf,
         min_days_from_earnings: int | None = None,
         max_days_from_earnings: int | None = None,
+        min_days_since_ipo: int | None = None,
         days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
@@ -372,6 +402,7 @@ class DailyATRParabolicUpScanner:
         self._max_market_cap = max_market_cap
         self._min_days_from_earnings = min_days_from_earnings
         self._max_days_from_earnings = max_days_from_earnings
+        self._min_days_since_ipo = min_days_since_ipo
         self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
 
@@ -395,6 +426,7 @@ class DailyATRParabolicUpScanner:
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
         days_from_earnings = DaysFromEarningsIndicator()
+        days_since_ipo = DaysSinceIPOIndicator()
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
@@ -415,6 +447,7 @@ class DailyATRParabolicUpScanner:
         daily_df = await prev_open.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
         daily_df = await days_from_earnings.extend(symbol, daily_df)
+        daily_df = await days_since_ipo.extend(symbol, daily_df)
 
         if self._min_days_from_earnings is not None:
             daily_df = daily_df.loc[
@@ -426,6 +459,8 @@ class DailyATRParabolicUpScanner:
                 daily_df[days_from_earnings.column_name()]
                 <= self._max_days_from_earnings
             ]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         if self._days_of_week is not None:
             daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
@@ -462,6 +497,7 @@ class DailyATRParabolicDownScanner:
         max_market_cap: float = math.inf,
         min_days_from_earnings: int | None = None,
         max_days_from_earnings: int | None = None,
+        min_days_since_ipo: int | None = None,
         days_of_week: list[int] | None = None,
         include_null_market_cap: bool = False,
     ) -> None:
@@ -474,6 +510,7 @@ class DailyATRParabolicDownScanner:
         self._max_market_cap = max_market_cap
         self._min_days_from_earnings = min_days_from_earnings
         self._max_days_from_earnings = max_days_from_earnings
+        self._min_days_since_ipo = min_days_since_ipo
         self._days_of_week = days_of_week
         self._include_null_market_cap = include_null_market_cap
 
@@ -497,6 +534,7 @@ class DailyATRParabolicDownScanner:
         prev_open = PrevDayIndicator(C.OPEN)
         market_cap = MarketCapIndicator()
         days_from_earnings = DaysFromEarningsIndicator()
+        days_since_ipo = DaysSinceIPOIndicator()
 
         daily_df = await ApplicationRegistry.candles.get(
             symbol,
@@ -517,6 +555,7 @@ class DailyATRParabolicDownScanner:
         daily_df = await prev_open.extend(symbol, daily_df)
         daily_df = await market_cap.extend(symbol, daily_df)
         daily_df = await days_from_earnings.extend(symbol, daily_df)
+        daily_df = await days_since_ipo.extend(symbol, daily_df)
 
         if self._min_days_from_earnings is not None:
             daily_df = daily_df.loc[
@@ -528,6 +567,8 @@ class DailyATRParabolicDownScanner:
                 daily_df[days_from_earnings.column_name()]
                 <= self._max_days_from_earnings
             ]
+        if self._min_days_since_ipo is not None:
+            daily_df = filter_by_days_since_ipo(daily_df, self._min_days_since_ipo)
         if self._days_of_week is not None:
             daily_df = daily_df.loc[daily_df.index.dayofweek.isin(self._days_of_week)]  # type: ignore
 
