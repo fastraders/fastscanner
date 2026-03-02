@@ -268,16 +268,18 @@ async def run_scanner():
     #     days_of_week=[1, 3, 4],  # 0=Monday ... 6=Sunday
     #     # include_null_market_cap=True,
     # )
-    # scanner = SmallCapUpScanner(
-    #     min_volume=10_000,
-    #     min_gap=0.10,
-    #     min_price=0.3,
-    #     min_market_cap=100_000,
-    #     max_market_cap=100_000_000,
-    #     include_null_market_cap=True,
-    #     start_time=time(4, 00),
-    #     end_time=time(12, 00),
-    # )
+    scanner = SmallCapUpScanner(
+        min_volume=10_000,
+        min_gap=0.20,
+        shift_periods=[2],
+        shift_min_changes=[0.12],
+        min_price=0.3,
+        # min_market_cap=100_000,
+        # max_market_cap=100_000_000,
+        include_null_market_cap=True,
+        start_time=time(16, 00),
+        end_time=time(17, 30),
+    )
     # scanner = Day2GapScanner(
     #     min_adv=0,
     #     min_adr=0,

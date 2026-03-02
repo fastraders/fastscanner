@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal
 import numpy as np
 import pandas as pd
 
+from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry, split_freq
 from fastscanner.services.indicators.lib.daily import (
     DailyATRIndicator,
@@ -18,8 +19,6 @@ from fastscanner.services.indicators.lib.daily import (
 from ...registry import ApplicationRegistry
 from ..ports import Cache, CandleCol
 from ..utils import lookback_days
-
-from fastscanner.pkg.candle import Candle
 
 if TYPE_CHECKING:
     from fastscanner.services.indicators.lib import Indicator
@@ -199,6 +198,7 @@ class CumulativeIndicator:
     def __init__(self, candle_col: str, op: str):
         self._candle_col = candle_col
         self._op = CumulativeOperation(op)
+        self._last_date: dict[str, date] = {}
         self._last_value: dict[str, float] = {}
 
     @classmethod
@@ -211,7 +211,12 @@ class CumulativeIndicator:
     async def save_to_cache(self):
         await ApplicationRegistry.cache.save(
             f"indicator:{self.column_name()}",
-            json.dumps({"last_value": self._last_value}),
+            json.dumps(
+                {
+                    "last_value": self._last_value,
+                    "last_date": {k: v.isoformat() for k, v in self._last_date.items()},
+                }
+            ),
         )
 
     async def load_from_cache(self, symbol: str | None = None):
@@ -224,6 +229,11 @@ class CumulativeIndicator:
             for k, v in indicator_data["last_value"].items()
             if symbol is None or k == symbol
         }
+        self._last_date = {
+            k: date.fromisoformat(v)
+            for k, v in indicator_data["last_date"].items()
+            if symbol is None or k == symbol
+        }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         values = df[self._candle_col]
@@ -234,6 +244,11 @@ class CumulativeIndicator:
         return df
 
     async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
+        last_date = self._last_date.get(symbol)
+        if last_date is None or last_date != new_row.timestamp.date():
+            self._last_value.pop(symbol, None)
+            self._last_date[symbol] = new_row.timestamp.date()
+
         last_value = self._last_value.get(symbol)
         value = float(new_row[self._candle_col])
         if last_value is not None:

@@ -35,6 +35,8 @@ class SmallCapUpScanner:
         start_time: time,
         end_time: time,
         min_gap: float,
+        shift_periods: list[int],
+        shift_min_changes: list[float],
         min_price: float = 0,
         max_price: float = math.inf,
         min_market_cap: float = 0,
@@ -60,13 +62,13 @@ class SmallCapUpScanner:
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
         # The order of the periods defines the priority of the alerts.
 
-        #smallcap shorts
-        # self._shift_periods = [2]
-        # self._shift_min_change = [0.12]
+        # smallcap shorts
+        self._shift_periods = shift_periods
+        self._shift_min_change = shift_min_changes
 
-        #smallcap longs
-        self._shift_periods = [1]
-        self._shift_min_change = [0.06]
+        # smallcap longs
+        # self._shift_periods = [1]
+        # self._shift_min_change = [0.06]
 
         self._shift_indicators = [
             ShiftIndicator(C.LOW, period) for period in self._shift_periods
@@ -115,7 +117,7 @@ class SmallCapUpScanner:
             df = await shift_indicator.extend(symbol, df)
 
         # Comment out for highest high from 4am logic
-        df[C.HIGH] = pd.to_numeric(df[C.HIGH], errors='coerce')
+        df[C.HIGH] = pd.to_numeric(df[C.HIGH], errors="coerce")
         df = await self._cum_high.extend(symbol, df)
         df = df[(df[self._cum_high.column_name()] - df[C.HIGH]).abs() < 0.0001]
 
@@ -181,18 +183,16 @@ class SmallCapUpScanner:
             self._shift_periods, self._shift_min_change, self._shift_indicators
         ):
             change_col = f"change_{shift}"
-            df.loc[:, change_col] = (
-                df[C.HIGH] - df[shift_ind.column_name()]
-            ) / df[shift_ind.column_name()]
+            df.loc[:, change_col] = (df[C.HIGH] - df[shift_ind.column_name()]) / df[
+                shift_ind.column_name()
+            ]
             df.loc[df[change_col] > min_change, "triggered_alert"] = change_col
 
         df = df[df["triggered_alert"].notnull()]
 
         return df
 
-    async def scan_realtime(
-        self, symbol: str, new_row: Candle
-    ) -> tuple[Candle, bool]:
+    async def scan_realtime(self, symbol: str, new_row: Candle) -> tuple[Candle, bool]:
         if (
             new_row.timestamp.time() > self._end_time
             or new_row.timestamp.time() < self._start_time

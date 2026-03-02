@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
 
 from ...registry import ApplicationRegistry
 
@@ -237,6 +238,7 @@ class MarketCapIndicator:
         new_row[self.column_name()] = self._last_market_cap.get(symbol)
         return new_row
 
+
 class DaysSinceIPOIndicator:
     def __init__(self) -> None:
         self._last_date: dict[str, date] = {}
@@ -287,7 +289,7 @@ class DaysSinceIPOIndicator:
             df[col] = np.nan
             return df
 
-        ipo_date = pd.to_datetime(ipo_date_str)
+        ipo_date = pd.Timestamp(ipo_date_str, tz=LOCAL_TIMEZONE_STR)
         df[col] = (df.index - ipo_date).days
         df.loc[df[col] < 0, col] = np.nan
 

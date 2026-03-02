@@ -20,6 +20,10 @@ from fastscanner.services.indicators.lib.candle import (
     ATRGapIndicator,
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
+    CumulativeIndicator,
+)
+from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
+from fastscanner.services.indicators.lib.candle import (
     DailyRollingIndicator,
     GapIndicator,
     PositionInRangeIndicator,
@@ -38,6 +42,7 @@ from fastscanner.services.indicators.lib.daily import (
 )
 from fastscanner.services.indicators.lib.fundamental import (
     DaysFromEarningsIndicator,
+    DaysSinceIPOIndicator,
     DaysToEarningsIndicator,
     MarketCapIndicator,
 )
@@ -95,6 +100,9 @@ async def main():
         DailyATRIndicator(14),
         PrevDayIndicator(CandleCol.CLOSE),
         DayOpenIndicator(),
+        DaysSinceIPOIndicator(),
+        GapIndicator(CandleCol.HIGH),
+        CumulativeIndicator(CandleCol.HIGH, CumOp.MAX),
     ]
     logger.info(f"Loading {len(indicators_with_cache)} indicators from cache.")
     for i in indicators_with_cache:
