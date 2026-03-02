@@ -602,9 +602,11 @@ class GapIndicator:
             cols_to_drop.append(self._prev_day.column_name())
 
         prev_col = self._prev_day.column_name()
-        new_row[self.column_name()] = (
-            new_row[self._candle_col] - new_row[prev_col]
-        ) / new_row[prev_col]
+        new_row[self.column_name()] = None
+        if new_row.get(prev_col) is not None:
+            new_row[self.column_name()] = (
+                new_row[self._candle_col] - new_row[prev_col]
+            ) / new_row[prev_col]
 
         return new_row.drop(cols_to_drop)
 
