@@ -221,7 +221,6 @@ class SmallCapUpScanner:
         mandatory_values = [
             new_row[C.CLOSE],
             new_row[C.HIGH],
-            market_cap_value,
             cum_vol_val,
             gap_val,
         ]
