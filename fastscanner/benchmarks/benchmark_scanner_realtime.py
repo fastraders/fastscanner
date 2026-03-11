@@ -117,7 +117,7 @@ async def main():
         params={
             "min_adv": 1_000_000.0,
             "min_adr": 1.0,
-            "atr_multiplier": 1.5,
+            "min_atr_multiplier": 1.5,
             "min_volume": 500_000.0,
             "start_time": dt_time(9, 30),
             "end_time": dt_time(16, 0),

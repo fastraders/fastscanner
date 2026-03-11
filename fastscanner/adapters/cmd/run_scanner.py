@@ -220,7 +220,7 @@ async def run_scanner():
         min_adv=500_000,
         min_adr=0.005,
         min_volume=5_000,
-        atr_multiplier=2,
+        min_atr_multiplier=2,
         start_time=time(9, 20),
         end_time=time(9, 29),
         min_market_cap=500_000_000,

@@ -1,11 +1,11 @@
 import json
-from datetime import date
+from datetime import date, time
 
 import numpy as np
 import pandas as pd
 
 from fastscanner.pkg.candle import Candle
-from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.clock import ClockRegistry
 
 from ...registry import ApplicationRegistry
 
@@ -289,7 +289,9 @@ class DaysSinceIPOIndicator:
             df[col] = np.nan
             return df
 
-        ipo_date = pd.Timestamp(ipo_date_str, tz=LOCAL_TIMEZONE_STR)
+        ipo_date = ClockRegistry.clock.date_at(
+            date.fromisoformat(ipo_date_str), time(0, 0)
+        )
         df[col] = (df.index - ipo_date).days
         df.loc[df[col] < 0, col] = np.nan
 

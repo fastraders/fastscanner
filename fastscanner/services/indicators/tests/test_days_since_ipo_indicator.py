@@ -4,6 +4,8 @@ from typing import Dict
 import pandas as pd
 import pytest
 
+from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.clock import ClockRegistry, FixedClock
 from fastscanner.services.indicators.lib.fundamental import DaysSinceIPOIndicator
 from fastscanner.services.indicators.ports import (
     Cache,
@@ -12,7 +14,6 @@ from fastscanner.services.indicators.ports import (
     FundamentalDataStore,
 )
 from fastscanner.services.registry import ApplicationRegistry
-from fastscanner.pkg.candle import Candle
 
 
 class FundamentalDataStoreTest(FundamentalDataStore):
@@ -35,6 +36,10 @@ class MockCache(Cache):
 
     async def get(self, key: str) -> str:
         return self._data.get(key, "")
+
+
+def setup_module(module):
+    ClockRegistry.set(FixedClock(datetime(2023, 2, 1, 9, 30)))
 
 
 @pytest.fixture
@@ -104,9 +109,7 @@ async def test_extend_with_null_ipo_date(fundamentals: FundamentalDataStoreTest)
         datetime(2023, 1, 10, 9, 30),
         datetime(2023, 1, 20, 9, 30),
     ]
-    df = pd.DataFrame(
-        {CandleCol.CLOSE: [100, 101]}, index=pd.DatetimeIndex(dates)
-    )
+    df = pd.DataFrame({CandleCol.CLOSE: [100, 101]}, index=pd.DatetimeIndex(dates))
 
     indicator = DaysSinceIPOIndicator()
     result_df = await indicator.extend("AAPL", df)
@@ -115,7 +118,9 @@ async def test_extend_with_null_ipo_date(fundamentals: FundamentalDataStoreTest)
 
 
 @pytest.mark.asyncio
-async def test_extend_before_ipo_date_returns_nan(fundamentals: FundamentalDataStoreTest):
+async def test_extend_before_ipo_date_returns_nan(
+    fundamentals: FundamentalDataStoreTest,
+):
     fundamentals.set("AAPL", create_fundamental_data("2023-01-15"))
 
     dates = [
@@ -152,7 +157,9 @@ async def test_extend_realtime_with_ipo_date(fundamentals: FundamentalDataStoreT
 
 
 @pytest.mark.asyncio
-async def test_extend_realtime_with_null_ipo_date(fundamentals: FundamentalDataStoreTest):
+async def test_extend_realtime_with_null_ipo_date(
+    fundamentals: FundamentalDataStoreTest,
+):
     fundamentals.set("AAPL", create_fundamental_data(None))
 
     indicator = DaysSinceIPOIndicator()

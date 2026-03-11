@@ -1,9 +1,10 @@
-from datetime import date, time
+from datetime import date, datetime, time
 
 import pandas as pd
 import pytest
 
 from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.clock import ClockRegistry, FixedClock
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.indicators.ports import FundamentalData
 from fastscanner.services.indicators.tests.fixtures import (
@@ -61,6 +62,7 @@ def store():
     fundamental_store = MockFundamentalDataStore()
     holiday_store = MockPublicHolidaysStore()
     cache = MockCache()
+    ClockRegistry.set(FixedClock(datetime(2023, 2, 1, 9, 30)))
 
     ApplicationRegistry.init(
         candles=candle_store,
@@ -110,7 +112,7 @@ async def test_gap_down_scan_realtime_passes(store: MultiFreqCandleStore):
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -142,7 +144,7 @@ async def test_gap_down_scan_realtime_outside_time_window(store: MultiFreqCandle
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(10, 0),
@@ -172,7 +174,7 @@ async def test_gap_down_scan_realtime_fails_min_adv(store: MultiFreqCandleStore)
     scanner = ATRGapDownScanner(
         min_adv=999_999_999,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -201,7 +203,7 @@ async def test_gap_down_scan_realtime_days_of_week_filter(store: MultiFreqCandle
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -229,7 +231,7 @@ async def test_gap_down_scan_empty_daily(store: MultiFreqCandleStore):
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -278,7 +280,7 @@ async def test_gap_down_scan_returns_dataframe(store: MultiFreqCandleStore):
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -305,7 +307,7 @@ async def test_gap_up_scan_realtime_passes(store: MultiFreqCandleStore):
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -337,7 +339,7 @@ async def test_gap_up_scan_realtime_outside_time_window(store: MultiFreqCandleSt
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(10, 0),
@@ -367,7 +369,7 @@ async def test_gap_up_scan_realtime_fails_market_cap(store: MultiFreqCandleStore
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -398,7 +400,7 @@ async def test_gap_up_scan_empty_daily(store: MultiFreqCandleStore):
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -447,7 +449,7 @@ async def test_gap_up_scan_returns_dataframe(store: MultiFreqCandleStore):
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -471,7 +473,7 @@ async def test_gap_up_scan_realtime_days_of_week_filter(store: MultiFreqCandleSt
     scanner = ATRGapUpScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -543,7 +545,7 @@ async def test_gap_down_scan_realtime_filtered_by_days_since_ipo(
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -578,7 +580,7 @@ async def test_gap_down_scan_realtime_passes_with_old_ipo(
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -613,7 +615,7 @@ async def test_gap_down_scan_realtime_null_ipo_passes(
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -648,7 +650,7 @@ async def test_gap_down_scan_filtered_by_days_since_ipo(
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),
@@ -700,7 +702,7 @@ async def test_gap_down_scan_null_ipo_passes_filter(
     scanner = ATRGapDownScanner(
         min_adv=0,
         min_adr=0,
-        atr_multiplier=0.1,
+        min_atr_multiplier=0.1,
         min_volume=0,
         start_time=time(9, 30),
         end_time=time(16, 0),

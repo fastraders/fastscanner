@@ -126,7 +126,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
         ATRGapDownScanner(
             min_adv=500_000,
             min_adr=0.05,
-            atr_multiplier=-1.0,
+            min_atr_multiplier=-1.0,
             min_volume=0,
             start_time=time(9, 20),
             end_time=time(12, 0),
@@ -135,7 +135,7 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
         ATRGapUpScanner(
             min_adv=500_000,
             min_adr=0.05,
-            atr_multiplier=1.0,
+            min_atr_multiplier=1.0,
             min_volume=0,
             start_time=time(9, 20),
             end_time=time(12, 0),
@@ -184,6 +184,8 @@ async def test_scanner_consistency_between_scan_and_scan_realtime(candles):
             min_gap=0.03,
             min_price=1.0,
             max_price=50.0,
+            shift_periods=[1],
+            shift_min_changes=[0.06],
             min_market_cap=100000,
             max_market_cap=1000000,
             include_null_market_cap=False,

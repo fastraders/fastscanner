@@ -33,10 +33,11 @@ class ATRGapDownScanner:
         self,
         min_adv: float,
         min_adr: float,
-        atr_multiplier: float,
+        min_atr_multiplier: float,
         min_volume: float,
         start_time: time,
         end_time: time,
+        max_atr_multiplier: float | None = None,
         max_adr: float | None = None,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -50,7 +51,8 @@ class ATRGapDownScanner:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._max_adr = max_adr
-        self._atr_multiplier = atr_multiplier
+        self._min_atr_multiplier = min_atr_multiplier
+        self._max_atr_multiplier = max_atr_multiplier
         self._min_volume = min_volume
         self._start_time = start_time
         self._end_time = end_time
@@ -152,7 +154,9 @@ class ATRGapDownScanner:
 
         atr_gap_col = self._atr_gap.column_name()
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
-        df = df[df[atr_gap_col].abs() > self._atr_multiplier]
+        df = df[df[atr_gap_col].abs() >= self._min_atr_multiplier]
+        if self._max_atr_multiplier is not None:
+            df = df[df[atr_gap_col].abs() <= self._max_atr_multiplier]
         df = df[df[atr_gap_col] < 0]
         df = df[df[C.CLOSE] < df[C.OPEN]]
         return df
@@ -231,7 +235,8 @@ class ATRGapDownScanner:
             and (self._max_adr is None or adr_value <= self._max_adr)
             and market_cap_passes
             and cum_volume_value >= self._min_volume
-            and abs(atr_gap_value) > self._atr_multiplier
+            and abs(atr_gap_value) >= self._min_atr_multiplier
+            and (self._max_atr_multiplier is None or abs(atr_gap_value) <= self._max_atr_multiplier)
             and atr_gap_value < 0
             and new_row[C.CLOSE] < new_row[C.OPEN]
             and days_from_earnings_passes
@@ -246,10 +251,11 @@ class ATRGapUpScanner:
         self,
         min_adv: float,
         min_adr: float,
-        atr_multiplier: float,
+        min_atr_multiplier: float,
         min_volume: float,
         start_time: time,
         end_time: time,
+        max_atr_multiplier: float | None = None,
         max_adr: float | None = None,
         min_market_cap: float = 0,
         max_market_cap: float = math.inf,
@@ -263,7 +269,8 @@ class ATRGapUpScanner:
         self._min_adv = min_adv
         self._min_adr = min_adr
         self._max_adr = max_adr
-        self._atr_multiplier = atr_multiplier
+        self._min_atr_multiplier = min_atr_multiplier
+        self._max_atr_multiplier = max_atr_multiplier
         self._min_volume = min_volume
         self._start_time = start_time
         self._end_time = end_time
@@ -365,7 +372,9 @@ class ATRGapUpScanner:
 
         atr_gap_col = self._atr_gap.column_name()
         df = df[df[self._cum_volume.column_name()] >= self._min_volume]
-        df = df[df[atr_gap_col].abs() > self._atr_multiplier]
+        df = df[df[atr_gap_col].abs() >= self._min_atr_multiplier]
+        if self._max_atr_multiplier is not None:
+            df = df[df[atr_gap_col].abs() <= self._max_atr_multiplier]
         df = df[df[atr_gap_col] > 0]
         df = df[df[C.CLOSE] > df[C.OPEN]]
 
@@ -445,7 +454,8 @@ class ATRGapUpScanner:
             and (self._max_adr is None or adr_value <= self._max_adr)
             and market_cap_passes
             and cum_volume_value >= self._min_volume
-            and abs(atr_gap_value) > self._atr_multiplier
+            and abs(atr_gap_value) >= self._min_atr_multiplier
+            and (self._max_atr_multiplier is None or abs(atr_gap_value) <= self._max_atr_multiplier)
             and atr_gap_value > 0
             and new_row[C.CLOSE] > new_row[C.OPEN]
             and days_from_earnings_passes
