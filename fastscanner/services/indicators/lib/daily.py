@@ -227,7 +227,7 @@ class DailyATRIndicator:
         }
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
-        start_date = lookback_days(df.index[0].date(), self._period + 1)
+        start_date = lookback_days(df.index[0].date(), 8 * self._period)
         end_date = df.index[-1].date() - timedelta(days=1)
 
         daily = await ApplicationRegistry.candles.get(

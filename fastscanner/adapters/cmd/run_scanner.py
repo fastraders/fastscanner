@@ -97,9 +97,7 @@ async def _run_async(
     freq: str,
 ):
     # We set the clock to a fixed date to ensure that adjustments are done correctly
-    ClockRegistry.set(
-        FixedClock(datetime.combine(end_date + timedelta(days=1), time.min))
-    )
+    ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
         config.POLYGON_API_KEY,
