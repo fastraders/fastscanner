@@ -101,7 +101,6 @@ async def main():
         PrevDayIndicator(CandleCol.CLOSE),
         DayOpenIndicator(),
         DaysSinceIPOIndicator(),
-        GapIndicator(CandleCol.HIGH),
         CumulativeIndicator(CandleCol.HIGH, CumOp.MAX),
     ]
     logger.info(f"Loading {len(indicators_with_cache)} indicators from cache.")

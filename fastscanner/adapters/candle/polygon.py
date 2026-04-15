@@ -160,7 +160,7 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
             url = urljoin(self._base_url, "v3/reference/tickers")
             params = {
                 "apiKey": self._api_key,
-                "type": "CS",
+                "market": "stocks",
                 "limit": 1000,
                 **filter,
             }
@@ -177,6 +177,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                     break
 
                 for item in data["results"]:
+                    if item.get("type") not in ("CS", "ADRC", "ADRP", "ADRR"):
+                        continue
                     symbols.append(item["ticker"])
 
                 if data.get("next_url") is None:
