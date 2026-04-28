@@ -1,6 +1,10 @@
 import asyncio
+import dataclasses
 import email.utils
+import json
 import logging
+import re
+import shutil
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -22,6 +26,21 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 HTTP_TIMEOUT = 10.0
+CODEX_TIMEOUT = 90.0
+MAX_HEADLINES_PER_SYMBOL = 50
+MIN_SUBSTRING_SYMBOL_LEN = 3
+CONFIDENCE_THRESHOLD = 50  # strict greater-than per spec
+
+
+@dataclasses.dataclass(frozen=True)
+class Headline:
+    title: str
+    source: str
+
+
+def _entry_str(entry: Any, key: str) -> str:
+    value = entry.get(key, "")
+    return value if isinstance(value, str) else ""
 
 
 class InNewsIndicator:
@@ -51,40 +70,230 @@ class InNewsIndicator:
 
     async def _has_news_today(self, symbol: str) -> bool:
         today_str = datetime.now(EST).strftime("%Y-%m-%d")
-        checks = (
-            self._finviz_has_news,
-            self._finnhub_has_news,
-            self._yahoo_has_news,
-            self._seeking_alpha_has_news,
-            self._marketwatch_has_news,
+        sources: tuple[tuple[str, Any], ...] = (
+            ("finviz", self._finviz_headlines),
+            ("finnhub", self._finnhub_headlines),
+            ("yahoo", self._yahoo_headlines),
+            ("seeking_alpha", self._seeking_alpha_headlines),
+            ("marketwatch", self._marketwatch_headlines),
         )
-        for check in checks:
-            try:
-                if await check(symbol, today_str):
-                    return True
-            except Exception as e:
-                logger.warning(
-                    "in_news source %s failed for %s: %s", check.__name__, symbol, e
-                )
-        return False
+        results = await asyncio.gather(
+            *(fn(symbol, today_str) for _, fn in sources),
+            return_exceptions=True,
+        )
 
-    async def _finviz_has_news(self, symbol: str, today_str: str) -> bool:
+        headlines: list[Headline] = []
+        for (name, _), result in zip(sources, results):
+            if isinstance(result, BaseException):
+                logger.warning(
+                    "[in_news %s] source %s failed: %s", symbol, name, result
+                )
+                continue
+            for title in result:
+                headlines.append(Headline(title=title, source=name))
+
+        if not headlines:
+            logger.info("[in_news %s] no headlines retrieved for %s", symbol, today_str)
+            return False
+
+        if len(headlines) > MAX_HEADLINES_PER_SYMBOL:
+            logger.info(
+                "[in_news %s] truncating %d headlines to %d",
+                symbol,
+                len(headlines),
+                MAX_HEADLINES_PER_SYMBOL,
+            )
+            headlines = headlines[:MAX_HEADLINES_PER_SYMBOL]
+
+        logger.info(
+            "[in_news %s] retrieved %d headlines for %s, filtering...",
+            symbol,
+            len(headlines),
+            today_str,
+        )
+
+        # Pass 1: substring (only when symbol is long enough to be unambiguous)
+        if len(symbol) >= MIN_SUBSTRING_SYMBOL_LEN:
+            substring_hits = self._substring_match(symbol, headlines)
+            if substring_hits:
+                logger.info(
+                    "[in_news %s] %d/%d substring hits -> in_news=True (skipped Codex)",
+                    symbol,
+                    len(substring_hits),
+                    len(headlines),
+                )
+                return True
+            logger.info("[in_news %s] 0 substring hits, asking Codex...", symbol)
+        else:
+            logger.info(
+                "[in_news %s] symbol shorter than %d chars, skipping substring pass",
+                symbol,
+                MIN_SUBSTRING_SYMBOL_LEN,
+            )
+
+        # Pass 2: Codex
+        try:
+            codex_kept = await self._filter_with_codex(symbol, headlines)
+        except Exception as e:
+            logger.warning(
+                "[in_news %s] Codex unavailable (%s) -> in_news=False", symbol, e
+            )
+            return False
+
+        logger.info(
+            "[in_news %s] %d/%d headlines kept by Codex -> in_news=%s",
+            symbol,
+            len(codex_kept),
+            len(headlines),
+            bool(codex_kept),
+        )
+        return bool(codex_kept)
+
+    def _substring_match(
+        self, symbol: str, headlines: list[Headline]
+    ) -> list[Headline]:
+        needle = symbol.upper()
+        kept: list[Headline] = []
+        for h in headlines:
+            if needle in h.title.upper():
+                logger.info(
+                    "[in_news %s][KEEP %s substring] %s",
+                    symbol,
+                    h.source,
+                    h.title,
+                )
+                kept.append(h)
+            else:
+                logger.info(
+                    "[in_news %s][DROP %s substring] %s",
+                    symbol,
+                    h.source,
+                    h.title,
+                )
+        return kept
+
+    async def _filter_with_codex(
+        self, symbol: str, headlines: list[Headline]
+    ) -> list[Headline]:
+        if shutil.which("codex") is None:
+            raise RuntimeError("codex CLI not found in PATH")
+
+        items = [{"idx": i, "title": h.title} for i, h in enumerate(headlines)]
+        prompt = (
+            "You are a strict JSON-only classifier. Use only your training "
+            "knowledge.\n\n"
+            f"For ticker symbol {symbol.upper()}, output the confidence (0-100) "
+            f"that the company name corresponding to {symbol.upper()} appears in "
+            "each headline.\n\n"
+            f"Output ONLY a JSON array of {len(items)} objects, each with keys "
+            '"idx" (int) and "confidence" (int 0-100). No prose, no markdown '
+            "fences.\n"
+            'Format: [{"idx":0,"confidence":87}, ...]\n\n'
+            f"Headlines:\n{json.dumps(items, ensure_ascii=False)}\n"
+        )
+
+        proc = await asyncio.create_subprocess_exec(
+            "codex",
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--ask-for-approval",
+            "never",
+            "-c",
+            'web_search="disabled"',
+            "-c",
+            "features.shell_tool=false",
+            prompt,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                proc.communicate(), timeout=CODEX_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(f"codex timed out after {CODEX_TIMEOUT}s")
+
+        if proc.returncode != 0:
+            err = stderr_b.decode(errors="replace")[:200]
+            raise RuntimeError(f"codex exited {proc.returncode}: {err}")
+
+        text = stdout_b.decode(errors="replace")
+        scores = self._parse_codex_response(text, n_headlines=len(headlines))
+
+        kept: list[Headline] = []
+        for entry in scores:
+            idx = entry["idx"]
+            conf = entry["confidence"]
+            h = headlines[idx]
+            if conf > CONFIDENCE_THRESHOLD:
+                logger.info(
+                    "[in_news %s][KEEP %s codex=%d%%] %s",
+                    symbol,
+                    h.source,
+                    conf,
+                    h.title,
+                )
+                kept.append(h)
+            else:
+                logger.info(
+                    "[in_news %s][DROP %s codex=%d%%] %s",
+                    symbol,
+                    h.source,
+                    conf,
+                    h.title,
+                )
+        return kept
+
+    @staticmethod
+    def _parse_codex_response(text: str, n_headlines: int) -> list[dict]:
+        match = re.search(r"\[\s*(?:\{.*?\}\s*,?\s*)*\]", text, re.DOTALL)
+        if not match:
+            raise RuntimeError(f"no JSON array in codex output: {text[:200]!r}")
+        raw = json.loads(match.group(0))
+        if not isinstance(raw, list):
+            raise RuntimeError(f"codex output is not a JSON array: {raw!r}")
+
+        valid: list[dict] = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            idx = entry.get("idx")
+            conf = entry.get("confidence")
+            if not isinstance(idx, int) or not isinstance(conf, (int, float)):
+                continue
+            if not (0 <= idx < n_headlines):
+                continue
+            if not (0 <= conf <= 100):
+                continue
+            valid.append({"idx": idx, "confidence": int(conf)})
+
+        if not valid:
+            raise RuntimeError(f"codex output had no valid entries: {raw!r}")
+        return valid
+
+    # --- per-source helpers: each returns list[str] of titles dated today_str ---
+
+    async def _finviz_headlines(self, symbol: str, today_str: str) -> list[str]:
         url = f"https://finviz.com/quote.ashx?t={symbol.upper()}&p=d"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await async_retry_request(
                 client, "GET", url, headers={"User-Agent": USER_AGENT}
             )
         if response.status_code != 200:
-            return False
-        return self._finviz_news_table_has_date(response.text, today_str)
+            return []
+        return self._finviz_news_table_extract(response.text, today_str)
 
     @staticmethod
-    def _finviz_news_table_has_date(html: str, date_str: str) -> bool:
+    def _finviz_news_table_extract(html: str, date_str: str) -> list[str]:
         target = datetime.strptime(date_str, "%Y-%m-%d").strftime("%b-%d-%y")
         soup = BeautifulSoup(html, "html.parser")
         news_table = soup.find("table", id="news-table")
         if not news_table:
-            return False
+            return []
+        titles: list[str] = []
         current_date: str | None = None
         for row in news_table.find_all("tr"):
             date_td = row.find("td", attrs={"width": "130"})
@@ -94,13 +303,15 @@ class InNewsIndicator:
                 if cell_text and cell_text[0].isalpha():
                     current_date = cell_text[:9].strip()
             if title_a and current_date == target:
-                return True
-        return False
+                title = title_a.get_text(strip=True)
+                if title:
+                    titles.append(title)
+        return titles
 
-    async def _finnhub_has_news(self, symbol: str, today_str: str) -> bool:
+    async def _finnhub_headlines(self, symbol: str, today_str: str) -> list[str]:
         token = config.FINNHUB_TOKEN
         if not token:
-            return False
+            return []
         url = (
             "https://finnhub.io/api/v1/company-news"
             f"?symbol={symbol.upper()}&from={today_str}&to={today_str}&token={token}"
@@ -108,46 +319,55 @@ class InNewsIndicator:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await async_retry_request(client, "GET", url)
         if response.status_code != 200:
-            return False
+            return []
         items = response.json()
         if not isinstance(items, list):
-            return False
+            return []
+        titles: list[str] = []
         for item in items:
             ts = item.get("datetime")
-            if ts and self._dt_is_on_date(
+            title = item.get("headline", "")
+            if not ts or not title:
+                continue
+            if self._dt_is_on_date(
                 datetime.fromtimestamp(ts, tz=timezone.utc), today_str
             ):
-                return True
-        return False
+                titles.append(title)
+        return titles
 
-    async def _yahoo_has_news(self, symbol: str, today_str: str) -> bool:
+    async def _yahoo_headlines(self, symbol: str, today_str: str) -> list[str]:
         url = (
             "https://feeds.finance.yahoo.com/rss/2.0/headline"
             f"?s={symbol.upper()}&region=US&lang=en-US"
         )
-        return await self._rss_feed_has_today(url, today_str, match_symbol=None)
+        return await self._rss_titles_for_today(url, today_str, match_symbol=None)
 
-    async def _seeking_alpha_has_news(self, symbol: str, today_str: str) -> bool:
+    async def _seeking_alpha_headlines(self, symbol: str, today_str: str) -> list[str]:
         url = f"https://seekingalpha.com/api/sa/combined/{symbol.lower()}.xml"
-        return await self._rss_feed_has_today(url, today_str, match_symbol=None)
+        return await self._rss_titles_for_today(url, today_str, match_symbol=None)
 
-    async def _marketwatch_has_news(self, symbol: str, today_str: str) -> bool:
+    async def _marketwatch_headlines(self, symbol: str, today_str: str) -> list[str]:
         url = "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines"
-        return await self._rss_feed_has_today(url, today_str, match_symbol=symbol)
+        return await self._rss_titles_for_today(url, today_str, match_symbol=symbol)
 
-    async def _rss_feed_has_today(
+    async def _rss_titles_for_today(
         self, url: str, today_str: str, match_symbol: str | None
-    ) -> bool:
+    ) -> list[str]:
         feed = await asyncio.to_thread(feedparser.parse, url)
+        titles: list[str] = []
         for entry in feed.entries:
+            entry_title = _entry_str(entry, "title")
+            entry_summary = _entry_str(entry, "summary")
             if match_symbol is not None:
-                blob = (entry.get("title", "") + " " + entry.get("summary", "")).upper()
+                blob = (entry_title + " " + entry_summary).upper()
                 if match_symbol.upper() not in blob:
                     continue
             dt = self._parse_rss_date(entry)
             if dt is not None and self._dt_is_on_date(dt, today_str):
-                return True
-        return False
+                title = entry_title.strip()
+                if title:
+                    titles.append(title)
+        return titles
 
     @staticmethod
     def _parse_rss_date(entry: Any) -> datetime | None:
