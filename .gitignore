@@ -186,3 +186,5 @@ cython_debug/
 
 # REdis
 *.rdb
+
+docs/meeting_notes/

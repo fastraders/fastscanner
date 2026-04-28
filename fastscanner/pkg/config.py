@@ -21,6 +21,9 @@ MASSIVE_FILES_SECRET_KEY = os.environ["MASSIVE_FILES_SECRET_KEY"]
 EOD_HD_BASE_URL = os.environ["EOD_HD_BASE_URL"]
 EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 
+# Finnhub (used by the in_news indicator)
+FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN", "")
+
 # Cache
 REDIS_DB_PORT = 6379
 REDIS_DB_HOST = "localhost"
