@@ -8,6 +8,7 @@ PrivateTmp=true
 Type=simple
 ExecStart=/home/mmoheeka/.local/bin/poetry run python -m fastscanner.adapters.rest.main
 ExecReload=/bin/kill -s HUP $MAINPID
+Environment="PATH=/home/mmoheeka/.nvm/versions/node/v22.22.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # The nats-server uses SIGUSR2 to trigger Lame Duck Mode (LDM) shutdown
 # https://docs.nats.io/running-a-nats-service/nats_admin/lame_duck_mode

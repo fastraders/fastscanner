@@ -197,7 +197,7 @@ async def test_codex_runs_when_no_substring_hit():
 
 
 @pytest.mark.asyncio
-async def test_codex_failure_returns_false_when_no_substring_hit():
+async def test_codex_failure_fails_open_to_true_when_headlines_exist():
     indicator = InNewsIndicator()
     codex = AsyncMock(side_effect=RuntimeError("codex blew up"))
     with patch.object(
@@ -209,12 +209,12 @@ async def test_codex_failure_returns_false_when_no_substring_hit():
          patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
          patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
          patch.object(indicator, "_filter_with_codex", new=codex):
-        assert await indicator._has_news_today("XYZ") is False
+        assert await indicator._has_news_today("XYZ") is True
         codex.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_codex_missing_returns_false_when_no_substring_hit():
+async def test_codex_missing_fails_open_to_true_when_headlines_exist():
     indicator = InNewsIndicator()
     with patch.object(
         indicator,
@@ -225,7 +225,7 @@ async def test_codex_missing_returns_false_when_no_substring_hit():
          patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
          patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
          patch("fastscanner.services.indicators.lib.news.shutil.which", return_value=None):
-        assert await indicator._has_news_today("XYZ") is False
+        assert await indicator._has_news_today("XYZ") is True
 
 
 @pytest.mark.asyncio

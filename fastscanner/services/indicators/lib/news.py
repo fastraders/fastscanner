@@ -123,22 +123,20 @@ class InNewsIndicator:
                     len(headlines),
                 )
                 return True
-            logger.info("[in_news %s] 0 substring hits, asking Codex...", symbol)
-        else:
-            logger.info(
-                "[in_news %s] symbol shorter than %d chars, skipping substring pass",
-                symbol,
-                MIN_SUBSTRING_SYMBOL_LEN,
-            )
 
-        # Pass 2: Codex
+        # Pass 2: Codex. If Codex itself is unavailable we fail open: we already
+        # have N>0 headlines for today, and without the classifier we can't
+        # confidently drop them, so report in_news=True rather than miss real news.
         try:
             codex_kept = await self._filter_with_codex(symbol, headlines)
         except Exception as e:
             logger.warning(
-                "[in_news %s] Codex unavailable (%s) -> in_news=False", symbol, e
+                "[in_news %s] Codex unavailable (%s); %d headlines retrieved -> in_news=True (fail-open)",
+                symbol,
+                e,
+                len(headlines),
             )
-            return False
+            return True
 
         logger.info(
             "[in_news %s] %d/%d headlines kept by Codex -> in_news=%s",
@@ -192,13 +190,13 @@ class InNewsIndicator:
             f"Headlines:\n{json.dumps(items, ensure_ascii=False)}\n"
         )
 
+        # codex exec is implicitly non-interactive (no --ask-for-approval needed
+        # — that flag only exists on the top-level codex command).
         proc = await asyncio.create_subprocess_exec(
             "codex",
             "exec",
             "--sandbox",
             "read-only",
-            "--ask-for-approval",
-            "never",
             "-c",
             'web_search="disabled"',
             "-c",
