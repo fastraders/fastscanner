@@ -73,6 +73,8 @@ def candles():
         symbols_subscribe_channel="test_subscribe",
         symbols_unsubscribe_channel="test_unsubscribe",
         cache_at_seconds=10,
+        symbols_news_subscribe_channel="test_news_subscribe",
+        symbols_news_unsubscribe_channel="test_news_unsubscribe",
     )
     ApplicationRegistry.set_indicators(indicators_service)
 

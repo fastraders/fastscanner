@@ -3,9 +3,10 @@ import dataclasses
 import email.utils
 import json
 import logging
+import random
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from bs4 import BeautifulSoup
 from fastscanner.pkg import config
 from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.http import async_retry_request
+from fastscanner.services.registry import ApplicationRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,11 @@ def _entry_str(entry: Any, key: str) -> str:
 
 
 class InNewsIndicator:
-    def __init__(self) -> None:
-        self._cached: dict[str, bool] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+    def __init__(self, caching: bool = False) -> None:
+        self._caching = caching
+        self._in_news_today: dict[str, bool] = {}  # sticky-True for the day
+        self._date: dict[str, date] = {}            # per-symbol day boundary
+        self._tasks: dict[str, asyncio.Task] = {}   # in-flight fire-and-forget (caching=True)
 
     @classmethod
     def type(cls) -> str:
@@ -55,18 +59,57 @@ class InNewsIndicator:
     def column_name(self) -> str:
         return self.type()
 
+    @staticmethod
+    def _cache_key(symbol: str) -> str:
+        return f"indicator:in_news:{symbol}"
+
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         df[self.column_name()] = pd.NA
         return df
 
     async def extend_realtime(self, symbol: str, new_row: Candle) -> Candle:
-        if symbol not in self._cached:
-            lock = self._locks.setdefault(symbol, asyncio.Lock())
-            async with lock:
-                if symbol not in self._cached:
-                    self._cached[symbol] = await self._has_news_today(symbol)
-        new_row[self.column_name()] = self._cached[symbol]
+        today = new_row.timestamp.date()
+        if self._date.get(symbol) != today:
+            self._date[symbol] = today
+            self._in_news_today.pop(symbol, None)
+
+        if self._in_news_today.get(symbol) is True:
+            new_row[self.column_name()] = True
+            return new_row
+
+        if self._caching:
+            self._spawn_fetch(symbol)
+            new_row[self.column_name()] = self._in_news_today.get(symbol, False)
+            return new_row
+
+        # consumer: read from shared cache
+        try:
+            value = await ApplicationRegistry.cache.get(self._cache_key(symbol))
+            cached = value == "true"
+        except KeyError:
+            cached = False
+
+        if cached:
+            self._in_news_today[symbol] = True
+        new_row[self.column_name()] = cached
         return new_row
+
+    def _spawn_fetch(self, symbol: str) -> None:
+        existing = self._tasks.get(symbol)
+        if existing is not None and not existing.done():
+            return
+        self._tasks[symbol] = asyncio.create_task(self._inline_fetch(symbol))
+
+    async def _inline_fetch(self, symbol: str) -> None:
+        try:
+            await asyncio.sleep(random.uniform(0, 45))
+            in_news = await self._has_news_today(symbol)
+            self._in_news_today[symbol] = in_news
+            await ApplicationRegistry.cache.save(
+                self._cache_key(symbol), "true" if in_news else "false"
+            )
+        except Exception:
+            logger.exception("[in_news %s] inline fetch failed", symbol)
 
     async def _has_news_today(self, symbol: str) -> bool:
         today_str = datetime.now(EST).strftime("%Y-%m-%d")

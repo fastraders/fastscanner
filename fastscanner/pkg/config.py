@@ -40,6 +40,12 @@ NATS_SYMBOL_SUBSCRIBE_CHANNEL = os.environ.get(
 NATS_SYMBOL_UNSUBSCRIBE_CHANNEL = os.environ.get(
     "NATS_SYMBOL_UNSUBSCRIBE_CHANNEL", "symbol_unsubscribe"
 )
+NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL = os.environ.get(
+    "NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL", "symbol_news_subscribe"
+)
+NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL = os.environ.get(
+    "NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL", "symbol_news_unsubscribe"
+)
 
 # Data cache directory
 DATA_BASE_DIR = os.environ["DATA_BASE_DIR"]

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 import pytest
@@ -10,17 +10,40 @@ from fastscanner.services.indicators.lib.news import (
     Headline,
     InNewsIndicator,
 )
+from fastscanner.services.registry import ApplicationRegistry
+
+
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    had = "cache" in ApplicationRegistry.__dict__
+    orig = ApplicationRegistry.__dict__.get("cache")
+    yield
+    if had and orig is not None:
+        ApplicationRegistry.cache = orig
+    elif "cache" in ApplicationRegistry.__dict__:
+        try:
+            del ApplicationRegistry.cache
+        except AttributeError:
+            pass
 
 
 def _make_candle(ts: datetime | None = None) -> Candle:
-    ts = ts or datetime(2026, 4, 29, 10, 30, tzinfo=EST)
+    ts = ts or datetime(2026, 4, 29, 10, 30)
     return Candle(
         {"open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "volume": 1000},
         timestamp=pd.Timestamp(ts),
     )
 
 
-# --- public API: extend / extend_realtime ---
+def _make_candle_on_date(year: int, month: int, day: int) -> Candle:
+    ts = datetime(year, month, day, 10, 30)
+    return Candle(
+        {"open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "volume": 1000},
+        timestamp=pd.Timestamp(ts),
+    )
+
+
+# --- extend ---
 
 
 @pytest.mark.asyncio
@@ -34,40 +57,152 @@ async def test_extend_returns_na_column():
     assert out[indicator.column_name()].isna().all()
 
 
-@pytest.mark.asyncio
-async def test_first_call_scrapes_and_caches_true():
-    indicator = InNewsIndicator()
-    with patch.object(
-        indicator, "_has_news_today", new=AsyncMock(return_value=True)
-    ) as scrape:
-        candle = await indicator.extend_realtime("AAPL", _make_candle())
-        assert candle[indicator.column_name()] is True
-        assert indicator._cached["AAPL"] is True
-        scrape.assert_awaited_once_with("AAPL")
+# --- consumer mode (caching=False, default) ---
 
 
 @pytest.mark.asyncio
-async def test_subsequent_calls_use_cache_no_rescrape():
+async def test_consumer_reads_cache_true():
     indicator = InNewsIndicator()
-    scrape = AsyncMock(return_value=False)
+    mock_cache = AsyncMock()
+    mock_cache.get = AsyncMock(return_value="true")
+    ApplicationRegistry.cache = mock_cache
+    candle = await indicator.extend_realtime("AAPL", _make_candle())
+    assert candle[indicator.column_name()] is True
+    assert indicator._in_news_today["AAPL"] is True
+
+
+@pytest.mark.asyncio
+async def test_consumer_cache_miss_returns_false():
+    indicator = InNewsIndicator()
+    mock_cache = AsyncMock()
+    mock_cache.get = AsyncMock(side_effect=KeyError("miss"))
+    ApplicationRegistry.cache = mock_cache
+    candle = await indicator.extend_realtime("AAPL", _make_candle())
+    assert candle[indicator.column_name()] is False
+    assert "AAPL" not in indicator._in_news_today
+
+
+@pytest.mark.asyncio
+async def test_consumer_short_circuits_after_true():
+    indicator = InNewsIndicator()
+    mock_cache = AsyncMock()
+    mock_cache.get = AsyncMock(return_value="true")
+    ApplicationRegistry.cache = mock_cache
+    await indicator.extend_realtime("AAPL", _make_candle())
+    # second call should not hit cache (sticky-True in memory)
+    mock_cache.get.reset_mock()
+    candle = await indicator.extend_realtime("AAPL", _make_candle())
+    assert candle[indicator.column_name()] is True
+    mock_cache.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_consumer_does_not_call_has_news_today():
+    indicator = InNewsIndicator()
+    mock_cache = AsyncMock()
+    mock_cache.get = AsyncMock(return_value="false")
+    scrape = AsyncMock(return_value=True)
+    ApplicationRegistry.cache = mock_cache
     with patch.object(indicator, "_has_news_today", new=scrape):
-        for _ in range(3):
-            candle = await indicator.extend_realtime("AAPL", _make_candle())
-            assert candle[indicator.column_name()] is False
-        assert scrape.await_count == 1
+        await indicator.extend_realtime("AAPL", _make_candle())
+    scrape.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_per_symbol_cache_isolation():
     indicator = InNewsIndicator()
-    side = {"AAPL": True, "MSFT": False}
-    scrape = AsyncMock(side_effect=lambda symbol: side[symbol])
+    mock_cache = AsyncMock()
+    mock_cache.get = AsyncMock(side_effect=lambda k: "true" if "AAPL" in k else (_ for _ in ()).throw(KeyError("miss")))
+    ApplicationRegistry.cache = mock_cache
+    a = await indicator.extend_realtime("AAPL", _make_candle())
+    m = await indicator.extend_realtime("MSFT", _make_candle())
+    assert a[indicator.column_name()] is True
+    assert m[indicator.column_name()] is False
+
+
+# --- day boundary reset ---
+
+
+@pytest.mark.asyncio
+async def test_day_boundary_resets_state():
+    indicator = InNewsIndicator()
+    mock_cache = AsyncMock()
+    call_count = 0
+
+    async def _get(key):
+        nonlocal call_count
+        call_count += 1
+        return "true"
+
+    mock_cache.get = _get
+    ApplicationRegistry.cache = mock_cache
+    # Day 1: cache returns true → sticky
+    await indicator.extend_realtime("AAPL", _make_candle_on_date(2026, 4, 29))
+    assert indicator._in_news_today.get("AAPL") is True
+    # Day 2: new date → state reset, cache re-read
+    await indicator.extend_realtime("AAPL", _make_candle_on_date(2026, 4, 30))
+    assert call_count == 2  # cache queried on both days
+
+
+# --- inline producer mode (caching=True) ---
+
+
+@pytest.mark.asyncio
+async def test_producer_fire_and_forget_does_not_block():
+    indicator = InNewsIndicator(caching=True)
+    mock_cache = AsyncMock()
+    mock_cache.save = AsyncMock()
+
+    async def _slow_fetch(_symbol):
+        import asyncio
+        await asyncio.sleep(0.05)
+        return True
+
+    ApplicationRegistry.cache = mock_cache
+    with patch.object(indicator, "_has_news_today", new=AsyncMock(side_effect=_slow_fetch)), \
+         patch("fastscanner.services.indicators.lib.news.random.uniform", return_value=0):
+        candle = await indicator.extend_realtime("AAPL", _make_candle())
+        # Returns immediately (False until background task finishes)
+        assert candle[indicator.column_name()] is False
+        # Let background task finish
+        import asyncio
+        await asyncio.sleep(0.1)
+    assert indicator._in_news_today.get("AAPL") is True
+    mock_cache.save.assert_called_once_with(
+        InNewsIndicator._cache_key("AAPL"), "true"
+    )
+
+
+@pytest.mark.asyncio
+async def test_producer_dedup_spawns_one_task_per_symbol():
+    indicator = InNewsIndicator(caching=True)
+    mock_cache = AsyncMock()
+    mock_cache.save = AsyncMock()
+    scrape = AsyncMock(return_value=False)
+
+    ApplicationRegistry.cache = mock_cache
+    with patch.object(indicator, "_has_news_today", new=scrape), \
+         patch("fastscanner.services.indicators.lib.news.random.uniform", return_value=0):
+        import asyncio
+        for _ in range(5):
+            await indicator.extend_realtime("AAPL", _make_candle())
+        await asyncio.sleep(0.05)
+
+    assert scrape.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_producer_sticky_true_prevents_refetch():
+    indicator = InNewsIndicator(caching=True)
+    indicator._in_news_today["AAPL"] = True
+    indicator._date["AAPL"] = _make_candle().timestamp.date()
+    scrape = AsyncMock(return_value=True)
+
     with patch.object(indicator, "_has_news_today", new=scrape):
-        a = await indicator.extend_realtime("AAPL", _make_candle())
-        m = await indicator.extend_realtime("MSFT", _make_candle())
-        assert a[indicator.column_name()] is True
-        assert m[indicator.column_name()] is False
-        assert scrape.await_count == 2
+        candle = await indicator.extend_realtime("AAPL", _make_candle())
+
+    assert candle[indicator.column_name()] is True
+    scrape.assert_not_called()
 
 
 # --- Finviz HTML parser ---
@@ -310,6 +445,13 @@ def test_parse_codex_response_raises_when_all_entries_invalid():
         InNewsIndicator._parse_codex_response(text, n_headlines=2)
 
 
+# --- cache key ---
+
+
+def test_cache_key_format():
+    assert InNewsIndicator._cache_key("AAPL") == "indicator:in_news:AAPL"
+
+
 # --- registry ---
 
 
@@ -320,3 +462,12 @@ def test_indicator_is_registered_in_library():
     indicator = library.get("in_news", {})
     assert isinstance(indicator, InNewsIndicator)
     assert indicator.column_name() == "in_news"
+
+
+def test_indicator_registered_with_caching_true():
+    from fastscanner.services.indicators.lib import IndicatorsLibrary
+
+    library = IndicatorsLibrary.instance()
+    indicator = library.get("in_news", {"caching": True})
+    assert isinstance(indicator, InNewsIndicator)
+    assert indicator._caching is True

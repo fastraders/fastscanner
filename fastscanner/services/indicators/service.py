@@ -25,6 +25,8 @@ class IndicatorParams:
 
 
 class IndicatorsService:
+    _NEWS_INDICATOR_TYPES: frozenset[str] = frozenset({"in_news"})
+
     def __init__(
         self,
         candles: CandleStore,
@@ -34,6 +36,8 @@ class IndicatorsService:
         symbols_subscribe_channel: str,
         symbols_unsubscribe_channel: str,
         cache_at_seconds: int,
+        symbols_news_subscribe_channel: str,
+        symbols_news_unsubscribe_channel: str,
     ) -> None:
         self.candles = candles
         self.fundamentals = fundamentals
@@ -41,7 +45,10 @@ class IndicatorsService:
         self._cache = cache
         self._symbols_subscribe_channel = symbols_subscribe_channel
         self._symbols_unsubscribe_channel = symbols_unsubscribe_channel
+        self._symbols_news_subscribe_channel = symbols_news_subscribe_channel
+        self._symbols_news_unsubscribe_channel = symbols_news_unsubscribe_channel
         self._subscription_to_channel: dict[str, str] = {}
+        self._news_subscriptions: set[str] = set()
         # Cache parameters
         self._cached_indicators: list[CacheableIndicator] = []
         self._cache_at_seconds = cache_at_seconds
@@ -115,6 +122,22 @@ class IndicatorsService:
                     "unit": unit,
                 },
             )
+            news_types = [
+                i.type()
+                for i in indicator_instances
+                if i.type() in self._NEWS_INDICATOR_TYPES
+            ]
+            if news_types:
+                await self.channel.push(
+                    self._symbols_news_subscribe_channel,
+                    {
+                        "symbol": symbol,
+                        "subscriber_id": sub_handler.id(),
+                        "unit": unit,
+                        "indicator_types": news_types,
+                    },
+                )
+                self._news_subscriptions.add(sub_handler.id())
         self._subscription_to_channel[sub_handler.id()] = stream_key
         # Configures the handler to receive messages from the channel
         await self.channel.subscribe(stream_key, sub_handler)
@@ -203,6 +226,16 @@ class IndicatorsService:
                     "unit": unit,
                 },
             )
+            if subscription_id in self._news_subscriptions:
+                await self.channel.push(
+                    self._symbols_news_unsubscribe_channel,
+                    {
+                        "symbol": symbol,
+                        "subscriber_id": subscription_id,
+                        "unit": unit,
+                    },
+                )
+                self._news_subscriptions.discard(subscription_id)
         await self.channel.unsubscribe(stream_key, subscription_id)
 
     async def stop(self):
@@ -217,6 +250,16 @@ class IndicatorsService:
                     "unit": unit,
                 },
             )
+            if sub_id in self._news_subscriptions:
+                await self.channel.push(
+                    self._symbols_news_unsubscribe_channel,
+                    {
+                        "symbol": symbol,
+                        "subscriber_id": sub_id,
+                        "unit": unit,
+                    },
+                )
+        self._news_subscriptions.clear()
 
 
 class SubscriptionHandler(Protocol):

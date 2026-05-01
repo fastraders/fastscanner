@@ -117,7 +117,10 @@ def indicators_service():
     channel = MockChannel()
     cache = MockCache()
     service = IndicatorsService(
-        candles, fundamentals, channel, cache, "test_subscribe", "test_unsubscribe", 10
+        candles, fundamentals, channel, cache,
+        "test_subscribe", "test_unsubscribe", 10,
+        symbols_news_subscribe_channel="test_news_subscribe",
+        symbols_news_unsubscribe_channel="test_news_unsubscribe",
     )
 
     yield service, channel
