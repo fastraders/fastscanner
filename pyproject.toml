@@ -23,6 +23,8 @@ boto3 = "^1.42.15"
 polars-lts-cpu = "^1.33.1"
 beautifulsoup4 = "^4.14.3"
 feedparser = "^6.0.12"
+selenium = "^4.43.0"
+webdriver-manager = "^4.0.2"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^9.1.0"

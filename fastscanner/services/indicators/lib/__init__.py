@@ -28,6 +28,7 @@ from .fundamental import (
     DaysSinceIPOIndicator,
     DaysToEarningsIndicator,
     MarketCapIndicator,
+    SharesFloatIndicator,
 )
 from .news import InNewsIndicator
 
@@ -49,6 +50,7 @@ _indicators: list[type["Indicator"]] = [
     ATRGapIndicator,
     DayOpenIndicator,
     InNewsIndicator,
+    SharesFloatIndicator,
 ]
 
 

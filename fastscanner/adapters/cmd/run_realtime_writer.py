@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import traceback
+from datetime import timedelta
 
 import uvloop
 
@@ -15,38 +16,39 @@ load_logging_config()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+_DAILY_RESET_HOUR = 3  # 3am local time
+
+
+def _seconds_until_next_reset() -> float:
+    now = ClockRegistry.clock.now()
+    next_reset = now.replace(hour=_DAILY_RESET_HOUR, minute=0, second=0, microsecond=0)
+    if next_reset <= now:
+        next_reset += timedelta(days=1)
+    return (next_reset - now).total_seconds()
+
 
 async def main():
-    try:
-        # channel = RedisChannel(
-        #     unix_socket_path=config.UNIX_SOCKET_PATH,
-        #     host=config.REDIS_DB_HOST,
-        #     port=config.REDIS_DB_PORT,
-        #     password=None,
-        #     db=0,
-        # )
-        ClockRegistry.set(LocalClock())
-        symbols_provider = PolygonCandlesProvider(
-            config.POLYGON_BASE_URL, config.POLYGON_API_KEY
-        )
-        channel = NATSChannel(servers=config.NATS_SERVER)
+    ClockRegistry.set(LocalClock())
+    symbols_provider = PolygonCandlesProvider(
+        config.POLYGON_BASE_URL, config.POLYGON_API_KEY
+    )
+
+    while True:
         realtime = PolygonRealtime(
             api_key=config.POLYGON_API_KEY,
-            channel=channel,
+            channel=NATSChannel(servers=config.NATS_SERVER),
         )
-
-        await realtime.start()
-        await realtime.subscribe_all_active(symbols_provider)
-
-        while True:
-            await asyncio.sleep(10.131)  # Just a long sleep. The number is irrelevant.
-
-    except Exception as e:
-        logger.error(f"Error in main(): {e}")
-        logger.error(traceback.format_exc())
-    finally:
-        realtime.unsubscribe_all()
-        await realtime.stop()
+        try:
+            await realtime.start()
+            await realtime.subscribe_all_active(symbols_provider)
+            await asyncio.sleep(_seconds_until_next_reset())
+            logger.info("Performing scheduled daily connection reset")
+        except Exception as e:
+            logger.error(f"Error in main(): {e}")
+            logger.error(traceback.format_exc())
+        finally:
+            realtime.unsubscribe_all()
+            await realtime.stop()
 
 
 if __name__ == "__main__":

@@ -24,6 +24,10 @@ EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 # Finnhub (used by the in_news indicator)
 FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN", "")
 
+# Dilutiontracker (used by the shares_float indicator)
+DILUTION_EMAIL = os.environ.get("DILUTION_EMAIL", "")
+DILUTION_PASSWORD = os.environ.get("DILUTION_PASSWORD", "")
+
 # Cache
 REDIS_DB_PORT = 6379
 REDIS_DB_HOST = "localhost"
