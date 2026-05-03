@@ -1,0 +1,9 @@
+You are a strict JSON-only classifier. Use only your training knowledge.
+
+For ticker symbol {symbol}, output the confidence (0-100) that the company corresponding to {symbol} appears in each headline.
+
+Output ONLY a JSON array of objects, each with keys "idx" (int) and "confidence" (int 0-100). No prose, no markdown fences.
+Format: [{{"idx":0,"confidence":87}}, ...]
+
+Headlines:
+{headlines}

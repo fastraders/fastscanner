@@ -30,7 +30,6 @@ USER_AGENT = (
 HTTP_TIMEOUT = 10.0
 CODEX_TIMEOUT = 90.0
 MAX_HEADLINES_PER_SYMBOL = 50
-MIN_SUBSTRING_SYMBOL_LEN = 3
 CONFIDENCE_THRESHOLD = 50  # strict greater-than per spec
 
 
@@ -49,8 +48,13 @@ class InNewsIndicator:
     def __init__(self, caching: bool = False) -> None:
         self._caching = caching
         self._in_news_today: dict[str, bool] = {}  # sticky-True for the day
-        self._date: dict[str, date] = {}            # per-symbol day boundary
-        self._tasks: dict[str, asyncio.Task] = {}   # in-flight fire-and-forget (caching=True)
+        self._date: dict[str, date] = {}  # per-symbol day boundary
+        self._tasks: dict[str, asyncio.Task] = (
+            {}
+        )  # in-flight fire-and-forget (caching=True)
+        self._seen_headlines: dict[str, set[str]] = (
+            {}
+        )  # symbol → titles already sent to Codex
 
     @classmethod
     def type(cls) -> str:
@@ -72,6 +76,7 @@ class InNewsIndicator:
         if self._date.get(symbol) != today:
             self._date[symbol] = today
             self._in_news_today.pop(symbol, None)
+            self._seen_headlines.pop(symbol, None)
 
         if self._in_news_today.get(symbol) is True:
             new_row[self.column_name()] = True
@@ -155,63 +160,33 @@ class InNewsIndicator:
             today_str,
         )
 
-        # Pass 1: substring (only when symbol is long enough to be unambiguous)
-        if len(symbol) >= MIN_SUBSTRING_SYMBOL_LEN:
-            substring_hits = self._substring_match(symbol, headlines)
-            if substring_hits:
-                logger.info(
-                    "[in_news %s] %d/%d substring hits -> in_news=True (skipped Codex)",
-                    symbol,
-                    len(substring_hits),
-                    len(headlines),
-                )
-                return True
+        # Codex — only unseen headlines.
+        seen = self._seen_headlines.setdefault(symbol, set())
+        new_headlines = [h for h in headlines if h.title not in seen]
+        if not new_headlines:
+            return False
 
-        # Pass 2: Codex. If Codex itself is unavailable we fail open: we already
-        # have N>0 headlines for today, and without the classifier we can't
-        # confidently drop them, so report in_news=True rather than miss real news.
         try:
-            codex_kept = await self._filter_with_codex(symbol, headlines)
+            codex_kept = await self._filter_with_codex(symbol, new_headlines)
         except Exception as e:
             logger.warning(
                 "[in_news %s] Codex unavailable (%s); %d headlines retrieved -> in_news=True (fail-open)",
                 symbol,
                 e,
-                len(headlines),
+                len(new_headlines),
             )
-            return True
+            return False
+
+        seen.update(h.title for h in new_headlines)
 
         logger.info(
-            "[in_news %s] %d/%d headlines kept by Codex -> in_news=%s",
+            "[in_news %s] %d/%d new headlines kept by Codex -> in_news=%s",
             symbol,
             len(codex_kept),
-            len(headlines),
+            len(new_headlines),
             bool(codex_kept),
         )
         return bool(codex_kept)
-
-    def _substring_match(
-        self, symbol: str, headlines: list[Headline]
-    ) -> list[Headline]:
-        needle = symbol.upper()
-        kept: list[Headline] = []
-        for h in headlines:
-            if needle in h.title.upper():
-                logger.info(
-                    "[in_news %s][KEEP %s substring] %s",
-                    symbol,
-                    h.source,
-                    h.title,
-                )
-                kept.append(h)
-            else:
-                logger.info(
-                    "[in_news %s][DROP %s substring] %s",
-                    symbol,
-                    h.source,
-                    h.title,
-                )
-        return kept
 
     async def _filter_with_codex(
         self, symbol: str, headlines: list[Headline]
@@ -220,17 +195,8 @@ class InNewsIndicator:
             raise RuntimeError("codex CLI not found in PATH")
 
         items = [{"idx": i, "title": h.title} for i, h in enumerate(headlines)]
-        prompt = (
-            "You are a strict JSON-only classifier. Use only your training "
-            "knowledge.\n\n"
-            f"For ticker symbol {symbol.upper()}, output the confidence (0-100) "
-            f"that the company name corresponding to {symbol.upper()} appears in "
-            "each headline.\n\n"
-            f"Output ONLY a JSON array of {len(items)} objects, each with keys "
-            '"idx" (int) and "confidence" (int 0-100). No prose, no markdown '
-            "fences.\n"
-            'Format: [{"idx":0,"confidence":87}, ...]\n\n'
-            f"Headlines:\n{json.dumps(items, ensure_ascii=False)}\n"
+        prompt = PROMPT.format(
+            symbol=symbol.upper(), headlines=json.dumps(items, ensure_ascii=False)
         )
 
         # codex exec is implicitly non-interactive (no --ask-for-approval needed
@@ -431,3 +397,159 @@ class InNewsIndicator:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(EST).strftime("%Y-%m-%d") == date_str
+
+
+PROMPT = (
+    "You are a strict JSON-only classifier. Use only your training "
+    "knowledge.\n\n"
+    "For ticker symbol {symbol}, output the confidence (0-100) "
+    "that each headline represents POSITIVE, ACTIONABLE news for the "
+    "company corresponding to {symbol}.\n\n"
+    "Confidence >= 50 means the headline should trigger action.\n"
+    "Confidence < 50 means the headline should be skipped.\n\n"
+    "SCORING RUBRIC\n"
+    "==============\n"
+    "Score HIGH confidence (75-100) when the headline clearly indicates:\n"
+    "  MONEY IN — REQUIRES an explicit dollar amount in the headline of\n"
+    "  at least $1 million (e.g., '$5M', '$250 million', '$1.2 billion').\n"
+    "  Words implying money without a specific number do NOT qualify\n"
+    "  for HIGH. The dollar amount must be stated in the headline text\n"
+    "  itself.\n"
+    "    - Revenue, partnership, agreement, loan, or investment received\n"
+    "    - Lawsuit won or favorable settlement received\n"
+    "    - Government contract or grant awarded (DoD, NASA, DOE, etc.)\n"
+    "    - Dividend initiation or increase\n"
+    "    - Debt paydown or refinancing at better terms\n"
+    "    - Insurance settlement received\n"
+    "    - Royalty or licensing deal\n"
+    "    - Milestone payment received\n"
+    "    - Major contract win (named customer, multi-year)\n"
+    "    - Earnings beat WITH raised guidance\n"
+    "    - Patent litigation won\n"
+    "    - Inclusion in major index (S&P 500, Russell 1000, Nasdaq-100)\n"
+    "  CORPORATE ACTIONS:\n"
+    "    - Acquisition or merger involving the company, in any direction:\n"
+    "        * Company acquires another company\n"
+    "        * Company is being acquired by another company\n"
+    "        * Company merges with another company\n"
+    "    - Company is a SPAC or involved in a SPAC deal\n"
+    "    - Company filing for bankruptcy\n"
+    "    - Reverse stock split\n"
+    "  MARKET / COVERAGE:\n"
+    "    - Analyst upgrade or price target raise\n"
+    "  CLINICAL / BIOTECH (positive RESULTS only, not applications):\n"
+    "    - Positive Phase 2, Phase 2b, Phase 3, or Phase 3b results\n"
+    "    - Positive cancer-related trial results\n"
+    "    - Major breakthrough indications with positive results,\n"
+    "      including:\n"
+    "        * Cancer cures\n"
+    "        * Alzheimer's disease treatments or cures\n"
+    "        * Anti-aging / de-aging\n"
+    "        * ALS, Parkinson's, Huntington's cures\n"
+    "        * Cures for genetic diseases (sickle cell, cystic fibrosis,\n"
+    "          muscular dystrophy)\n"
+    "        * HIV cures (not just treatments)\n"
+    "        * Type 1 diabetes cures (not just management)\n"
+    "        * Spinal cord injury reversal / paralysis treatments\n"
+    "        * Blindness or deafness reversal\n"
+    "        * Universal vaccines (cancer vaccine, universal flu vaccine)\n"
+    "        * Any treatment described as a 'cure' for a previously\n"
+    "          incurable major disease\n"
+    "  AI / STRATEGIC:\n"
+    "    - Launches an AI PLATFORM (a standalone product offering, not\n"
+    "      a feature added to an existing product)\n"
+    "    - Partnership with a named AI company (e.g., OpenAI, Anthropic,\n"
+    "      Nvidia, Microsoft AI, Google DeepMind, etc.)\n"
+    "    - AI strategy announcement that represents a PIVOT from the\n"
+    "      company's current core business (not an extension of\n"
+    "      existing operations)\n"
+    "    - Major pivot to AI, backed by concrete evidence:\n"
+    "        * Renaming the company or core product to reflect AI focus\n"
+    "        * Acquisition of a named AI company\n"
+    "    - Large AI investment with a specific dollar amount that is\n"
+    "      material relative to company size (hundreds of millions or\n"
+    "      billions, OR a multi-year capital commitment with a dollar\n"
+    "      figure)\n"
+    "\n"
+    "Score MODERATE confidence (50-74) when the headline indicates:\n"
+    "    - Positive Phase 2a results\n"
+    "    - Fast Track or Orphan Drug designation\n"
+    "    - Breakthrough Therapy designation for major indications\n"
+    "      (cancer, Alzheimer's, anti-aging, rare/unbelievable conditions)\n"
+    "\n"
+    "Score LOW confidence (0-49) when the headline indicates:\n"
+    "  CLINICAL / BIOTECH:\n"
+    "    - Phase 1 results (positive or otherwise) - always LOW\n"
+    "    - Applications, filings, or preparations to file for clinical\n"
+    "      trials at any phase\n"
+    "    - Trial initiation, enrollment, or design announcements\n"
+    "    - PDUFA date set\n"
+    "    - Trial mention without explicit positive language\n"
+    "    - Breakthrough Therapy designation for non-major indications\n"
+    "  AI / STRATEGIC:\n"
+    "    - 'Launches AI tool' or 'launches AI feature' (a tool or\n"
+    "      feature is an addition to existing products, not a platform)\n"
+    "    - 'Integrates AI into [existing product]'\n"
+    "    - 'Adds AI capabilities to [existing product]'\n"
+    "    - 'AI-powered' / 'AI-driven' / 'AI-enabled' feature launches\n"
+    "    - AI strategy that EXTENDS the current business rather than\n"
+    "      pivoting away from it\n"
+    "    - Generic 'exploring AI' or 'evaluating AI use cases'\n"
+    "  UNQUANTIFIED FINANCIALS:\n"
+    "    - Money-in events WITHOUT an explicit dollar amount in the\n"
+    "      headline (e.g., 'Company signs partnership' with no number)\n"
+    "    - Money-in events with dollar amounts under $1 million\n"
+    "    - Reverse mergers where the operating company is questionable\n"
+    "  HEDGING OR NEGATIVE LANGUAGE:\n"
+    "    - Vague language: 'exploring', 'considering', 'in talks',\n"
+    "      'evaluating', 'may', 'could', 'potentially'\n"
+    "    - Lawsuits FILED AGAINST the company\n"
+    "    - Headlines where peers get good news and this company is\n"
+    "      mentioned only as a beneficiary by association\n"
+    "    - Headlines where the company is only listed among peers\n"
+    "  PR LANGUAGE TO IGNORE:\n"
+    "    - Words like 'transformative', 'game-changing', 'revolutionary',\n"
+    "      'groundbreaking', 'industry-leading' do not raise confidence\n"
+    "      on their own. Require concrete evidence (dollar amount, named\n"
+    "      counterparty, structural change, or positive trial results).\n"
+    "\n"
+    "MONEY-IN DOLLAR AMOUNT REQUIREMENT\n"
+    "==================================\n"
+    "For any money-in event (revenue, partnership, contract, grant,\n"
+    "loan, investment, settlement, royalty, milestone, PIPE, direct\n"
+    "offering, 'up to $X' deal, etc.) the headline MUST contain an\n"
+    "explicit dollar figure of at least $1 million to qualify for\n"
+    "HIGH confidence.\n"
+    "  - Headline contains '$X million' or '$X billion' (X >= 1) -> HIGH\n"
+    "  - Headline contains 'up to $X' where X >= $1 million -> HIGH\n"
+    "  - Headline contains a dollar amount under $1 million -> LOW\n"
+    "  - Headline implies money but states no number -> LOW\n"
+    "  - Headline says 'undisclosed terms' or 'undisclosed amount' -> LOW\n"
+    "\n"
+    "CLINICAL TRIAL DISAMBIGUATION\n"
+    "=============================\n"
+    "Distinguish RESULTS from APPLICATIONS:\n"
+    "  - Positive Phase 2, 2b, 3, or 3b RESULTS -> HIGH (75-100)\n"
+    "  - Positive Phase 2a RESULTS -> MODERATE (50-74)\n"
+    "  - Phase 1 RESULTS (any indication, any outcome) -> LOW (0-49)\n"
+    "  - APPLICATIONS, FILINGS, or PREPARATIONS to file -> LOW (0-49)\n"
+    "  - Trial initiation, enrollment, or design -> LOW (0-49)\n"
+    "  - Trial without explicit positive language -> LOW (0-49)\n"
+    "\n"
+    "AI ANNOUNCEMENT DISAMBIGUATION\n"
+    "==============================\n"
+    "  - AI PLATFORM launch (standalone product) -> HIGH (75-100)\n"
+    "  - AI partnership with NAMED AI company -> HIGH (75-100)\n"
+    "  - AI strategy that is a PIVOT from current business -> HIGH\n"
+    "  - AI tool or feature added to existing products -> LOW (0-49)\n"
+    "  - AI integration into existing products -> LOW (0-49)\n"
+    "  - AI strategy that extends existing business -> LOW (0-49)\n"
+    "\n"
+    "OUTPUT FORMAT\n"
+    "=============\n"
+    f"Output ONLY a JSON array of objects, each with keys "
+    '"idx" (int) and "confidence" (int 0-100). No prose, no markdown '
+    "fences, no explanations.\n"
+    'Format: [{"idx":0,"confidence":87}, ...]\n\n'
+    "Headlines:\n{headlines}\n"
+)

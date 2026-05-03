@@ -1,0 +1,152 @@
+You are a strict JSON-only classifier. Use only your training knowledge.
+
+For ticker symbol {symbol}, output the confidence (0-100) that each headline represents POSITIVE, ACTIONABLE news for the company corresponding to {symbol}.
+
+Confidence >= 50 means the headline should trigger action.
+Confidence < 50 means the headline should be skipped.
+
+SCORING RUBRIC
+==============
+Score HIGH confidence (75-100) when the headline clearly indicates:
+  MONEY IN — REQUIRES an explicit dollar amount in the headline of
+  at least $1 million (e.g., '$5M', '$250 million', '$1.2 billion').
+  Words implying money without a specific number do NOT qualify
+  for HIGH. The dollar amount must be stated in the headline text
+  itself.
+    - Revenue, partnership, agreement, loan, or investment received
+    - Lawsuit won or favorable settlement received
+    - Government contract or grant awarded (DoD, NASA, DOE, etc.)
+    - Dividend initiation or increase
+    - Debt paydown or refinancing at better terms
+    - Insurance settlement received
+    - Royalty or licensing deal
+    - Milestone payment received
+    - Major contract win (named customer, multi-year)
+    - Earnings beat WITH raised guidance
+    - Patent litigation won
+    - Inclusion in major index (S&P 500, Russell 1000, Nasdaq-100)
+  CORPORATE ACTIONS:
+    - Acquisition or merger involving the company, in any direction:
+        * Company acquires another company
+        * Company is being acquired by another company
+        * Company merges with another company
+    - Company is a SPAC or involved in a SPAC deal
+    - Company filing for bankruptcy
+    - Reverse stock split
+  MARKET / COVERAGE:
+    - Analyst upgrade or price target raise
+  CLINICAL / BIOTECH (positive RESULTS only, not applications):
+    - Positive Phase 2, Phase 2b, Phase 3, or Phase 3b results
+    - Positive cancer-related trial results
+    - Major breakthrough indications with positive results,
+      including:
+        * Cancer cures
+        * Alzheimer's disease treatments or cures
+        * Anti-aging / de-aging
+        * ALS, Parkinson's, Huntington's cures
+        * Cures for genetic diseases (sickle cell, cystic fibrosis,
+          muscular dystrophy)
+        * HIV cures (not just treatments)
+        * Type 1 diabetes cures (not just management)
+        * Spinal cord injury reversal / paralysis treatments
+        * Blindness or deafness reversal
+        * Universal vaccines (cancer vaccine, universal flu vaccine)
+        * Any treatment described as a 'cure' for a previously
+          incurable major disease
+  AI / STRATEGIC:
+    - Launches an AI PLATFORM (a standalone product offering, not
+      a feature added to an existing product)
+    - Partnership with a named AI company (e.g., OpenAI, Anthropic,
+      Nvidia, Microsoft AI, Google DeepMind, etc.)
+    - AI strategy announcement that represents a PIVOT from the
+      company's current core business (not an extension of
+      existing operations)
+    - Major pivot to AI, backed by concrete evidence:
+        * Renaming the company or core product to reflect AI focus
+        * Acquisition of a named AI company
+    - Large AI investment with a specific dollar amount that is
+      material relative to company size (hundreds of millions or
+      billions, OR a multi-year capital commitment with a dollar
+      figure)
+
+Score MODERATE confidence (50-74) when the headline indicates:
+    - Positive Phase 2a results
+    - Fast Track or Orphan Drug designation
+    - Breakthrough Therapy designation for major indications
+      (cancer, Alzheimer's, anti-aging, rare/unbelievable conditions)
+
+Score LOW confidence (0-49) when the headline indicates:
+  CLINICAL / BIOTECH:
+    - Phase 1 results (positive or otherwise) - always LOW
+    - Applications, filings, or preparations to file for clinical
+      trials at any phase
+    - Trial initiation, enrollment, or design announcements
+    - PDUFA date set
+    - Trial mention without explicit positive language
+    - Breakthrough Therapy designation for non-major indications
+  AI / STRATEGIC:
+    - 'Launches AI tool' or 'launches AI feature' (a tool or
+      feature is an addition to existing products, not a platform)
+    - 'Integrates AI into [existing product]'
+    - 'Adds AI capabilities to [existing product]'
+    - 'AI-powered' / 'AI-driven' / 'AI-enabled' feature launches
+    - AI strategy that EXTENDS the current business rather than
+      pivoting away from it
+    - Generic 'exploring AI' or 'evaluating AI use cases'
+  UNQUANTIFIED FINANCIALS:
+    - Money-in events WITHOUT an explicit dollar amount in the
+      headline (e.g., 'Company signs partnership' with no number)
+    - Money-in events with dollar amounts under $1 million
+    - Reverse mergers where the operating company is questionable
+  HEDGING OR NEGATIVE LANGUAGE:
+    - Vague language: 'exploring', 'considering', 'in talks',
+      'evaluating', 'may', 'could', 'potentially'
+    - Lawsuits FILED AGAINST the company
+    - Headlines where peers get good news and this company is
+      mentioned only as a beneficiary by association
+    - Headlines where the company is only listed among peers
+  PR LANGUAGE TO IGNORE:
+    - Words like 'transformative', 'game-changing', 'revolutionary',
+      'groundbreaking', 'industry-leading' do not raise confidence
+      on their own. Require concrete evidence (dollar amount, named
+      counterparty, structural change, or positive trial results).
+
+MONEY-IN DOLLAR AMOUNT REQUIREMENT
+==================================
+For any money-in event (revenue, partnership, contract, grant,
+loan, investment, settlement, royalty, milestone, PIPE, direct
+offering, 'up to $X' deal, etc.) the headline MUST contain an
+explicit dollar figure of at least $1 million to qualify for
+HIGH confidence.
+  - Headline contains '$X million' or '$X billion' (X >= 1) -> HIGH
+  - Headline contains 'up to $X' where X >= $1 million -> HIGH
+  - Headline contains a dollar amount under $1 million -> LOW
+  - Headline implies money but states no number -> LOW
+  - Headline says 'undisclosed terms' or 'undisclosed amount' -> LOW
+
+CLINICAL TRIAL DISAMBIGUATION
+=============================
+Distinguish RESULTS from APPLICATIONS:
+  - Positive Phase 2, 2b, 3, or 3b RESULTS -> HIGH (75-100)
+  - Positive Phase 2a RESULTS -> MODERATE (50-74)
+  - Phase 1 RESULTS (any indication, any outcome) -> LOW (0-49)
+  - APPLICATIONS, FILINGS, or PREPARATIONS to file -> LOW (0-49)
+  - Trial initiation, enrollment, or design -> LOW (0-49)
+  - Trial without explicit positive language -> LOW (0-49)
+
+AI ANNOUNCEMENT DISAMBIGUATION
+==============================
+  - AI PLATFORM launch (standalone product) -> HIGH (75-100)
+  - AI partnership with NAMED AI company -> HIGH (75-100)
+  - AI strategy that is a PIVOT from current business -> HIGH
+  - AI tool or feature added to existing products -> LOW (0-49)
+  - AI integration into existing products -> LOW (0-49)
+  - AI strategy that extends existing business -> LOW (0-49)
+
+OUTPUT FORMAT
+=============
+Output ONLY a JSON array of objects, each with keys "idx" (int) and "confidence" (int 0-100). No prose, no markdown fences, no explanations.
+Format: [{{"idx":0,"confidence":87}}, ...]
+
+Headlines:
+{headlines}

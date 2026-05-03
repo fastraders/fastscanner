@@ -31,11 +31,15 @@ class Split:
 class _MassiveSplitsLoader:
     _base_dir: str
     _splits_cache: dict[str, list[Split]] | None = None
+    _last_refreshed: Date | None = None
 
     @property
     def splits(self) -> "dict[str, list[Split]]":
-        if self._splits_cache is None:
+        today = ClockRegistry.clock.today()
+        if self._splits_cache is None or self._last_refreshed != today:
             self._splits_cache = self._load_splits()
+            self._last_refreshed = today
+            logger.info(f"Loaded splits cache with {len(self._splits_cache)} symbols")
         return self._splits_cache
 
     def _splits_path(self) -> str:
@@ -139,6 +143,7 @@ class MassiveAdjustedCollector(_MassiveSplitsLoader):
             all_splits[symbol] = all_symbol_splits.get(symbol, [])
 
         self._save_splits(all_splits)
+        self._splits_cache = all_splits
 
     def _save_splits(self, splits: "dict[str, list[Split]]") -> None:
         with open(self._splits_path(), "w") as f:

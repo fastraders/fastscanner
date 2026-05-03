@@ -112,7 +112,11 @@ async def test_consumer_does_not_call_has_news_today():
 async def test_per_symbol_cache_isolation():
     indicator = InNewsIndicator()
     mock_cache = AsyncMock()
-    mock_cache.get = AsyncMock(side_effect=lambda k: "true" if "AAPL" in k else (_ for _ in ()).throw(KeyError("miss")))
+    mock_cache.get = AsyncMock(
+        side_effect=lambda k: (
+            "true" if "AAPL" in k else (_ for _ in ()).throw(KeyError("miss"))
+        )
+    )
     ApplicationRegistry.cache = mock_cache
     a = await indicator.extend_realtime("AAPL", _make_candle())
     m = await indicator.extend_realtime("MSFT", _make_candle())
@@ -155,22 +159,23 @@ async def test_producer_fire_and_forget_does_not_block():
 
     async def _slow_fetch(_symbol):
         import asyncio
+
         await asyncio.sleep(0.05)
         return True
 
     ApplicationRegistry.cache = mock_cache
-    with patch.object(indicator, "_has_news_today", new=AsyncMock(side_effect=_slow_fetch)), \
-         patch("fastscanner.services.indicators.lib.news.random.uniform", return_value=0):
+    with patch.object(
+        indicator, "_has_news_today", new=AsyncMock(side_effect=_slow_fetch)
+    ), patch("fastscanner.services.indicators.lib.news.random.uniform", return_value=0):
         candle = await indicator.extend_realtime("AAPL", _make_candle())
         # Returns immediately (False until background task finishes)
         assert candle[indicator.column_name()] is False
         # Let background task finish
         import asyncio
+
         await asyncio.sleep(0.1)
     assert indicator._in_news_today.get("AAPL") is True
-    mock_cache.save.assert_called_once_with(
-        InNewsIndicator._cache_key("AAPL"), "true"
-    )
+    mock_cache.save.assert_called_once_with(InNewsIndicator._cache_key("AAPL"), "true")
 
 
 @pytest.mark.asyncio
@@ -181,9 +186,11 @@ async def test_producer_dedup_spawns_one_task_per_symbol():
     scrape = AsyncMock(return_value=False)
 
     ApplicationRegistry.cache = mock_cache
-    with patch.object(indicator, "_has_news_today", new=scrape), \
-         patch("fastscanner.services.indicators.lib.news.random.uniform", return_value=0):
+    with patch.object(indicator, "_has_news_today", new=scrape), patch(
+        "fastscanner.services.indicators.lib.news.random.uniform", return_value=0
+    ):
         import asyncio
+
         for _ in range(5):
             await indicator.extend_realtime("AAPL", _make_candle())
         await asyncio.sleep(0.05)
@@ -244,7 +251,9 @@ def test_finviz_extract_skips_other_dates():
 
 
 def test_finviz_extract_returns_empty_when_table_missing():
-    assert InNewsIndicator._finviz_news_table_extract("<html></html>", "2026-04-29") == []
+    assert (
+        InNewsIndicator._finviz_news_table_extract("<html></html>", "2026-04-29") == []
+    )
 
 
 # --- date helpers ---
@@ -262,57 +271,25 @@ def test_dt_is_on_date_handles_timezone_boundary():
     assert InNewsIndicator._dt_is_on_date(dt, "2026-04-29") is False
 
 
-# --- substring filter ---
-
-
-def test_substring_match_keeps_only_matching_titles():
-    indicator = InNewsIndicator()
-    headlines = [
-        Headline(title="AAPL beats earnings", source="finviz"),
-        Headline(title="Tech sector rallies on Fed news", source="yahoo"),
-        Headline(title="why aapl is undervalued", source="seeking_alpha"),
-    ]
-    kept = indicator._substring_match("AAPL", headlines)
-    assert [h.title for h in kept] == [
-        "AAPL beats earnings",
-        "why aapl is undervalued",
-    ]
-
-
-# --- _has_news_today orchestration ---
-
-
 @pytest.mark.asyncio
 async def test_no_headlines_returns_false():
     indicator = InNewsIndicator()
-    with patch.object(indicator, "_finviz_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])):
+    with patch.object(
+        indicator, "_finviz_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ):
         assert await indicator._has_news_today("AAPL") is False
 
 
 @pytest.mark.asyncio
-async def test_substring_hit_short_circuits_codex():
-    indicator = InNewsIndicator()
-    codex = AsyncMock()
-    with patch.object(
-        indicator,
-        "_finviz_headlines",
-        new=AsyncMock(return_value=["AAPL surges on guidance raise"]),
-    ), patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_filter_with_codex", new=codex):
-        result = await indicator._has_news_today("AAPL")
-        assert result is True
-        codex.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_codex_runs_when_no_substring_hit():
+async def test_codex_runs_for_headlines():
     indicator = InNewsIndicator()
     codex_kept = [Headline(title="Acme reports earnings", source="finviz")]
     codex = AsyncMock(return_value=codex_kept)
@@ -320,68 +297,64 @@ async def test_codex_runs_when_no_substring_hit():
         indicator,
         "_finviz_headlines",
         new=AsyncMock(return_value=["Acme reports earnings"]),
-    ), patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_filter_with_codex", new=codex):
-        # ticker XYZ does not appear in title → substring miss → Codex runs
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_filter_with_codex", new=codex
+    ):
         result = await indicator._has_news_today("XYZ")
         assert result is True
         codex.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_codex_failure_fails_open_to_true_when_headlines_exist():
+async def test_codex_failure_returns_false_when_headlines_exist():
     indicator = InNewsIndicator()
     codex = AsyncMock(side_effect=RuntimeError("codex blew up"))
     with patch.object(
         indicator,
         "_finviz_headlines",
         new=AsyncMock(return_value=["Sector ETF rebalance"]),
-    ), patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_filter_with_codex", new=codex):
-        assert await indicator._has_news_today("XYZ") is True
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_filter_with_codex", new=codex
+    ):
+        assert await indicator._has_news_today("XYZ") is False
         codex.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_codex_missing_fails_open_to_true_when_headlines_exist():
+async def test_codex_missing_returns_false_when_headlines_exist():
     indicator = InNewsIndicator()
     with patch.object(
         indicator,
         "_finviz_headlines",
         new=AsyncMock(return_value=["Some unrelated headline"]),
-    ), patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch("fastscanner.services.indicators.lib.news.shutil.which", return_value=None):
-        assert await indicator._has_news_today("XYZ") is True
-
-
-@pytest.mark.asyncio
-async def test_short_symbol_skips_substring_pass_goes_straight_to_codex():
-    indicator = InNewsIndicator()
-    # "GE" (2 chars) appears in "GENERAL" but we must skip the substring pass.
-    codex = AsyncMock(return_value=[])
-    with patch.object(
-        indicator,
-        "_finviz_headlines",
-        new=AsyncMock(return_value=["GENERAL market update; banks rally"]),
-    ), patch.object(indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_substring_match") as substring_mock, \
-         patch.object(indicator, "_filter_with_codex", new=codex):
-        result = await indicator._has_news_today("GE")
-        assert result is False  # codex returned no keepers
-        substring_mock.assert_not_called()  # substring pass skipped entirely
-        codex.assert_awaited_once()
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ), patch(
+        "fastscanner.services.indicators.lib.news.shutil.which", return_value=None
+    ):
+        assert await indicator._has_news_today("XYZ") is False
 
 
 @pytest.mark.asyncio
@@ -389,14 +362,20 @@ async def test_source_exception_does_not_break_other_sources():
     indicator = InNewsIndicator()
     codex = AsyncMock(return_value=[])
     with patch.object(
-        indicator, "_finviz_headlines", new=AsyncMock(side_effect=RuntimeError("network"))
+        indicator,
+        "_finviz_headlines",
+        new=AsyncMock(side_effect=RuntimeError("network")),
     ), patch.object(
         indicator, "_finnhub_headlines", new=AsyncMock(return_value=["Acme rises 10%"])
-    ), patch.object(indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])), \
-         patch.object(indicator, "_filter_with_codex", new=codex):
-        # finviz raises but finnhub still produces a headline; substring miss → codex
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_filter_with_codex", new=codex
+    ):
         result = await indicator._has_news_today("XYZ")
         assert result is False
         codex.assert_awaited_once()
@@ -439,10 +418,56 @@ def test_parse_codex_response_drops_invalid_entries():
     ]
 
 
+def test_parse_codex_response_handles_non_ascii_surrounding_prose():
+    text = (
+        "分析結果:\n"
+        '[{"idx":0,"confidence":91},{"idx":1,"confidence":8}]\n'
+        "Résultat: terminé."
+    )
+    out = InNewsIndicator._parse_codex_response(text, n_headlines=2)
+    assert out == [{"idx": 0, "confidence": 91}, {"idx": 1, "confidence": 8}]
+
+
 def test_parse_codex_response_raises_when_all_entries_invalid():
     text = '[{"idx":99,"confidence":50},{"idx":"bad","confidence":50}]'
     with pytest.raises(RuntimeError, match="no valid entries"):
         InNewsIndicator._parse_codex_response(text, n_headlines=2)
+
+
+# --- non-ASCII headlines ---
+
+
+@pytest.mark.asyncio
+async def test_non_ascii_headlines_flow_through_has_news_today():
+    indicator = InNewsIndicator()
+    non_ascii = [
+        "Société Générale raises €50M price target on XYZ",
+        "日本企業XYZがAI戦略を発表",
+        "Ação da XYZ sobe após acordo de R$2bi",
+    ]
+    received: list[list[Headline]] = []
+
+    async def _capture(symbol, headlines):
+        received.append(list(headlines))
+        return headlines[:1]
+
+    with patch.object(
+        indicator, "_finviz_headlines", new=AsyncMock(return_value=non_ascii)
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_filter_with_codex", new=AsyncMock(side_effect=_capture)
+    ):
+        result = await indicator._has_news_today("XYZ")
+
+    assert result is True
+    assert [h.title for h in received[0]] == non_ascii
 
 
 # --- cache key ---
