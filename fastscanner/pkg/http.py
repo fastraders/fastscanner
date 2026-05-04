@@ -24,7 +24,7 @@ def retry_request(client: httpx.Client, *args, **kwargs):
             ) or response.status_code not in RETRIABLE_STATUS:
                 return response
             logger.warning(
-                f"Status code: {response.status_code}\nContent:\n{response.content.decode('utf-8')}"
+                f"Status code: {response.status_code}\nContent:\n{response.content.decode('utf-8')[:200]}"
             )
         except httpx.RequestError:
             logger.warning(f"RequestError: request failed. Will retry...")
