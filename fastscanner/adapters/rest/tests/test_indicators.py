@@ -119,8 +119,8 @@ def indicators_service():
     service = IndicatorsService(
         candles, fundamentals, channel, cache,
         "test_subscribe", "test_unsubscribe", 10,
-        symbols_news_subscribe_channel="test_news_subscribe",
-        symbols_news_unsubscribe_channel="test_news_unsubscribe",
+        symbols_slow_indicators_subscribe_channel="test_slow_indicators_subscribe",
+        symbols_slow_indicators_unsubscribe_channel="test_slow_indicators_unsubscribe",
     )
 
     yield service, channel

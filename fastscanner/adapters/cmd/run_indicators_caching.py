@@ -16,7 +16,10 @@ from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.lib import CacheableIndicator, IndicatorsLibrary
-from fastscanner.services.indicators.news_cache_service import NewsCacheService
+from fastscanner.services.indicators.lib.news import InNewsIndicator
+from fastscanner.services.indicators.slow_indicators_service import (
+    SlowIndicatorsService,
+)
 from fastscanner.services.indicators.lib.candle import (
     ATRGapIndicator,
     ATRIndicator,
@@ -46,6 +49,7 @@ from fastscanner.services.indicators.lib.fundamental import (
     DaysSinceIPOIndicator,
     DaysToEarningsIndicator,
     MarketCapIndicator,
+    SharesFloatIndicator,
 )
 from fastscanner.services.indicators.ports import CandleCol
 from fastscanner.services.indicators.service import (
@@ -86,8 +90,8 @@ async def main():
         config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
         config.CACHE_AT_SECONDS,
-        symbols_news_subscribe_channel=config.NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL,
-        symbols_news_unsubscribe_channel=config.NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_subscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_SUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_unsubscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_UNSUBSCRIBE_CHANNEL,
     )
     ApplicationRegistry.set_indicators(indicators_service)
 
@@ -113,14 +117,17 @@ async def main():
         except KeyError:
             await i.save_to_cache()
             logger.info(f"Indicator {i} not found in cache. It will be cached anew.")
-    news_service = NewsCacheService(
+    slow_indicators_service = SlowIndicatorsService(
         channel=channel,
-        cache=cache,
-        news_subscribe_channel=config.NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL,
-        news_unsubscribe_channel=config.NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL,
+        indicators=[
+            InNewsIndicator(caching=True),
+            SharesFloatIndicator(caching=True),
+        ],
+        subscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_SUBSCRIBE_CHANNEL,
+        unsubscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_UNSUBSCRIBE_CHANNEL,
     )
-    await news_service.start()
-    logger.info("News cache service started")
+    await slow_indicators_service.start()
+    logger.info("Slow indicators service started")
 
     sub_id = await indicators_service.cache_indicators(indicators_with_cache)
     logger.info(f"Subscribed to all symbols. Starting caching loop...")
@@ -128,7 +135,7 @@ async def main():
         while True:
             await asyncio.sleep(20.1242)  # Sleep a random time to avoid thundering herd
     finally:
-        await news_service.stop()
+        await slow_indicators_service.stop()
         await indicators_service.stop_caching(sub_id)
         await cache.close()
 

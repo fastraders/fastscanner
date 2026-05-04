@@ -170,7 +170,7 @@ class InNewsIndicator:
             codex_kept = await self._filter_with_codex(symbol, new_headlines)
         except Exception as e:
             logger.warning(
-                "[in_news %s] Codex unavailable (%s); %d headlines retrieved -> in_news=True (fail-open)",
+                "[in_news %s] Codex unavailable (%s); %d headlines retrieved -> in_news=False (fail-open)",
                 symbol,
                 e,
                 len(new_headlines),
@@ -550,6 +550,6 @@ PROMPT = (
     f"Output ONLY a JSON array of objects, each with keys "
     '"idx" (int) and "confidence" (int 0-100). No prose, no markdown '
     "fences, no explanations.\n"
-    'Format: [{"idx":0,"confidence":87}, ...]\n\n'
+    'Format: [{{"idx":0,"confidence":87}}, ...]\n\n'
     "Headlines:\n{headlines}\n"
 )

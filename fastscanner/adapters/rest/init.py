@@ -34,8 +34,8 @@ def init() -> tuple[IndicatorsService, ScannerService]:
         symbols_subscribe_channel=config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         symbols_unsubscribe_channel=config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
         cache_at_seconds=config.CACHE_AT_SECONDS,
-        symbols_news_subscribe_channel=config.NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL,
-        symbols_news_unsubscribe_channel=config.NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_subscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_SUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_unsubscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_UNSUBSCRIBE_CHANNEL,
     )
     scanner_service = ScannerService(
         candles=candles, channel=channel, symbols_provider=polygon

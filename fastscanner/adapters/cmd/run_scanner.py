@@ -124,8 +124,8 @@ async def _run_async(
         config.NATS_SYMBOL_SUBSCRIBE_CHANNEL,
         config.NATS_SYMBOL_UNSUBSCRIBE_CHANNEL,
         cache_at_seconds=config.CACHE_AT_SECONDS,
-        symbols_news_subscribe_channel=config.NATS_SYMBOL_NEWS_SUBSCRIBE_CHANNEL,
-        symbols_news_unsubscribe_channel=config.NATS_SYMBOL_NEWS_UNSUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_subscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_SUBSCRIBE_CHANNEL,
+        symbols_slow_indicators_unsubscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_UNSUBSCRIBE_CHANNEL,
     )
 
     ApplicationRegistry.init(candles, fundamentals, holidays, cache)
