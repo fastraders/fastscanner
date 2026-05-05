@@ -5,14 +5,27 @@ For ticker symbol {symbol}, output the confidence (0-100) that each headline rep
 Confidence >= 50 means the headline should trigger action.
 Confidence < 50 means the headline should be skipped.
 
+CONFIDENCE TIERS
+================
+   0-49   LOW           — skip
+  50-74   MODERATE      — borderline actionable
+  75-89   HIGH          — actionable
+  90-100  TIER-DEFINING — high-conviction, rare
+
 SCORING RUBRIC
 ==============
-Score HIGH confidence (75-100) when the headline clearly indicates:
+Score HIGH (75-89), or TIER-DEFINING (90-100) where indicated, when
+the headline clearly indicates:
+
   MONEY IN — REQUIRES an explicit dollar amount in the headline of
   at least $1 million (e.g., '$5M', '$250 million', '$1.2 billion').
   Words implying money without a specific number do NOT qualify
   for HIGH. The dollar amount must be stated in the headline text
   itself.
+    Apply the dollar threshold:
+      * Stated amount >= $10M -> 90-100 (TIER-DEFINING)
+      * Stated amount >= $1M and < $10M -> 75-89 (HIGH)
+    Event types covered:
     - Revenue, partnership, agreement, loan, or investment received
     - Lawsuit won or favorable settlement received
     - Government contract or grant awarded (DoD, NASA, DOE, etc.)
@@ -26,10 +39,67 @@ Score HIGH confidence (75-100) when the headline clearly indicates:
     - Patent litigation won
     - Inclusion in major index (S&P 500, Russell 1000, Nasdaq-100)
   CORPORATE ACTIONS:
-    - Acquisition or merger involving the company, in any direction:
-        * Company acquires another company
-        * Company is being acquired by another company
-        * Company merges with another company
+    M&A is scored based on what {symbol} is doing in the deal and
+    what {symbol} is gaining or giving up.
+
+    {symbol} RECEIVES VALUE (HIGH-eligible):
+      - {symbol} is being acquired by another company
+      - Another company / fund / investor takes a stake in {symbol}
+        (any percentage). Stakes >= 30% are particularly strong
+        signals and should always score TIER-DEFINING (90-100)
+        when there is a named acquirer, regardless of stated price.
+      - {symbol} divests / sells assets / sells a subsidiary and
+        receives stated payments
+      - {symbol} merges with another company in a deal where
+        {symbol} shareholders receive consideration
+      Apply the dollar threshold for stated prices / payments to
+      {symbol}:
+        * Stated price/payment >= $10M -> 90-100 (TIER-DEFINING)
+        * Stated price/payment >= $1M and < $10M -> 75-89 (HIGH)
+        * No stated price -> 75-89 (HIGH) only if definitive with
+          named counterparty
+        * Named acquirer takes >= 30% stake -> 90-100 always
+      For 'up to $X' payment language, use X as the size.
+
+    {symbol} ACQUIRES AN OPERATING BUSINESS (HIGH-eligible):
+      When {symbol} is the acquirer and is buying an operating
+      business, operating assets, intellectual property, a
+      subsidiary, a product line, or another company, score based
+      on stated price:
+        * Stated price >= $10M -> 90-100 (TIER-DEFINING)
+        * Stated price >= $1M and < $10M -> 75-89 (HIGH)
+        * No stated price -> 75-89 (HIGH) only if definitive with
+          a named target
+      Operating assets means assets that produce revenue or form
+      a business (e.g., a drone fleet to operate a drone service,
+      patents, a software platform, manufacturing equipment, a
+      brand, a customer base, an entire company).
+
+    {symbol} BUYS FINANCIAL ASSETS (LOW):
+      When {symbol} is the buyer and is acquiring financial
+      assets rather than an operating business, score LOW (0-49)
+      even with a stated price. Financial assets include:
+      - Cryptocurrency, tokens, stablecoins, digital assets
+      - Stocks, bonds, securities, treasuries
+      - Commodities (gold, silver, oil, etc.)
+      - Real estate held as investment (not as the operating
+        business)
+      - ETFs, mutual funds, investment portfolios
+      This is a treasury / investment move, not a transformative
+      M&A event. The company is converting cash into another
+      asset class.
+
+    {symbol} TAKES A MINORITY STAKE IN ANOTHER COMPANY (LOW):
+      When {symbol} or a {symbol} subsidiary takes a stake in
+      another company without receiving payment back, score LOW
+      (0-49) regardless of stake size or stated price. This is
+      money-out without offsetting value flowing to {symbol}.
+      EXCEPTION: If the headline explicitly states {symbol}
+      receives cash, payments, or other value back as part of
+      the deal (e.g., "acquires X and receives $Y in milestone
+      payments"), apply the RECEIVES VALUE rule above instead.
+
+    OTHER CORPORATE ACTIONS:
     - Company is a SPAC or involved in a SPAC deal
     - Company filing for bankruptcy
     - Reverse stock split
@@ -56,14 +126,11 @@ Score HIGH confidence (75-100) when the headline clearly indicates:
   AI / STRATEGIC:
     - Launches an AI PLATFORM (a standalone product offering, not
       a feature added to an existing product)
-    - Partnership with a named AI company (e.g., OpenAI, Anthropic,
-      Nvidia, Microsoft AI, Google DeepMind, etc.)
-    - AI strategy announcement that represents a PIVOT from the
-      company's current core business (not an extension of
-      existing operations)
-    - Major pivot to AI, backed by concrete evidence:
-        * Renaming the company or core product to reflect AI focus
-        * Acquisition of a named AI company
+    - Partnership where {symbol} is the RECIPIENT of AI capability
+      from a named tier-1 AI company (e.g., OpenAI, Anthropic,
+      Nvidia, Microsoft AI, Google DeepMind). If {symbol} is itself
+      an AI company providing AI to the counterparty, the standard
+      money-in dollar threshold applies instead.
     - Large AI investment with a specific dollar amount that is
       material relative to company size (hundreds of millions or
       billions, OR a multi-year capital commitment with a dollar
@@ -71,9 +138,15 @@ Score HIGH confidence (75-100) when the headline clearly indicates:
 
 Score MODERATE confidence (50-74) when the headline indicates:
     - Positive Phase 2a results
-    - Fast Track or Orphan Drug designation
+    - Fast Track designation
     - Breakthrough Therapy designation for major indications
       (cancer, Alzheimer's, anti-aging, rare/unbelievable conditions)
+    - AI strategy announcement that represents a PIVOT from the
+      company's current core business (not an extension of
+      existing operations)
+    - Major pivot to AI, backed by concrete evidence:
+        * Renaming the company or core product to reflect AI focus
+        * Acquisition of a named AI company
 
 Score LOW confidence (0-49) when the headline indicates:
   CLINICAL / BIOTECH:
@@ -93,9 +166,12 @@ Score LOW confidence (0-49) when the headline indicates:
     - AI strategy that EXTENDS the current business rather than
       pivoting away from it
     - Generic 'exploring AI' or 'evaluating AI use cases'
+    - {symbol} is itself an AI company announcing a partnership
+      where it provides AI to the counterparty, with no dollar
+      amount stated
   UNQUANTIFIED FINANCIALS:
     - Money-in events WITHOUT an explicit dollar amount in the
-      headline (e.g., 'Company signs partnership' with no number)
+      headline AND without a named well-known counterparty
     - Money-in events with dollar amounts under $1 million
     - Reverse mergers where the operating company is questionable
   HEDGING OR NEGATIVE LANGUAGE:
@@ -118,17 +194,118 @@ loan, investment, settlement, royalty, milestone, PIPE, direct
 offering, 'up to $X' deal, etc.) the headline MUST contain an
 explicit dollar figure of at least $1 million to qualify for
 HIGH confidence.
-  - Headline contains '$X million' or '$X billion' (X >= 1) -> HIGH
-  - Headline contains 'up to $X' where X >= $1 million -> HIGH
+  - Headline contains '$X million' or '$X billion' where X >= 10
+    -> 90-100 (TIER-DEFINING)
+  - Headline contains '$X million' where 1 <= X < 10
+    -> 75-89 (HIGH)
+  - Headline contains 'up to $X' where X >= $10M -> 90-100
+  - Headline contains 'up to $X' where $1M <= X < $10M -> 75-89
   - Headline contains a dollar amount under $1 million -> LOW
   - Headline implies money but states no number -> LOW
   - Headline says 'undisclosed terms' or 'undisclosed amount' -> LOW
 
+HYPE CARVE-OUT — LARGE OPPORTUNITY / MARKET SIZE
+================================================
+If the headline contains a stated dollar figure describing the
+size of an opportunity, market, addressable market (TAM), trading
+volume, industry, or similar scope/scale measure, and the figure
+is in the hundreds of millions or higher, score 90-100
+(TIER-DEFINING).
+
+This is a HYPE carve-out — it is not a money-in event. The dollar
+figure does not have to represent money flowing to the company.
+It can describe:
+  - The size of the market the company is entering
+  - Trading volume of a partner platform
+  - Estimated TAM or annual industry volume
+  - Scope of an opportunity the company is positioned to address
+
+Thresholds:
+  - Stated opportunity / market size / volume >= $100 million
+    -> 90-100 (TIER-DEFINING)
+  - Stated opportunity / market size / volume >= $1 billion
+    -> 90-100 (TIER-DEFINING)
+  - Stated opportunity / market size / volume >= $1 trillion
+    -> 90-100 (TIER-DEFINING)
+  - Stated opportunity / market size / volume < $100 million
+    -> follow normal rules for the headline's primary event type
+
+This rule OVERRIDES the partnership rule and any other rule that
+would otherwise score the headline lower. If the headline mentions
+a hype figure in the hundreds of millions or higher, the score is
+90+ regardless of other classification.
+
+PRIVATE PLACEMENT / PIPE / SECURITIES PURCHASE AGREEMENT
+========================================================
+Private placements, PIPEs, securities purchase agreements,
+registered direct offerings, and similar structures where the
+company sells shares, ADS, units, or warrants to specific
+investors. Score them based on size:
+
+  - Headline states size < $1M -> LOW (0-49)
+  - Headline states size >= $1M and < $15M -> 75-89 (HIGH)
+  - Headline states size >= $15M -> 90-100 (TIER-DEFINING)
+  - Headline states no size or 'up to $X' where X < $1M -> LOW
+
+This rule OVERRIDES the general money-in dollar threshold for
+private placements.
+
+For 'up to $X' language, use X as the size for tier purposes.
+
+EXCEPTION — NAMED STRATEGIC INVESTOR (overrides the size tier):
+If the private placement is led by, or includes a named strategic
+investor (a named pharmaceutical company, named fund, named
+institutional investor, or other identifiable strategic partner)
+with explicit dollar amount >= $1M, score 90-100 (TIER-DEFINING)
+regardless of size.
+
+Generic descriptions like 'institutional investors', 'accredited
+investors', or unnamed financing firms do NOT count as a named
+strategic investor. The investor must be specifically named in
+the headline (e.g., 'Pfizer', 'BlackRock', 'ARCH Venture
+Partners').
+
+PARTNERSHIP / AGREEMENT WITHOUT DOLLAR AMOUNT
+=============================================
+A 'partnership', 'collaboration', 'strategic alliance', 'MOU', or
+similar structure WITHOUT an explicit dollar amount in the headline
+is scored as follows:
+
+  - Partnership with a NAMED, WELL-KNOWN counterparty (a
+    recognizable major company, exchange, platform, or institution
+    — e.g., Microsoft, Apple, Amazon, Walmart, JPMorgan, Visa,
+    Mastercard, Coinbase, Crypto.com, Binance, Shopify, Salesforce,
+    OpenAI, Anthropic, Nvidia, Google, Meta, or any company of
+    similar tier and recognition) -> 75-89 (HIGH)
+  - Partnership with no named counterparty, or with an obscure /
+    unrecognizable counterparty -> LOW (0-49)
+  - Partnership described with hedging language ('exploring',
+    'in talks', 'considering', 'evaluating', 'MOU to discuss')
+    -> LOW (0-49) regardless of counterparty
+
+Use judgment for "well-known": if the counterparty is a Fortune
+500 company, a major exchange, a top-tier financial institution,
+a major tech platform, or a household name, treat it as
+well-known. If you have to look the company up to know what they
+do, they are not well-known.
+
+This rule does NOT apply to:
+  - Acquisition agreements / asset purchase agreements / merger
+    agreements (these are corporate actions — see the M&A rule)
+  - Definitive agreements with stated dollar amounts
+  - Government contracts with stated dollar amounts
+  - Licensing or royalty agreements with stated dollar amounts
+
+The word 'agreement' alone does NOT trigger this rule. The rule
+fires only when the structure is a partnership, collaboration,
+MOU, or alliance with no dollar amount stated.
+
 CLINICAL TRIAL DISAMBIGUATION
 =============================
 Distinguish RESULTS from APPLICATIONS:
-  - Positive Phase 2, 2b, 3, or 3b RESULTS -> HIGH (75-100)
-  - Positive Phase 2a RESULTS -> MODERATE (50-74)
+  - Positive Phase 2, 2b, 3, or 3b RESULTS -> 75-100 (HIGH); for
+    biotechs, see carve-out below
+  - Positive Phase 2a RESULTS -> 50-74 (MODERATE)
   - Phase 1 RESULTS (any indication, any outcome) -> LOW (0-49)
   - APPLICATIONS, FILINGS, or PREPARATIONS to file -> LOW (0-49)
   - Trial initiation, enrollment, or design -> LOW (0-49)
@@ -136,12 +313,81 @@ Distinguish RESULTS from APPLICATIONS:
 
 AI ANNOUNCEMENT DISAMBIGUATION
 ==============================
-  - AI PLATFORM launch (standalone product) -> HIGH (75-100)
-  - AI partnership with NAMED AI company -> HIGH (75-100)
-  - AI strategy that is a PIVOT from current business -> HIGH
+  - AI PLATFORM launch (standalone product) -> 75-89 (HIGH)
+  - {symbol} receives AI capability from named tier-1 AI company
+    (OpenAI, Anthropic, Nvidia, Microsoft AI, Google DeepMind)
+    -> 75-89 (HIGH), no dollar amount required
+  - {symbol} is itself an AI company providing AI to the
+    counterparty: standard money-in threshold applies
+  - AI strategy that is a PIVOT from current business -> 50-74
+    (MODERATE)
+  - Major pivot to AI (renaming, AI company acquisition) -> 50-74
+    (MODERATE)
   - AI tool or feature added to existing products -> LOW (0-49)
   - AI integration into existing products -> LOW (0-49)
   - AI strategy that extends existing business -> LOW (0-49)
+
+BIOTECH / HEALTHCARE CARVE-OUTS
+===============================
+These rules OVERRIDE the general rules above when the company is
+a biotech, pharmaceutical, or medical/healthcare company.
+
+REGULATORY DESIGNATIONS:
+  - Orphan Drug designation (any indication) -> 90-100 (TIER-DEFINING)
+
+OUTSIDE INVESTMENT / OWNERSHIP:
+  Stakes taken in {symbol} by another party are governed by the
+  general M&A directionality rule above (RECEIVES VALUE). The
+  rules below cover biotech-specific equity investment patterns
+  that are not covered there.
+
+  - Outside equity investment from a NAMED strategic third party
+    (named pharma company, named fund, named institutional
+    investor) with explicit dollar amount of at least $1 million
+    -> 90-100 (TIER-DEFINING)
+  - Private placement, PIPE, direct offering without a NAMED
+    strategic investor -> follow the PRIVATE PLACEMENT tier rule
+    above (size-based: < $15M is HIGH, >= $15M is TIER-DEFINING)
+  - PIPE, direct offering, or registered offering led by a named
+    strategic or institutional investor with explicit dollar
+    amount >= $1 million -> 90-100 (TIER-DEFINING)
+
+CLINICAL / BIOTECH RESULTS (BIOTECH-SPECIFIC):
+  - Positive Phase 2, Phase 2b, Phase 3, or Phase 3b results
+    -> 90-100 (TIER-DEFINING)
+  - Positive cancer-related trial results -> 90-100 (TIER-DEFINING)
+  - Major breakthrough indications with positive results
+    -> 75-89 (HIGH). Do NOT bump to 90+. Includes:
+        * Cancer cures
+        * Alzheimer's disease treatments or cures
+        * Anti-aging / de-aging
+        * ALS, Parkinson's, Huntington's cures
+        * Cures for genetic diseases (sickle cell, cystic fibrosis,
+          muscular dystrophy)
+        * HIV cures (not just treatments)
+        * Type 1 diabetes cures (not just management)
+        * Spinal cord injury reversal / paralysis treatments
+        * Blindness or deafness reversal
+        * Universal vaccines (cancer vaccine, universal flu vaccine)
+        * Any treatment described as a 'cure' for a previously
+          incurable major disease
+
+MONEY-IN RESTRICTION (BIOTECH-SPECIFIC):
+For biotech and healthcare companies, money-in events qualify for
+HIGH or TIER-DEFINING confidence ONLY if the funds come from
+outside equity investment. The following do NOT qualify and should
+be scored LOW (0-49):
+  - Loans, credit facilities, or debt financing of any size
+  - Convertible notes (treat as debt unless explicitly described
+    as equity-linked strategic investment)
+  - Standby equity purchase agreements (SEPAs) / equity lines of
+    credit
+  - At-the-market (ATM) offerings
+  - Refinancing or debt restructuring
+  - Royalty financing or revenue-based financing
+
+This restriction applies ONLY to biotech and healthcare. For all
+other sectors, the general money-in rules above still apply.
 
 OUTPUT FORMAT
 =============

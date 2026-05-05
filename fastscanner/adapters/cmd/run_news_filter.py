@@ -31,6 +31,7 @@ CONCURRENCY = 3
 # Data loading
 # ---------------------------------------------------------------------------
 
+
 def _load_headlines() -> dict[str, list[str]]:
     """Return {symbol: [headline, ...]} from headlines.csv."""
     by_symbol: dict[str, list[str]] = {}
@@ -48,18 +49,25 @@ def _load_headlines() -> dict[str, list[str]]:
 # Codex
 # ---------------------------------------------------------------------------
 
+
 async def _run_codex(prompt: str) -> str:
     proc = await asyncio.create_subprocess_exec(
-        "codex", "exec",
-        "--sandbox", "read-only",
-        "-c", 'web_search="disabled"',
-        "-c", "features.shell_tool=false",
+        "codex",
+        "exec",
+        "--sandbox",
+        "read-only",
+        "-c",
+        'web_search="disabled"',
+        "-c",
+        "features.shell_tool=false",
         prompt,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=CODEX_TIMEOUT)
+        stdout_b, stderr_b = await asyncio.wait_for(
+            proc.communicate(), timeout=CODEX_TIMEOUT
+        )
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -177,7 +185,9 @@ def _print_report(
             print(thin)
 
             if only_old:
-                print(f"  REMOVED by new prompt ({len(only_old)}) — kept before, now dropped:")
+                print(
+                    f"  REMOVED by new prompt ({len(only_old)}) — kept before, now dropped:"
+                )
                 for t in sorted(only_old):
                     oc = old_conf.get(t, -1)
                     nc = new_conf.get(t, -1)
@@ -185,7 +195,9 @@ def _print_report(
                     print(f"    [was {oc:3d}% → now {nc_label}]  {t}")
 
             if only_new:
-                print(f"  ADDED by new prompt ({len(only_new)}) — dropped before, now kept:")
+                print(
+                    f"  ADDED by new prompt ({len(only_new)}) — dropped before, now kept:"
+                )
                 for t in sorted(only_new):
                     oc = old_conf.get(t, -1)
                     nc = new_conf.get(t, -1)
@@ -226,7 +238,9 @@ def _print_report(
             kept_old = "✓" if t in old_kept else "✗"
             kept_new = "✓" if t in new_kept else "✗"
             lines = textwrap.wrap(t, width=HEADLINE_COL)
-            print(f"  {lines[0]:<{HEADLINE_COL}}  {kept_old} {oc_label}  {kept_new} {nc_label}")
+            print(
+                f"  {lines[0]:<{HEADLINE_COL}}  {kept_old} {oc_label}  {kept_new} {nc_label}"
+            )
             for line in lines[1:]:
                 print(f"  {line}")
 
@@ -248,6 +262,7 @@ def _print_report(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 async def _main() -> None:
     if shutil.which("codex") is None:
@@ -273,15 +288,13 @@ async def _main() -> None:
 
     print("Running OLD prompt...")
     old_tasks = [
-        _score_symbol(sem, sym, by_symbol[sym], old_template, "old")
-        for sym in symbols
+        _score_symbol(sem, sym, by_symbol[sym], old_template, "old") for sym in symbols
     ]
     old_results_raw = await asyncio.gather(*old_tasks, return_exceptions=True)
 
     print("\nRunning NEW prompt...")
     new_tasks = [
-        _score_symbol(sem, sym, by_symbol[sym], new_template, "new")
-        for sym in symbols
+        _score_symbol(sem, sym, by_symbol[sym], new_template, "new") for sym in symbols
     ]
     new_results_raw = await asyncio.gather(*new_tasks, return_exceptions=True)
 
