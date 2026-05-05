@@ -30,7 +30,7 @@ from .fundamental import (
     MarketCapIndicator,
     SharesFloatIndicator,
 )
-from .news import InNewsIndicator
+from .news import NewsConfidenceIndicator
 
 _indicators: list[type["Indicator"]] = [
     CumulativeDailyVolumeIndicator,
@@ -49,7 +49,7 @@ _indicators: list[type["Indicator"]] = [
     GapIndicator,
     ATRGapIndicator,
     DayOpenIndicator,
-    InNewsIndicator,
+    NewsConfidenceIndicator,
     SharesFloatIndicator,
 ]
 

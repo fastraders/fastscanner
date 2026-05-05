@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 
 from fastscanner.pkg import config
 from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.pkg.http import async_retry_request
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -30,7 +31,7 @@ USER_AGENT = (
 HTTP_TIMEOUT = 10.0
 CODEX_TIMEOUT = 90.0
 MAX_HEADLINES_PER_SYMBOL = 50
-CONFIDENCE_THRESHOLD = 50  # strict greater-than per spec
+CONFIDENCE_THRESHOLD = 50  # used for KEEP/DROP log lines only; not a filter
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,28 +45,68 @@ def _entry_str(entry: Any, key: str) -> str:
     return value if isinstance(value, str) else ""
 
 
-class InNewsIndicator:
+class NewsConfidenceIndicator:
+    """Per-symbol daily news confidence (0-100), the running max across today's
+    headlines as scored by the Codex CLI. None means the value is not yet known
+    today (cache miss, day-stale payload, or Codex failure).
+
+    Single-producer assumption: the producer (caching=True, in
+    run_indicators_caching.py) is the only writer. Cache merges are
+    read-modify-write and not atomic; multi-producer scale-out would race.
+    See TODOS.md for atomic max-update via Dragonfly Lua/CAS.
+    """
+
     def __init__(self, caching: bool = False) -> None:
         self._caching = caching
-        self._in_news_today: dict[str, bool] = {}  # sticky-True for the day
+        # Running max confidence today; None = unknown (not yet scored).
+        self._confidence_today: dict[str, int | None] = {}
         self._date: dict[str, date] = {}  # per-symbol day boundary
-        self._tasks: dict[str, asyncio.Task] = (
-            {}
-        )  # in-flight fire-and-forget (caching=True)
-        self._seen_headlines: dict[str, set[str]] = (
-            {}
-        )  # symbol → titles already sent to Codex
+        self._tasks: dict[str, asyncio.Task] = {}  # in-flight fire-and-forget
+        self._seen_headlines: dict[str, set[str]] = {}  # symbol → already-scored titles
 
     @classmethod
     def type(cls) -> str:
-        return "in_news"
+        return "news_confidence"
 
     def column_name(self) -> str:
         return self.type()
 
     @staticmethod
     def _cache_key(symbol: str) -> str:
-        return f"indicator:in_news:{symbol}"
+        return f"indicator:news_confidence:{symbol}"
+
+    @staticmethod
+    def _encode_cache(today: date, value: int | None) -> str:
+        return json.dumps({"date": today.isoformat(), "value": value})
+
+    @staticmethod
+    def _decode_cache(raw: str, today: date) -> int | None:
+        """Return the cached score iff payload's date is today and value is in [0,100].
+        Stale-date, malformed JSON, or null value all map to None."""
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("date") != today.isoformat():
+            return None
+        value = payload.get("value")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        if not (0 <= value <= 100):
+            return None
+        return int(value)
+
+    @staticmethod
+    def _max_merge(a: int | None, b: int | None) -> int | None:
+        if a is None and b is None:
+            return None
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return max(a, b)
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         df[self.column_name()] = pd.NA
@@ -75,29 +116,32 @@ class InNewsIndicator:
         today = new_row.timestamp.date()
         if self._date.get(symbol) != today:
             self._date[symbol] = today
-            self._in_news_today.pop(symbol, None)
+            self._confidence_today.pop(symbol, None)
             self._seen_headlines.pop(symbol, None)
 
-        if self._in_news_today.get(symbol) is True:
-            new_row[self.column_name()] = True
-            return new_row
-
         if self._caching:
+            # Producer: kick off background fetch; report current in-mem max.
             self._spawn_fetch(symbol)
-            new_row[self.column_name()] = self._in_news_today.get(symbol, False)
+            new_row[self.column_name()] = self._confidence_today.get(symbol)
             return new_row
 
-        # consumer: read from shared cache
-        try:
-            value = await ApplicationRegistry.cache.get(self._cache_key(symbol))
-            cached = value == "true"
-        except KeyError:
-            cached = False
-
-        if cached:
-            self._in_news_today[symbol] = True
-        new_row[self.column_name()] = cached
+        # Consumer: max-merge in-memory state with cache every tick. No
+        # first-non-None stickiness — values can ratchet up over the day.
+        cache_value = await self._read_cache(symbol, today)
+        in_mem = self._confidence_today.get(symbol)
+        merged = self._max_merge(in_mem, cache_value)
+        self._confidence_today[symbol] = merged
+        new_row[self.column_name()] = merged
         return new_row
+
+    async def _read_cache(self, symbol: str, today: date) -> int | None:
+        try:
+            raw = await ApplicationRegistry.cache.get(self._cache_key(symbol))
+        except KeyError:
+            return None
+        if not raw:
+            return None
+        return self._decode_cache(raw, today)
 
     def _spawn_fetch(self, symbol: str) -> None:
         existing = self._tasks.get(symbol)
@@ -108,16 +152,30 @@ class InNewsIndicator:
     async def _inline_fetch(self, symbol: str) -> None:
         try:
             await asyncio.sleep(random.uniform(0, 45))
-            in_news = await self._has_news_today(symbol)
-            self._in_news_today[symbol] = in_news
+            today = ClockRegistry.clock.now().date()
+            latest = await self._score_new_headlines_today(symbol)
+            prior = self._confidence_today.get(symbol)
+            merged = self._max_merge(prior, latest)
+            self._confidence_today[symbol] = merged
+            # Always write today's payload (including null) so consumer reads on
+            # day N+1 see a stale date and correctly fall through to None.
             await ApplicationRegistry.cache.save(
-                self._cache_key(symbol), "true" if in_news else "false"
+                self._cache_key(symbol),
+                self._encode_cache(today, merged),
             )
         except Exception:
-            logger.exception("[in_news %s] inline fetch failed", symbol)
+            logger.exception("[news_confidence %s] inline fetch failed", symbol)
 
-    async def _has_news_today(self, symbol: str) -> bool:
-        today_str = datetime.now(EST).strftime("%Y-%m-%d")
+    async def _score_new_headlines_today(self, symbol: str) -> int | None:
+        """Score new (unseen) headlines for today and return the max score.
+
+        Returns:
+            int 0-100: max score across this batch of new headlines.
+            0:        no headlines retrieved or no headlines new since last call.
+            None:     Codex CLI missing, timed out, errored, or returned no
+                      valid entries (fail-open with explicit unknown).
+        """
+        today_str = ClockRegistry.clock.now().strftime("%Y-%m-%d")
         sources: tuple[tuple[str, Any], ...] = (
             ("finviz", self._finviz_headlines),
             ("finnhub", self._finnhub_headlines),
@@ -130,67 +188,83 @@ class InNewsIndicator:
             return_exceptions=True,
         )
 
-        headlines: list[Headline] = []
+        per_source: list[tuple[str, list[str]]] = []
         for (name, _), result in zip(sources, results):
             if isinstance(result, BaseException):
                 logger.warning(
-                    "[in_news %s] source %s failed: %s", symbol, name, result
+                    "[news_confidence %s] source %s failed: %s", symbol, name, result
                 )
                 continue
-            for title in result:
-                headlines.append(Headline(title=title, source=name))
+            per_source.append((name, list(result)))
+
+        # Source-fair sampling: round-robin across sources before truncation cap
+        # so a single high-volume source can't starve the others of Codex budget.
+        headlines = self._round_robin_truncate(per_source, MAX_HEADLINES_PER_SYMBOL)
 
         if not headlines:
-            logger.info("[in_news %s] no headlines retrieved for %s", symbol, today_str)
-            return False
+            return 0
 
-        if len(headlines) > MAX_HEADLINES_PER_SYMBOL:
-            logger.info(
-                "[in_news %s] truncating %d headlines to %d",
-                symbol,
-                len(headlines),
-                MAX_HEADLINES_PER_SYMBOL,
-            )
-            headlines = headlines[:MAX_HEADLINES_PER_SYMBOL]
-
-        logger.info(
-            "[in_news %s] retrieved %d headlines for %s, filtering...",
-            symbol,
-            len(headlines),
-            today_str,
-        )
-
-        # Codex — only unseen headlines.
         seen = self._seen_headlines.setdefault(symbol, set())
         new_headlines = [h for h in headlines if h.title not in seen]
         if not new_headlines:
-            return False
+            return 0
 
         try:
-            codex_kept = await self._filter_with_codex(symbol, new_headlines)
+            scored = await self._score_with_codex(symbol, new_headlines)
         except Exception as e:
             logger.warning(
-                "[in_news %s] Codex unavailable (%s); %d headlines retrieved -> in_news=False (fail-open)",
+                "[news_confidence %s] Codex unavailable (%s); %d new headlines -> None (fail-open)",
                 symbol,
                 e,
                 len(new_headlines),
             )
-            return False
+            return None
 
         seen.update(h.title for h in new_headlines)
 
+        if not scored:
+            return 0
+        max_score = max(conf for _h, conf in scored)
+        kept = sum(1 for _h, conf in scored if conf > CONFIDENCE_THRESHOLD)
         logger.info(
-            "[in_news %s] %d/%d new headlines kept by Codex -> in_news=%s",
+            "[news_confidence %s] scored %d new headlines; %d above threshold; max=%d",
             symbol,
-            len(codex_kept),
-            len(new_headlines),
-            bool(codex_kept),
+            len(scored),
+            kept,
+            max_score,
         )
-        return bool(codex_kept)
+        return max_score
 
-    async def _filter_with_codex(
-        self, symbol: str, headlines: list[Headline]
+    @staticmethod
+    def _round_robin_truncate(
+        per_source: list[tuple[str, list[str]]],
+        max_total: int,
     ) -> list[Headline]:
+        """Interleave headlines across sources until max_total is reached.
+        Round 0 picks index 0 from each source, round 1 picks index 1, etc.
+        Sources with fewer headlines are skipped in later rounds."""
+        out: list[Headline] = []
+        if max_total <= 0 or not per_source:
+            return out
+        idx = 0
+        while True:
+            added_this_round = False
+            for name, titles in per_source:
+                if idx < len(titles):
+                    out.append(Headline(title=titles[idx], source=name))
+                    added_this_round = True
+                    if len(out) >= max_total:
+                        return out
+            if not added_this_round:
+                return out
+            idx += 1
+
+    async def _score_with_codex(
+        self, symbol: str, headlines: list[Headline]
+    ) -> list[tuple[Headline, int]]:
+        """Score headlines via Codex CLI. Returns ALL scored (Headline, confidence)
+        pairs; caller decides how to threshold/aggregate. Raises on CLI missing,
+        timeout, non-zero exit, or unparseable output."""
         if shutil.which("codex") is None:
             raise RuntimeError("codex CLI not found in PATH")
 
@@ -199,8 +273,6 @@ class InNewsIndicator:
             symbol=symbol.upper(), headlines=json.dumps(items, ensure_ascii=False)
         )
 
-        # codex exec is implicitly non-interactive (no --ask-for-approval needed
-        # — that flag only exists on the top-level codex command).
         proc = await asyncio.create_subprocess_exec(
             "codex",
             "exec",
@@ -230,29 +302,29 @@ class InNewsIndicator:
         text = stdout_b.decode(errors="replace")
         scores = self._parse_codex_response(text, n_headlines=len(headlines))
 
-        kept: list[Headline] = []
+        out: list[tuple[Headline, int]] = []
         for entry in scores:
             idx = entry["idx"]
             conf = entry["confidence"]
             h = headlines[idx]
+            out.append((h, conf))
             if conf > CONFIDENCE_THRESHOLD:
                 logger.info(
-                    "[in_news %s][KEEP %s codex=%d%%] %s",
+                    "[news_confidence %s][KEEP %s codex=%d%%] %s",
                     symbol,
                     h.source,
                     conf,
                     h.title,
                 )
-                kept.append(h)
             else:
                 logger.info(
-                    "[in_news %s][DROP %s codex=%d%%] %s",
+                    "[news_confidence %s][DROP %s codex=%d%%] %s",
                     symbol,
                     h.source,
                     conf,
                     h.title,
                 )
-        return kept
+        return out
 
     @staticmethod
     def _parse_codex_response(text: str, n_headlines: int) -> list[dict]:

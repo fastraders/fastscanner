@@ -21,7 +21,7 @@ MASSIVE_FILES_SECRET_KEY = os.environ["MASSIVE_FILES_SECRET_KEY"]
 EOD_HD_BASE_URL = os.environ["EOD_HD_BASE_URL"]
 EOD_HD_API_KEY = os.environ["EOD_HD_API_KEY"]
 
-# Finnhub (used by the in_news indicator)
+# Finnhub (used by the news_confidence indicator)
 FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN", "")
 
 # Dilutiontracker (used by the shares_float indicator)

@@ -60,7 +60,7 @@ class _MockChannel:
 
 
 def _make_service(channel=None, indicators=None):
-    indicators = indicators or [_make_indicator("in_news"), _make_indicator("shares_float")]
+    indicators = indicators or [_make_indicator("news_confidence"), _make_indicator("shares_float")]
     return (
         SlowIndicatorsService(
             channel=channel or _MockChannel(),
@@ -91,7 +91,7 @@ async def test_subscribe_creates_candle_subscription_for_symbol():
     await sub.handle("slow_sub", {
         "subscriber_id": "s1",
         "symbol": "AAPL",
-        "indicator_types": ["in_news"],
+        "indicator_types": ["news_confidence"],
     })
 
     assert "candles.min.AAPL" in channel.handlers
@@ -123,11 +123,11 @@ async def test_payload_with_mixed_known_and_unknown_types_uses_only_known():
     await sub.handle("slow_sub", {
         "subscriber_id": "s1",
         "symbol": "AAPL",
-        "indicator_types": ["in_news", "atr"],
+        "indicator_types": ["news_confidence", "atr"],
     })
 
     handler = channel.handlers["candles.min.AAPL"]
-    assert [ind.type() for ind in handler._indicators] == ["in_news"]
+    assert [ind.type() for ind in handler._indicators] == ["news_confidence"]
 
 
 @pytest.mark.asyncio
@@ -138,12 +138,12 @@ async def test_second_subscriber_same_type_does_not_recreate_handler():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     handler_v1 = channel.handlers["candles.min.AAPL"]
 
     await sub.handle("slow_sub", {
-        "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     handler_v2 = channel.handlers["candles.min.AAPL"]
 
@@ -160,7 +160,7 @@ async def test_adding_new_indicator_type_for_same_symbol_rebuilds_handler():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     await sub.handle("slow_sub", {
         "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["shares_float"],
@@ -168,7 +168,7 @@ async def test_adding_new_indicator_type_for_same_symbol_rebuilds_handler():
 
     handler = channel.handlers["candles.min.AAPL"]
     types = sorted(ind.type() for ind in handler._indicators)
-    assert types == ["in_news", "shares_float"]
+    assert types == ["news_confidence", "shares_float"]
 
 
 @pytest.mark.asyncio
@@ -179,10 +179,10 @@ async def test_unsubscribe_keeps_handler_while_other_subscriber_remains():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     await sub.handle("slow_sub", {
-        "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
 
     unsub = channel.handlers["slow_unsub"]
@@ -199,7 +199,7 @@ async def test_last_unsubscribe_drops_candle_subscription():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
 
     unsub = channel.handlers["slow_unsub"]
@@ -216,7 +216,7 @@ async def test_unsubscribe_removing_only_one_of_two_types_keeps_other_active():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     await sub.handle("slow_sub", {
         "subscriber_id": "s2", "symbol": "AAPL", "indicator_types": ["shares_float"],
@@ -231,16 +231,16 @@ async def test_unsubscribe_removing_only_one_of_two_types_keeps_other_active():
 
 @pytest.mark.asyncio
 async def test_candle_arrival_invokes_extend_realtime_on_each_indicator():
-    in_news = _make_indicator("in_news")
+    news_conf = _make_indicator("news_confidence")
     shares_float = _make_indicator("shares_float")
     channel = _MockChannel()
-    svc, _ = _make_service(channel=channel, indicators=[in_news, shares_float])
+    svc, _ = _make_service(channel=channel, indicators=[news_conf, shares_float])
     await svc.start()
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
         "subscriber_id": "s1", "symbol": "AAPL",
-        "indicator_types": ["in_news", "shares_float"],
+        "indicator_types": ["news_confidence", "shares_float"],
     })
 
     candle_handler = channel.handlers["candles.min.AAPL"]
@@ -249,13 +249,13 @@ async def test_candle_arrival_invokes_extend_realtime_on_each_indicator():
         "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0,
     })
 
-    assert in_news.calls == [("AAPL", 1_700_000_000_000)]
+    assert news_conf.calls == [("AAPL", 1_700_000_000_000)]
     assert shares_float.calls == [("AAPL", 1_700_000_000_000)]
 
 
 @pytest.mark.asyncio
 async def test_exception_in_one_indicator_does_not_block_others():
-    bad = _make_indicator("in_news", raises=True)
+    bad = _make_indicator("news_confidence", raises=True)
     good = _make_indicator("shares_float")
     channel = _MockChannel()
     svc, _ = _make_service(channel=channel, indicators=[bad, good])
@@ -264,7 +264,7 @@ async def test_exception_in_one_indicator_does_not_block_others():
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
         "subscriber_id": "s1", "symbol": "AAPL",
-        "indicator_types": ["in_news", "shares_float"],
+        "indicator_types": ["news_confidence", "shares_float"],
     })
 
     candle_handler = channel.handlers["candles.min.AAPL"]
@@ -284,8 +284,8 @@ async def test_subscribe_payload_missing_required_fields_is_noop():
     await svc.start()
     sub = channel.handlers["slow_sub"]
 
-    await sub.handle("slow_sub", {"symbol": "AAPL", "indicator_types": ["in_news"]})  # no subscriber_id
-    await sub.handle("slow_sub", {"subscriber_id": "s1", "indicator_types": ["in_news"]})  # no symbol
+    await sub.handle("slow_sub", {"symbol": "AAPL", "indicator_types": ["news_confidence"]})  # no subscriber_id
+    await sub.handle("slow_sub", {"subscriber_id": "s1", "indicator_types": ["news_confidence"]})  # no symbol
     await sub.handle("slow_sub", {"subscriber_id": "s1", "symbol": "AAPL"})  # no types
 
     assert not any(c.startswith("candles.min.") for c in channel.subscribe_calls)
@@ -299,7 +299,7 @@ async def test_stop_unsubscribes_all_candle_streams():
 
     sub = channel.handlers["slow_sub"]
     await sub.handle("slow_sub", {
-        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["in_news"],
+        "subscriber_id": "s1", "symbol": "AAPL", "indicator_types": ["news_confidence"],
     })
     await sub.handle("slow_sub", {
         "subscriber_id": "s2", "symbol": "MSFT", "indicator_types": ["shares_float"],

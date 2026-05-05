@@ -314,7 +314,11 @@ class _DilutionTrackerDriver:
 
 
 class SharesFloatIndicator:
-    _NULL_CACHE_VALUE = "null"
+    """Per-symbol shares-float fundamental, cached as a dated JSON payload so
+    day-N+1 reads of yesterday's value are correctly invalidated.
+
+    Cache value: ``{"date": "YYYY-MM-DD", "value": float | null}``.
+    Stale-date or malformed payloads decode to None (treated as cache miss)."""
 
     def __init__(self, caching: bool = False) -> None:
         self._caching = caching
@@ -332,6 +336,31 @@ class SharesFloatIndicator:
     @staticmethod
     def _cache_key(symbol: str) -> str:
         return f"indicator:shares_float:{symbol}"
+
+    @staticmethod
+    def _encode_cache(today: date, value: float | None) -> str:
+        return json.dumps({"date": today.isoformat(), "value": value})
+
+    @staticmethod
+    def _decode_cache(raw: str, today: date) -> tuple[bool, float | None]:
+        """Return (hit, value).
+        hit=True with value=float: today's payload, scored.
+        hit=True with value=None:  today's payload, explicitly null (no float available).
+        hit=False, value=None:     stale date / malformed / no payload."""
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            return (False, None)
+        if not isinstance(payload, dict):
+            return (False, None)
+        if payload.get("date") != today.isoformat():
+            return (False, None)
+        value = payload.get("value")
+        if value is None:
+            return (True, None)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return (False, None)
+        return (True, float(value))
 
     async def extend(self, symbol: str, df: pd.DataFrame) -> pd.DataFrame:
         df[self.column_name()] = pd.NA
@@ -353,22 +382,19 @@ class SharesFloatIndicator:
             return new_row
 
         try:
-            cached = await ApplicationRegistry.cache.get(self._cache_key(symbol))
+            raw = await ApplicationRegistry.cache.get(self._cache_key(symbol))
         except KeyError:
-            cached = ""
+            raw = ""
 
-        if cached == self._NULL_CACHE_VALUE:
-            self._float[symbol] = None
+        if not raw:
             new_row[self.column_name()] = None
             return new_row
-        if cached:
-            try:
-                value = float(cached)
-                self._float[symbol] = value
-                new_row[self.column_name()] = value
-                return new_row
-            except ValueError:
-                pass
+
+        hit, value = self._decode_cache(raw, today)
+        if hit:
+            self._float[symbol] = value
+            new_row[self.column_name()] = value
+            return new_row
 
         new_row[self.column_name()] = None
         return new_row
@@ -381,11 +407,14 @@ class SharesFloatIndicator:
 
     async def _inline_fetch(self, symbol: str) -> None:
         try:
+            today = self._last_date.get(symbol)
+            if today is None:
+                today = ClockRegistry.clock.now().date()
             value = await _DilutionTrackerDriver.fetch_float(symbol)
             self._float[symbol] = value
             await ApplicationRegistry.cache.save(
                 self._cache_key(symbol),
-                self._NULL_CACHE_VALUE if value is None else str(value),
+                self._encode_cache(today, value),
             )
             logger.info("[shares_float %s] fetched float=%s", symbol, value)
         except Exception:

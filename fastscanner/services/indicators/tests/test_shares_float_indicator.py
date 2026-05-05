@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Dict
 from unittest.mock import AsyncMock, patch
@@ -55,6 +56,10 @@ def _make_row(ts: datetime) -> Candle:
     return row
 
 
+def _payload(date_str: str, value: float | None) -> str:
+    return json.dumps({"date": date_str, "value": value})
+
+
 def test_type_and_column_name():
     assert SharesFloatIndicator.type() == "shares_float"
     assert SharesFloatIndicator().column_name() == "shares_float"
@@ -82,6 +87,48 @@ def test_parse_float_value(raw, expected):
     assert _parse_float_value(raw) == expected
 
 
+# --- cache encode / decode (dated payload) ---
+
+
+def test_encode_cache_with_value():
+    raw = SharesFloatIndicator._encode_cache(
+        datetime(2026, 5, 3).date(), 1_500_000.0
+    )
+    assert json.loads(raw) == {"date": "2026-05-03", "value": 1_500_000.0}
+
+
+def test_encode_cache_with_none():
+    raw = SharesFloatIndicator._encode_cache(datetime(2026, 5, 3).date(), None)
+    assert json.loads(raw) == {"date": "2026-05-03", "value": None}
+
+
+def test_decode_cache_today_value():
+    today = datetime(2026, 5, 3).date()
+    raw = _payload("2026-05-03", 1_500_000.0)
+    assert SharesFloatIndicator._decode_cache(raw, today) == (True, 1_500_000.0)
+
+
+def test_decode_cache_today_null():
+    today = datetime(2026, 5, 3).date()
+    raw = _payload("2026-05-03", None)
+    assert SharesFloatIndicator._decode_cache(raw, today) == (True, None)
+
+
+def test_decode_cache_stale_date_is_miss():
+    today = datetime(2026, 5, 4).date()
+    raw = _payload("2026-05-03", 1_500_000.0)
+    assert SharesFloatIndicator._decode_cache(raw, today) == (False, None)
+
+
+def test_decode_cache_malformed_json_is_miss():
+    today = datetime(2026, 5, 3).date()
+    assert SharesFloatIndicator._decode_cache("not json", today) == (False, None)
+    assert SharesFloatIndicator._decode_cache("[1,2,3]", today) == (False, None)
+
+
+# --- extend ---
+
+
 @pytest.mark.asyncio
 async def test_extend_fills_with_na():
     indicator = SharesFloatIndicator()
@@ -90,9 +137,14 @@ async def test_extend_fills_with_na():
     assert out[indicator.column_name()].isna().all()
 
 
+# --- consumer mode (caching=False) ---
+
+
 @pytest.mark.asyncio
-async def test_extend_realtime_consumer_reads_from_cache(cache):
-    cache._data[SharesFloatIndicator._cache_key("AAPL")] = "1500000.0"
+async def test_consumer_reads_today_value_from_cache(cache):
+    cache._data[SharesFloatIndicator._cache_key("AAPL")] = _payload(
+        "2026-05-03", 1_500_000.0
+    )
     indicator = SharesFloatIndicator(caching=False)
 
     row = _make_row(datetime(2026, 5, 3, 10, 0))
@@ -103,7 +155,7 @@ async def test_extend_realtime_consumer_reads_from_cache(cache):
 
 
 @pytest.mark.asyncio
-async def test_extend_realtime_consumer_returns_none_when_cache_empty(cache):
+async def test_consumer_returns_none_when_cache_empty(cache):
     indicator = SharesFloatIndicator(caching=False)
     row = _make_row(datetime(2026, 5, 3, 10, 0))
     extended = await indicator.extend_realtime("AAPL", row)
@@ -111,7 +163,46 @@ async def test_extend_realtime_consumer_returns_none_when_cache_empty(cache):
 
 
 @pytest.mark.asyncio
-async def test_extend_realtime_uses_in_memory_value_without_hitting_cache(cache):
+async def test_consumer_returns_none_for_stale_date(cache):
+    """Yesterday's payload still in cache should NOT be served as today's value."""
+    cache._data[SharesFloatIndicator._cache_key("AAPL")] = _payload(
+        "2026-05-02", 1_500_000.0
+    )
+    indicator = SharesFloatIndicator(caching=False)
+
+    row = _make_row(datetime(2026, 5, 3, 10, 0))
+    extended = await indicator.extend_realtime("AAPL", row)
+    assert extended[indicator.column_name()] is None
+    # Stale-cache miss should NOT be cached in memory either; producer fetch
+    # later in the day should be allowed to populate the value.
+    assert "AAPL" not in indicator._float
+
+
+@pytest.mark.asyncio
+async def test_consumer_reads_null_value_from_cache(cache):
+    """Today's payload with explicit value=null means 'we know the float is
+    unavailable' — sticky in memory so we don't repeatedly hit the cache."""
+    cache._data[SharesFloatIndicator._cache_key("AAPL")] = _payload(
+        "2026-05-03", None
+    )
+    indicator = SharesFloatIndicator(caching=False)
+
+    extended = await indicator.extend_realtime(
+        "AAPL", _make_row(datetime(2026, 5, 3, 10, 0))
+    )
+    assert extended[indicator.column_name()] is None
+    assert "AAPL" in indicator._float
+    assert indicator._float["AAPL"] is None
+
+    cache.get = AsyncMock(side_effect=AssertionError("should not be called"))
+    second = await indicator.extend_realtime(
+        "AAPL", _make_row(datetime(2026, 5, 3, 10, 1))
+    )
+    assert second[indicator.column_name()] is None
+
+
+@pytest.mark.asyncio
+async def test_consumer_uses_in_memory_value_without_hitting_cache(cache):
     indicator = SharesFloatIndicator(caching=False)
     row = _make_row(datetime(2026, 5, 3, 10, 0))
     indicator._last_date["AAPL"] = row.timestamp.date()
@@ -135,8 +226,11 @@ async def test_day_rollover_clears_in_memory_value(cache):
     assert "AAPL" not in indicator._float
 
 
+# --- producer mode (caching=True) ---
+
+
 @pytest.mark.asyncio
-async def test_extend_realtime_caching_spawns_fetch_and_caches(cache):
+async def test_caching_spawns_fetch_and_writes_dated_payload(cache):
     indicator = SharesFloatIndicator(caching=True)
     row = _make_row(datetime(2026, 5, 3, 10, 0))
 
@@ -144,19 +238,20 @@ async def test_extend_realtime_caching_spawns_fetch_and_caches(cache):
         _DilutionTrackerDriver, "fetch_float", new=AsyncMock(return_value=2_500_000.0)
     ) as mocked:
         first = await indicator.extend_realtime("AAPL", row)
-        # first call returns None because fetch is async / fire-and-forget
         assert first[indicator.column_name()] is None
-
-        # let the spawned task run
-        task = indicator._tasks["AAPL"]
-        await task
+        await indicator._tasks["AAPL"]
 
     mocked.assert_awaited_once_with("AAPL")
     assert indicator._float["AAPL"] == 2_500_000.0
-    assert cache._data[SharesFloatIndicator._cache_key("AAPL")] == "2500000.0"
 
-    # second call sees in-memory value
-    second = await indicator.extend_realtime("AAPL", _make_row(datetime(2026, 5, 3, 10, 1)))
+    raw = cache._data[SharesFloatIndicator._cache_key("AAPL")]
+    payload = json.loads(raw)
+    assert payload["date"] == "2026-05-03"
+    assert payload["value"] == 2_500_000.0
+
+    second = await indicator.extend_realtime(
+        "AAPL", _make_row(datetime(2026, 5, 3, 10, 1))
+    )
     assert second[indicator.column_name()] == 2_500_000.0
 
 
@@ -174,8 +269,9 @@ async def test_caching_does_not_double_spawn_for_inflight_symbol(cache):
 
     with patch.object(_DilutionTrackerDriver, "fetch_float", new=slow_fetch):
         await indicator.extend_realtime("AAPL", row)
-        # second call before the first task completes should NOT spawn another
-        await indicator.extend_realtime("AAPL", _make_row(datetime(2026, 5, 3, 10, 0, 30)))
+        await indicator.extend_realtime(
+            "AAPL", _make_row(datetime(2026, 5, 3, 10, 0, 30))
+        )
         await indicator._tasks["AAPL"]
 
     assert call_count == 1
@@ -187,7 +283,9 @@ async def test_caching_swallows_fetch_failures(cache):
     row = _make_row(datetime(2026, 5, 3, 10, 0))
 
     with patch.object(
-        _DilutionTrackerDriver, "fetch_float", new=AsyncMock(side_effect=RuntimeError("boom"))
+        _DilutionTrackerDriver,
+        "fetch_float",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
         await indicator.extend_realtime("AAPL", row)
         await indicator._tasks["AAPL"]
@@ -197,7 +295,7 @@ async def test_caching_swallows_fetch_failures(cache):
 
 
 @pytest.mark.asyncio
-async def test_caching_caches_none_when_fetch_returns_none(cache):
+async def test_caching_writes_null_payload_when_fetch_returns_none(cache):
     indicator = SharesFloatIndicator(caching=True)
     row = _make_row(datetime(2026, 5, 3, 10, 0))
 
@@ -208,14 +306,12 @@ async def test_caching_caches_none_when_fetch_returns_none(cache):
         assert first[indicator.column_name()] is None
         await indicator._tasks["AAPL"]
 
-    # None is now a known-good value: in memory and persisted in shared cache
     assert indicator._float["AAPL"] is None
-    assert (
-        cache._data[SharesFloatIndicator._cache_key("AAPL")]
-        == SharesFloatIndicator._NULL_CACHE_VALUE
-    )
+    raw = cache._data[SharesFloatIndicator._cache_key("AAPL")]
+    payload = json.loads(raw)
+    assert payload["date"] == "2026-05-03"
+    assert payload["value"] is None
 
-    # Subsequent realtime ticks return None without re-spawning the fetch
     with patch.object(
         _DilutionTrackerDriver, "fetch_float", new=AsyncMock(return_value=999.0)
     ) as should_not_run:
@@ -224,26 +320,3 @@ async def test_caching_caches_none_when_fetch_returns_none(cache):
         )
     assert second[indicator.column_name()] is None
     should_not_run.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_consumer_reads_null_sentinel_from_cache(cache):
-    cache._data[SharesFloatIndicator._cache_key("AAPL")] = (
-        SharesFloatIndicator._NULL_CACHE_VALUE
-    )
-    indicator = SharesFloatIndicator(caching=False)
-
-    extended = await indicator.extend_realtime(
-        "AAPL", _make_row(datetime(2026, 5, 3, 10, 0))
-    )
-
-    assert extended[indicator.column_name()] is None
-    # remembered in memory so subsequent ticks don't hit the cache again
-    assert "AAPL" in indicator._float
-    assert indicator._float["AAPL"] is None
-
-    cache.get = AsyncMock(side_effect=AssertionError("should not be called"))
-    second = await indicator.extend_realtime(
-        "AAPL", _make_row(datetime(2026, 5, 3, 10, 1))
-    )
-    assert second[indicator.column_name()] is None

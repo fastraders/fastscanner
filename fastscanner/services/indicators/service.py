@@ -25,7 +25,9 @@ class IndicatorParams:
 
 
 class IndicatorsService:
-    _SLOW_INDICATOR_TYPES: frozenset[str] = frozenset({"in_news", "shares_float"})
+    _SLOW_INDICATOR_TYPES: frozenset[str] = frozenset(
+        {"news_confidence", "shares_float"}
+    )
 
     def __init__(
         self,

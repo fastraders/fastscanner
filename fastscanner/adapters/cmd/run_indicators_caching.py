@@ -16,7 +16,7 @@ from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.services.indicators.lib import CacheableIndicator, IndicatorsLibrary
-from fastscanner.services.indicators.lib.news import InNewsIndicator
+from fastscanner.services.indicators.lib.news import NewsConfidenceIndicator
 from fastscanner.services.indicators.slow_indicators_service import (
     SlowIndicatorsService,
 )
@@ -120,7 +120,7 @@ async def main():
     slow_indicators_service = SlowIndicatorsService(
         channel=channel,
         indicators=[
-            InNewsIndicator(caching=True),
+            NewsConfidenceIndicator(caching=True),
             SharesFloatIndicator(caching=True),
         ],
         subscribe_channel=config.NATS_SYMBOL_SLOW_INDICATORS_SUBSCRIBE_CHANNEL,
