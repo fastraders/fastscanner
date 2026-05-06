@@ -65,6 +65,20 @@ class _Metrics:
             buckets=buckets.HTTP_REQUEST_SECONDS,
             registry=registry,
         )
+        self.first_candle_delay_seconds = Histogram(
+            "fs_first_candle_delay_seconds",
+            "Wall-clock seconds past the bar end when the FIRST candle for a "
+            "minute arrived from Polygon (one observation per bar minute).",
+            buckets=buckets.CANDLE_DELAY_SECONDS,
+            registry=registry,
+        )
+        self.last_candle_delay_seconds = Histogram(
+            "fs_last_candle_delay_seconds",
+            "Wall-clock seconds past the bar end when the LAST candle for a "
+            "minute arrived from Polygon (one observation per bar minute).",
+            buckets=buckets.CANDLE_DELAY_SECONDS,
+            registry=registry,
+        )
         self.nats_pending_messages = Gauge(
             "fs_nats_pending_messages",
             "Depth of NATSChannel._pending_messages at flush boundary.",
@@ -128,6 +142,12 @@ class _Metrics:
             route=route, code=str(code)
         ).observe(latency_seconds)
 
+    def first_candle_delay(self, delay_seconds: float) -> None:
+        self.first_candle_delay_seconds.observe(delay_seconds)
+
+    def last_candle_delay(self, delay_seconds: float) -> None:
+        self.last_candle_delay_seconds.observe(delay_seconds)
+
     def set_ws_connected(self, connected: bool) -> None:
         self.polygon_ws_connected.set(1 if connected else 0)
 
@@ -185,6 +205,14 @@ def indicator_cache_save(name: str, result: CacheSaveResult) -> None:
 
 def http_request(route: str, code: int, latency_seconds: float) -> None:
     _get().http_request(route, code, latency_seconds)
+
+
+def first_candle_delay(delay_seconds: float) -> None:
+    _get().first_candle_delay(delay_seconds)
+
+
+def last_candle_delay(delay_seconds: float) -> None:
+    _get().last_candle_delay(delay_seconds)
 
 
 def set_ws_connected(connected: bool) -> None:

@@ -139,6 +139,27 @@ def test_market_open_and_daily_reset(fresh_registry: CollectorRegistry):
     assert _read_sample(fresh_registry, "fs_daily_reset_in_progress") == 0
 
 
+def test_first_and_last_candle_delay(fresh_registry: CollectorRegistry):
+    metrics.first_candle_delay(1.4)
+    metrics.first_candle_delay(1.6)
+    metrics.last_candle_delay(3.2)
+
+    assert _read_sample(fresh_registry, "fs_first_candle_delay_seconds_count") == 2
+    assert _read_sample(fresh_registry, "fs_last_candle_delay_seconds_count") == 1
+    assert (
+        _read_sample(
+            fresh_registry, "fs_first_candle_delay_seconds_bucket", le="1.5"
+        )
+        == 1
+    )
+    assert (
+        _read_sample(
+            fresh_registry, "fs_last_candle_delay_seconds_bucket", le="3.5"
+        )
+        == 1
+    )
+
+
 def test_exposition_format_round_trip(fresh_registry: CollectorRegistry):
     metrics.candle_received("Stocks")
     metrics.set_ws_connected(True)

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import traceback
 from datetime import date
 from typing import Protocol
@@ -22,6 +23,8 @@ from fastscanner.pkg.observability import metrics
 from fastscanner.services.indicators.ports import Channel
 
 _SYMBOL_CLASS = "Stocks"
+_MINUTE_EVENT_TYPES = (EventType.EquityAggMin, EventType.EquityAggMin.value)
+_MINUTE_BAR_DURATION_MS = 60_000
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +46,9 @@ class PolygonRealtime:
         self._is_filtering_active_symbols = False
         self._active_symbols: set[str] = set()
         self._active_symbols_last_updated: date | None = None
+
+        self._current_bar_minute_ms: int | None = None
+        self._last_arrival_ms: float | None = None
 
     @property
     def symbols_provider(self) -> ActiveSymbolsProvider:
@@ -182,10 +188,34 @@ class PolygonRealtime:
         EventType.EquityAggMin.value: "candles.min.",
     }
 
+    def _track_minute_arrival(self, msg: EquityAgg, batch_wall_ms: float) -> None:
+        if msg.event_type not in _MINUTE_EVENT_TYPES:
+            return
+        candle_ts_ms = msg.start_timestamp
+        if candle_ts_ms is None:
+            return
+        bar_end_ms = candle_ts_ms + _MINUTE_BAR_DURATION_MS
+
+        if self._current_bar_minute_ms is None:
+            metrics.first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
+            self._current_bar_minute_ms = candle_ts_ms
+        elif candle_ts_ms > self._current_bar_minute_ms:
+            if self._last_arrival_ms is not None:
+                prev_bar_end_ms = self._current_bar_minute_ms + _MINUTE_BAR_DURATION_MS
+                metrics.last_candle_delay(
+                    (self._last_arrival_ms - prev_bar_end_ms) / 1000
+                )
+            metrics.first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
+            self._current_bar_minute_ms = candle_ts_ms
+        elif candle_ts_ms < self._current_bar_minute_ms:
+            return
+        self._last_arrival_ms = batch_wall_ms
+
     async def handle_messages(self, msgs: list[WebSocketMessage]):
         parsed_msgs: list[dict] = []
         if self._is_filtering_active_symbols and self.is_active_symbols_expired():
             await self.reload_active_symbols()
+        batch_wall_ms = time.time() * 1000
         try:
             for msg in msgs:
                 if not isinstance(msg, EquityAgg):
@@ -214,6 +244,7 @@ class PolygonRealtime:
                 }
                 parsed_msgs.append(record)
                 metrics.candle_received(_SYMBOL_CLASS)
+                self._track_minute_arrival(msg, batch_wall_ms)
                 channel_id = (
                     f"{self._event_type_to_channel[msg.event_type]}{msg.symbol}"
                 )

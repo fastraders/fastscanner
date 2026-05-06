@@ -2,6 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from time import perf_counter
 from typing import Any, Awaitable, Callable, Iterable, Protocol
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ import pandas as pd
 
 from fastscanner.pkg.candle import Candle, CandleBuffer
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.exceptions import UnsubscribeSignal
 
 from .lib import Cacheable, CacheableIndicator, Indicator, IndicatorsLibrary
@@ -144,7 +146,13 @@ class IndicatorsService:
                     },
                 )
                 self._slow_indicator_subscriptions.add(sub_handler.id())
+                metrics.set_active_subscriptions(
+                    "slow_indicator_fanout", len(self._slow_indicator_subscriptions)
+                )
         self._subscription_to_channel[sub_handler.id()] = stream_key
+        metrics.set_active_subscriptions(
+            "indicator_fanout", len(self._subscription_to_channel)
+        )
         # Configures the handler to receive messages from the channel
         await self.channel.subscribe(stream_key, sub_handler)
         return sub_handler.id()
@@ -167,6 +175,9 @@ class IndicatorsService:
         )
 
         self._subscription_to_channel[cache_handler.id()] = stream_pattern
+        metrics.set_active_subscriptions(
+            "indicator_fanout", len(self._subscription_to_channel)
+        )
         await self.channel.subscribe(stream_pattern, cache_handler)
         return cache_handler.id()
 
@@ -201,7 +212,9 @@ class IndicatorsService:
             for indicator in self._cached_indicators:
                 try:
                     await indicator.save_to_cache()
+                    metrics.indicator_cache_save(indicator.column_name(), "ok")
                 except Exception as e:
+                    metrics.indicator_cache_save(indicator.column_name(), "error")
                     logger.exception(e)
                     logger.error(f"Error caching indicator {indicator.column_name()}")
 
@@ -242,7 +255,14 @@ class IndicatorsService:
                     },
                 )
                 self._slow_indicator_subscriptions.discard(subscription_id)
+                metrics.set_active_subscriptions(
+                    "slow_indicator_fanout", len(self._slow_indicator_subscriptions)
+                )
         await self.channel.unsubscribe(stream_key, subscription_id)
+        self._subscription_to_channel.pop(subscription_id, None)
+        metrics.set_active_subscriptions(
+            "indicator_fanout", len(self._subscription_to_channel)
+        )
 
     async def stop(self):
         for sub_id, channel in self._subscription_to_channel.items():
@@ -266,6 +286,9 @@ class IndicatorsService:
                     },
                 )
         self._slow_indicator_subscriptions.clear()
+        self._subscription_to_channel.clear()
+        metrics.set_active_subscriptions("indicator_fanout", 0)
+        metrics.set_active_subscriptions("slow_indicator_fanout", 0)
 
 
 class SubscriptionHandler(Protocol):
@@ -291,7 +314,11 @@ class CandleChannelHandler:
 
     async def _handle(self, symbol: str, new_row: Candle) -> None:
         for ind in self._indicators:
+            start = perf_counter()
             new_row = await ind.extend_realtime(symbol, new_row)
+            metrics.indicator_extend_latency(
+                type(ind).__name__, perf_counter() - start
+            )
         try:
             await self._handler.handle(symbol, new_row)
         except UnsubscribeSignal:

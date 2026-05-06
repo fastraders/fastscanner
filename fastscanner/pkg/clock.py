@@ -80,6 +80,13 @@ class ClockWrapper(Clock):
             microsecond=at.microsecond,
         )
 
+    def is_market_open_now(self) -> bool:
+        now = self.now()
+        public_holidays = ApplicationRegistry.holidays.get()
+        if now.weekday() >= 5 or now.date() in public_holidays:
+            return False
+        return self.market_open() <= now < self.market_close()
+
 
 class ClockRegistry:
     clock: ClockWrapper

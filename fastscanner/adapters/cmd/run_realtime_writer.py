@@ -3,16 +3,19 @@ import logging
 import traceback
 from datetime import timedelta
 
-import exchange_calendars as ecals
 import uvloop
 
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
+from fastscanner.adapters.holiday.exchange_calendars import (
+    ExchangeCalendarsPublicHolidaysStore,
+)
 from fastscanner.adapters.realtime.nats_channel import NATSChannel
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
 from fastscanner.pkg.observability import init_metrics, metrics, start_metrics_server
+from fastscanner.services.registry import ApplicationRegistry
 
 load_logging_config()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -31,12 +34,9 @@ def _seconds_until_next_reset() -> float:
 
 
 async def _sample_market_status():
-    calendar = ecals.get_calendar("XNYS")
     while True:
         try:
-            metrics.set_market_open(
-                bool(calendar.is_open_on_minute(ClockRegistry.clock.now()))
-            )
+            metrics.set_market_open(ClockRegistry.clock.is_market_open_now())
         except Exception:
             logger.exception("market_is_open sampler failed")
         await asyncio.sleep(_MARKET_SAMPLE_INTERVAL_S)
@@ -44,6 +44,7 @@ async def _sample_market_status():
 
 async def main():
     ClockRegistry.set(LocalClock())
+    ApplicationRegistry.holidays = ExchangeCalendarsPublicHolidaysStore()
     init_metrics(role="writer")
     start_metrics_server(port=config.METRICS_PORT_WRITER, host=config.METRICS_HOST)
     metrics.set_daily_reset(False)

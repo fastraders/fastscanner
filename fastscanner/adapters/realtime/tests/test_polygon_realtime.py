@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from massive.websocket.models import EquityAgg, EventType
@@ -103,3 +103,77 @@ async def test_handle_messages_skips_unknown_event_type(
         _read_sample(
             _isolate_metrics, "fs_candles_received_total", symbol_class="Stocks"
         )
+
+
+@pytest.mark.asyncio
+async def test_handle_messages_records_first_candle_delay(
+    realtime, _isolate_metrics
+):
+    bar_minute_ms = 1_700_000_000_000
+    bar_end_seconds = (bar_minute_ms + 60_000) / 1000
+    wall_now = bar_end_seconds + 1.4
+
+    msgs = [_make_msg("AAPL", EventType.EquityAggMin, ts=bar_minute_ms)]
+
+    with patch("fastscanner.adapters.realtime.polygon_realtime.time.time", return_value=wall_now):
+        await realtime.handle_messages(msgs)
+
+    assert _read_sample(_isolate_metrics, "fs_first_candle_delay_seconds_count") == 1
+    assert _read_sample(_isolate_metrics, "fs_last_candle_delay_seconds_count") == 0
+    bucket_le_1_5 = _read_sample(
+        _isolate_metrics, "fs_first_candle_delay_seconds_bucket", le="1.5"
+    )
+    assert bucket_le_1_5 == 1
+
+
+@pytest.mark.asyncio
+async def test_minute_rollover_records_last_then_first(
+    realtime, _isolate_metrics
+):
+    minute_a_ms = 1_700_000_000_000
+    minute_b_ms = minute_a_ms + 60_000
+
+    minute_a_end_s = (minute_a_ms + 60_000) / 1000
+    minute_b_end_s = (minute_b_ms + 60_000) / 1000
+
+    wall_a_first = minute_a_end_s + 1.2
+    wall_a_last = minute_a_end_s + 3.2
+    wall_b_first = minute_b_end_s + 1.5
+
+    with patch(
+        "fastscanner.adapters.realtime.polygon_realtime.time.time",
+        return_value=wall_a_first,
+    ):
+        await realtime.handle_messages([_make_msg("AAPL", EventType.EquityAggMin, ts=minute_a_ms)])
+
+    with patch(
+        "fastscanner.adapters.realtime.polygon_realtime.time.time",
+        return_value=wall_a_last,
+    ):
+        await realtime.handle_messages([_make_msg("MSFT", EventType.EquityAggMin, ts=minute_a_ms)])
+
+    with patch(
+        "fastscanner.adapters.realtime.polygon_realtime.time.time",
+        return_value=wall_b_first,
+    ):
+        await realtime.handle_messages([_make_msg("AAPL", EventType.EquityAggMin, ts=minute_b_ms)])
+
+    assert _read_sample(_isolate_metrics, "fs_first_candle_delay_seconds_count") == 2
+    assert _read_sample(_isolate_metrics, "fs_last_candle_delay_seconds_count") == 1
+    assert (
+        _read_sample(
+            _isolate_metrics, "fs_last_candle_delay_seconds_bucket", le="3.5"
+        )
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_seconds_event_type_not_tracked_for_minute_delay(
+    realtime, _isolate_metrics
+):
+    bar_seconds_ms = 1_700_000_000_000
+    msgs = [_make_msg("AAPL", EventType.EquityAgg, ts=bar_seconds_ms)]
+    with patch("fastscanner.adapters.realtime.polygon_realtime.time.time", return_value=bar_seconds_ms / 1000 + 1.4):
+        await realtime.handle_messages(msgs)
+    assert _read_sample(_isolate_metrics, "fs_first_candle_delay_seconds_count") == 0

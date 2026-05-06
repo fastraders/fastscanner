@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 from typing import Iterable
 from uuid import uuid4
 
@@ -6,6 +7,7 @@ import pandas as pd
 
 from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.indicators.lib import Indicator
 from fastscanner.services.indicators.ports import Channel
 
@@ -56,6 +58,10 @@ class SlowIndicatorsService:
             )
         self._handlers.clear()
         self._subscribers.clear()
+        metrics.set_active_subscriptions("slow_indicator_fanout", 0)
+
+    def _bindings_count(self) -> int:
+        return sum(len(types) for types in self._subscribers.values())
 
     async def _add_subscription(
         self,
@@ -72,6 +78,7 @@ class SlowIndicatorsService:
         new_active = set(types_for_symbol.keys())
         if new_active != prev_active:
             await self._sync_handler(symbol)
+        metrics.set_active_subscriptions("slow_indicator_fanout", self._bindings_count())
 
     async def _remove_subscription(self, subscriber_id: str) -> None:
         affected: set[str] = set()
@@ -87,6 +94,7 @@ class SlowIndicatorsService:
                 self._subscribers.pop(symbol, None)
         for symbol in affected:
             await self._sync_handler(symbol)
+        metrics.set_active_subscriptions("slow_indicator_fanout", self._bindings_count())
 
     async def _sync_handler(self, symbol: str) -> None:
         active_types = sorted(self._subscribers.get(symbol, {}).keys())
@@ -128,6 +136,7 @@ class _SlowIndicatorCandleHandler:
         )
         new_row = Candle(data, timestamp=ts)
         for ind in self._indicators:
+            start = perf_counter()
             try:
                 await ind.extend_realtime(self._symbol, new_row)
             except Exception:
@@ -135,6 +144,10 @@ class _SlowIndicatorCandleHandler:
                     "[slow_indicators] %s.extend_realtime failed for %s",
                     ind.type(),
                     self._symbol,
+                )
+            finally:
+                metrics.indicator_extend_latency(
+                    type(ind).__name__, perf_counter() - start
                 )
 
 
