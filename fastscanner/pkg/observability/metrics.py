@@ -65,19 +65,20 @@ class _Metrics:
             buckets=buckets.HTTP_REQUEST_SECONDS,
             registry=registry,
         )
-        self.first_candle_delay_seconds = Histogram(
+        self.first_candle_delay_seconds = Gauge(
             "fs_first_candle_delay_seconds",
-            "Wall-clock seconds past the bar end when the FIRST candle for a "
-            "minute arrived from Polygon (one observation per bar minute).",
-            buckets=buckets.CANDLE_DELAY_SECONDS,
+            "Wall-clock seconds past the bar end when the FIRST candle for the "
+            "most recently observed minute arrived from Polygon.",
             registry=registry,
+            multiprocess_mode="max",
         )
-        self.last_candle_delay_seconds = Histogram(
-            "fs_last_candle_delay_seconds",
-            "Wall-clock seconds past the bar end when the LAST candle for a "
-            "minute arrived from Polygon (one observation per bar minute).",
-            buckets=buckets.CANDLE_DELAY_SECONDS,
+        self.candle_arrival_spread_seconds = Gauge(
+            "fs_candle_arrival_spread_seconds",
+            "Seconds between the first and last candle arrival for the most "
+            "recently completed minute bar. Zero means Polygon delivered every "
+            "candle for that minute in a single batch.",
             registry=registry,
+            multiprocess_mode="max",
         )
         self.nats_pending_messages = Gauge(
             "fs_nats_pending_messages",
@@ -142,11 +143,11 @@ class _Metrics:
             route=route, code=str(code)
         ).observe(latency_seconds)
 
-    def first_candle_delay(self, delay_seconds: float) -> None:
-        self.first_candle_delay_seconds.observe(delay_seconds)
+    def set_first_candle_delay(self, delay_seconds: float) -> None:
+        self.first_candle_delay_seconds.set(delay_seconds)
 
-    def last_candle_delay(self, delay_seconds: float) -> None:
-        self.last_candle_delay_seconds.observe(delay_seconds)
+    def set_candle_arrival_spread(self, spread_seconds: float) -> None:
+        self.candle_arrival_spread_seconds.set(spread_seconds)
 
     def set_ws_connected(self, connected: bool) -> None:
         self.polygon_ws_connected.set(1 if connected else 0)
@@ -207,12 +208,12 @@ def http_request(route: str, code: int, latency_seconds: float) -> None:
     _get().http_request(route, code, latency_seconds)
 
 
-def first_candle_delay(delay_seconds: float) -> None:
-    _get().first_candle_delay(delay_seconds)
+def set_first_candle_delay(delay_seconds: float) -> None:
+    _get().set_first_candle_delay(delay_seconds)
 
 
-def last_candle_delay(delay_seconds: float) -> None:
-    _get().last_candle_delay(delay_seconds)
+def set_candle_arrival_spread(spread_seconds: float) -> None:
+    _get().set_candle_arrival_spread(spread_seconds)
 
 
 def set_ws_connected(connected: bool) -> None:

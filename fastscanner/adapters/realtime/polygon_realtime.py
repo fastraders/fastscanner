@@ -48,6 +48,7 @@ class PolygonRealtime:
         self._active_symbols_last_updated: date | None = None
 
         self._current_bar_minute_ms: int | None = None
+        self._first_arrival_ms: float | None = None
         self._last_arrival_ms: float | None = None
 
     @property
@@ -197,16 +198,20 @@ class PolygonRealtime:
         bar_end_ms = candle_ts_ms + _MINUTE_BAR_DURATION_MS
 
         if self._current_bar_minute_ms is None:
-            metrics.first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
+            metrics.set_first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
             self._current_bar_minute_ms = candle_ts_ms
+            self._first_arrival_ms = batch_wall_ms
         elif candle_ts_ms > self._current_bar_minute_ms:
-            if self._last_arrival_ms is not None:
-                prev_bar_end_ms = self._current_bar_minute_ms + _MINUTE_BAR_DURATION_MS
-                metrics.last_candle_delay(
-                    (self._last_arrival_ms - prev_bar_end_ms) / 1000
+            if (
+                self._first_arrival_ms is not None
+                and self._last_arrival_ms is not None
+            ):
+                metrics.set_candle_arrival_spread(
+                    (self._last_arrival_ms - self._first_arrival_ms) / 1000
                 )
-            metrics.first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
+            metrics.set_first_candle_delay((batch_wall_ms - bar_end_ms) / 1000)
             self._current_bar_minute_ms = candle_ts_ms
+            self._first_arrival_ms = batch_wall_ms
         elif candle_ts_ms < self._current_bar_minute_ms:
             return
         self._last_arrival_ms = batch_wall_ms

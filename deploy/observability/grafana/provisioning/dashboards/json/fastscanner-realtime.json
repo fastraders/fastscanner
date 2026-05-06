@@ -165,60 +165,6 @@
       ]
     },
     {
-      "id": 5,
-      "title": "Candle ingest rate",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (symbol_class) (irate(fs_candles_received_total[30s]))",
-          "legendFormat": "{{symbol_class}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "title": "NATS publish rate by kind",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (kind) (irate(fs_nats_publish_total[30s]))",
-          "legendFormat": "{{kind}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        }
-      }
-    },
-    {
       "id": 7,
       "title": "NATS pending messages depth",
       "type": "timeseries",
@@ -226,7 +172,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 12
+        "y": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -248,7 +194,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 12
+        "y": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -285,7 +231,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 12
+        "y": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -317,7 +263,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 20
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -327,6 +273,7 @@
         {
           "expr": "sum(increase(fs_candles_received_total[1m]))",
           "legendFormat": "candles/min",
+          "interval": "1m",
           "refId": "A"
         }
       ],
@@ -347,14 +294,14 @@
     },
     {
       "id": 11,
-      "title": "First candle delay (P50/P95/P99)",
-      "description": "Wall-clock seconds past minute end when the FIRST candle for that minute arrived from Polygon. Typical: ~1-2s.",
+      "title": "First candle delay (per minute)",
+      "description": "Wall-clock seconds past minute end when the FIRST candle for that minute arrived from Polygon. One value per minute. Typical: ~1-2s.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 20
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -362,19 +309,10 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(fs_first_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p50",
+          "expr": "fs_first_candle_delay_seconds",
+          "legendFormat": "first candle delay",
+          "interval": "1m",
           "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_first_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(fs_first_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p99",
-          "refId": "C"
         }
       ],
       "fieldConfig": {
@@ -385,14 +323,14 @@
     },
     {
       "id": 12,
-      "title": "Last candle delay (P50/P95/P99)",
-      "description": "Wall-clock seconds past minute end when the LAST candle for that minute arrived from Polygon. Typical: ~3-4s.",
+      "title": "Candle arrival spread (per minute)",
+      "description": "Seconds between first and last candle arrival within a minute. One value per minute. Zero means Polygon delivered the whole minute in a single batch.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 20
+        "y": 12
       },
       "datasource": {
         "type": "prometheus",
@@ -400,19 +338,10 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(fs_last_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p50",
+          "expr": "fs_candle_arrival_spread_seconds",
+          "legendFormat": "spread",
+          "interval": "1m",
           "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_last_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(fs_last_candle_delay_seconds_bucket[5m])))",
-          "legendFormat": "p99",
-          "refId": "C"
         }
       ],
       "fieldConfig": {

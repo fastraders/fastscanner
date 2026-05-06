@@ -85,7 +85,7 @@ class ClockWrapper(Clock):
         public_holidays = ApplicationRegistry.holidays.get()
         if now.weekday() >= 5 or now.date() in public_holidays:
             return False
-        return self.market_open() <= now < self.market_close()
+        return time(4, 0) <= now.time() < time(20, 0)
 
 
 class ClockRegistry:
