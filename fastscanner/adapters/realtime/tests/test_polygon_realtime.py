@@ -5,16 +5,11 @@ from massive.websocket.models import EquityAgg, EventType
 
 from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
-
-
-def _read_sample(reg, sample_name: str, **labels) -> float:
-    for metric in reg.collect():
-        for sample in metric.samples:
-            if sample.name != sample_name:
-                continue
-            if all(sample.labels.get(k) == v for k, v in labels.items()):
-                return sample.value
-    raise AssertionError(f"sample {sample_name}{labels} not found")
+from fastscanner.pkg.observability.tests._helpers import (
+    find_point,
+    read_value,
+    snapshot,
+)
 
 
 def _make_msg(symbol: str, event_type: EventType, ts: int = 1_700_000_000) -> EquityAgg:
@@ -49,8 +44,8 @@ async def test_handle_messages_increments_candle_counter(
     await realtime.handle_messages(msgs)
 
     assert (
-        _read_sample(
-            _isolate_metrics, "fs_candles_received_total", symbol_class="Stocks"
+        read_value(
+            _isolate_metrics, "fs.candles.received", symbol_class="Stocks"
         )
         == 3
     )
@@ -71,8 +66,8 @@ async def test_handle_messages_skips_filtered_symbols(realtime, _isolate_metrics
     await realtime.handle_messages(msgs)
 
     assert (
-        _read_sample(
-            _isolate_metrics, "fs_candles_received_total", symbol_class="Stocks"
+        read_value(
+            _isolate_metrics, "fs.candles.received", symbol_class="Stocks"
         )
         == 1
     )
@@ -100,8 +95,8 @@ async def test_handle_messages_skips_unknown_event_type(
     await realtime.handle_messages([bad])
 
     with pytest.raises(AssertionError):
-        _read_sample(
-            _isolate_metrics, "fs_candles_received_total", symbol_class="Stocks"
+        read_value(
+            _isolate_metrics, "fs.candles.received", symbol_class="Stocks"
         )
 
 
@@ -118,8 +113,11 @@ async def test_handle_messages_records_first_candle_delay(
     with patch("fastscanner.adapters.realtime.polygon_realtime.time.time", return_value=wall_now):
         await realtime.handle_messages(msgs)
 
-    assert _read_sample(_isolate_metrics, "fs_first_candle_delay_seconds") == pytest.approx(1.4)
-    assert _read_sample(_isolate_metrics, "fs_candle_arrival_spread_seconds") == 0.0
+    snap = snapshot(_isolate_metrics)
+    assert find_point(snap, "fs.first.candle.delay").value == pytest.approx(1.4)
+    # arrival_spread is set only on minute rollover; not yet set after one msg.
+    with pytest.raises(AssertionError):
+        find_point(snap, "fs.candle.arrival.spread")
 
 
 @pytest.mark.asyncio
@@ -152,12 +150,9 @@ async def test_minute_rollover_records_spread(realtime, _isolate_metrics):
     ):
         await realtime.handle_messages([_make_msg("AAPL", EventType.EquityAggMin, ts=minute_b_ms)])
 
-    assert _read_sample(
-        _isolate_metrics, "fs_first_candle_delay_seconds"
-    ) == pytest.approx(1.5)
-    assert _read_sample(
-        _isolate_metrics, "fs_candle_arrival_spread_seconds"
-    ) == pytest.approx(2.2)
+    snap = snapshot(_isolate_metrics)
+    assert find_point(snap, "fs.first.candle.delay").value == pytest.approx(1.5)
+    assert find_point(snap, "fs.candle.arrival.spread").value == pytest.approx(2.2)
 
 
 @pytest.mark.asyncio
@@ -168,4 +163,6 @@ async def test_seconds_event_type_not_tracked_for_minute_delay(
     msgs = [_make_msg("AAPL", EventType.EquityAgg, ts=bar_seconds_ms)]
     with patch("fastscanner.adapters.realtime.polygon_realtime.time.time", return_value=bar_seconds_ms / 1000 + 1.4):
         await realtime.handle_messages(msgs)
-    assert _read_sample(_isolate_metrics, "fs_first_candle_delay_seconds") == 0.0
+    # Seconds event type should NOT touch the minute-delay gauge.
+    with pytest.raises(AssertionError):
+        find_point(_isolate_metrics, "fs.first.candle.delay")

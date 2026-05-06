@@ -1,8 +1,8 @@
 {
-  "title": "Fastscanner \u2014 REST API",
+  "title": "Fastscanner — REST API",
   "uid": "fastscanner-api",
   "schemaVersion": 42,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-1h",
@@ -28,8 +28,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (route) (rate(fs_http_request_latency_seconds_count[1m]))",
-          "legendFormat": "{{route}}",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count[1m]))",
+          "legendFormat": "{{http_route}}",
           "refId": "A"
         }
       ],
@@ -55,8 +55,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(fs_http_request_latency_seconds_bucket[5m])))",
-          "legendFormat": "{{route}}",
+          "expr": "histogram_quantile(0.95, sum by (http_route, le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{http_route}}",
           "refId": "A"
         }
       ],
@@ -82,8 +82,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (route) (rate(fs_http_request_latency_seconds_count{code=~\"5..\"}[5m]))",
-          "legendFormat": "{{route}}",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m]))",
+          "legendFormat": "{{http_route}}",
           "refId": "A"
         }
       ],
@@ -109,7 +109,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(fs_http_request_latency_seconds_count{code=~\"5..\"}[5m])) / clamp_min(sum(rate(fs_http_request_latency_seconds_count[5m])), 1e-9)",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1e-9)",
           "refId": "A"
         }
       ],
@@ -152,14 +152,85 @@
       },
       "targets": [
         {
-          "expr": "sum by (code) (rate(fs_http_request_latency_seconds_count[1m]))",
-          "legendFormat": "{{code}}",
+          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count[1m]))",
+          "legendFormat": "{{http_response_status_code}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "P50 / P95 / P99 latency (overall)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Workers reporting (last 5m)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(count by (service_instance_id) (rate(http_server_request_duration_seconds_count{service_role=\"rest_api\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 50},
+              {"color": "green", "value": 90}
+            ]
+          }
         }
       }
     }

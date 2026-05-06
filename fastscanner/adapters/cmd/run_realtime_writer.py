@@ -14,7 +14,7 @@ from fastscanner.adapters.realtime.polygon_realtime import PolygonRealtime
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
-from fastscanner.pkg.observability import init_metrics, metrics, start_metrics_server
+from fastscanner.pkg.observability import init_metrics, metrics
 from fastscanner.services.registry import ApplicationRegistry
 
 load_logging_config()
@@ -46,7 +46,6 @@ async def main():
     ClockRegistry.set(LocalClock())
     ApplicationRegistry.holidays = ExchangeCalendarsPublicHolidaysStore()
     init_metrics(role="writer")
-    start_metrics_server(port=config.METRICS_PORT_WRITER, host=config.METRICS_HOST)
     metrics.set_daily_reset(False)
     asyncio.create_task(_sample_market_status())
 

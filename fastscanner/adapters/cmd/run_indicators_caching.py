@@ -15,7 +15,7 @@ from fastscanner.adapters.realtime.nats_channel import NATSChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
-from fastscanner.pkg.observability import init_metrics, start_metrics_server
+from fastscanner.pkg.observability import init_metrics
 from fastscanner.services.indicators.lib import CacheableIndicator, IndicatorsLibrary
 from fastscanner.services.indicators.lib.news import NewsConfidenceIndicator
 from fastscanner.services.indicators.slow_indicators_service import (
@@ -68,7 +68,6 @@ logger = logging.getLogger(__name__)
 async def main():
     ClockRegistry.set(LocalClock())
     init_metrics(role="caching")
-    start_metrics_server(port=config.METRICS_PORT_CACHING, host=config.METRICS_HOST)
 
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     candles = PartitionedCSVCandlesProvider(polygon)

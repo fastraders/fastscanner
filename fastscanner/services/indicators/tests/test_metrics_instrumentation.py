@@ -3,28 +3,18 @@ from unittest.mock import AsyncMock
 
 import pandas as pd
 import pytest
-from prometheus_client import CollectorRegistry
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
 from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.observability.tests._helpers import find_point, read_value
 from fastscanner.services.indicators.service import (
     CandleChannelHandler,
     IndicatorsService,
     SubscriptionHandler,
 )
 from fastscanner.services.indicators.slow_indicators_service import (
-    SlowIndicatorsService,
     _SlowIndicatorCandleHandler,
 )
-
-
-def _read_sample(reg: CollectorRegistry, sample_name: str, **labels) -> float:
-    for metric in reg.collect():
-        for sample in metric.samples:
-            if sample.name != sample_name:
-                continue
-            if all(sample.labels.get(k) == v for k, v in labels.items()):
-                return sample.value
-    raise AssertionError(f"sample {sample_name}{labels} not found")
 
 
 class _SilentHandler(SubscriptionHandler):
@@ -61,6 +51,11 @@ class _FakeSlowIndicator(_FakeIndicator):
         return new_row
 
 
+class _RaisingFastIndicator(_FakeIndicator):
+    async def extend_realtime(self, symbol, new_row):
+        raise RuntimeError("boom")
+
+
 def _make_candle() -> Candle:
     ts = pd.Timestamp("2026-05-06 10:00:00", tz="America/New_York")
     return Candle(
@@ -71,39 +66,22 @@ def _make_candle() -> Candle:
 
 @pytest.mark.asyncio
 async def test_candle_channel_handler_records_extend_latency(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     indicators: Iterable = [_FakeFastIndicator("ATR"), _FakeFastIndicator("ADV")]
     handler = CandleChannelHandler(indicators, _SilentHandler(), "1min", AsyncMock())
 
     await handler._handle("AAPL", _make_candle())
 
-    assert (
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_latency_seconds_count",
-            name="ATR",
-        )
-        == 1
-    )
-    assert (
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_latency_seconds_count",
-            name="ADV",
-        )
-        == 1
-    )
-
-
-class _RaisingFastIndicator(_FakeIndicator):
-    async def extend_realtime(self, symbol, new_row):
-        raise RuntimeError("boom")
+    atr = find_point(_isolate_metrics, "fs.indicator.extend.latency", name="ATR")
+    adv = find_point(_isolate_metrics, "fs.indicator.extend.latency", name="ADV")
+    assert atr.count == 1
+    assert adv.count == 1
 
 
 @pytest.mark.asyncio
 async def test_candle_channel_handler_records_extend_error(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     handler = CandleChannelHandler(
         [_RaisingFastIndicator("BAD")], _SilentHandler(), "1min", AsyncMock()
@@ -112,19 +90,14 @@ async def test_candle_channel_handler_records_extend_error(
     with pytest.raises(RuntimeError):
         await handler._handle("AAPL", _make_candle())
 
-    assert (
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_errors_total",
-            name="BAD",
-        )
-        == 1
-    )
+    assert read_value(
+        _isolate_metrics, "fs.indicator.extend.errors", name="BAD"
+    ) == 1
 
 
 @pytest.mark.asyncio
 async def test_candle_channel_handler_no_error_on_success(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     handler = CandleChannelHandler(
         [_FakeFastIndicator("OK")], _SilentHandler(), "1min", AsyncMock()
@@ -133,16 +106,12 @@ async def test_candle_channel_handler_no_error_on_success(
     await handler._handle("AAPL", _make_candle())
 
     with pytest.raises(AssertionError):
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_errors_total",
-            name="OK",
-        )
+        find_point(_isolate_metrics, "fs.indicator.extend.errors", name="OK")
 
 
 @pytest.mark.asyncio
 async def test_subscribe_realtime_updates_active_subscriptions_gauge(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     channel = AsyncMock()
     service = IndicatorsService(
@@ -161,22 +130,20 @@ async def test_subscribe_realtime_updates_active_subscriptions_gauge(
         "AAPL", "1min", [], _SilentHandler(), _send_events=False
     )
 
-    assert (
-        _read_sample(_isolate_metrics, "fs_active_subscriptions", kind="indicator_fanout")
-        == 1
-    )
+    assert read_value(
+        _isolate_metrics, "fs.active.subscriptions", kind="indicator_fanout"
+    ) == 1
 
     await service.unsubscribe_realtime(sub_id, _send_events=False)
 
-    assert (
-        _read_sample(_isolate_metrics, "fs_active_subscriptions", kind="indicator_fanout")
-        == 0
-    )
+    assert read_value(
+        _isolate_metrics, "fs.active.subscriptions", kind="indicator_fanout"
+    ) == 0
 
 
 @pytest.mark.asyncio
 async def test_unsubscribe_realtime_removes_from_subscription_dict(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     channel = AsyncMock()
     service = IndicatorsService(
@@ -202,7 +169,7 @@ async def test_unsubscribe_realtime_removes_from_subscription_dict(
 
 @pytest.mark.asyncio
 async def test_slow_indicator_handler_records_latency_on_success(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     handler = _SlowIndicatorCandleHandler(
         "AAPL",
@@ -223,19 +190,15 @@ async def test_slow_indicator_handler_records_latency_on_success(
         },
     )
 
-    assert (
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_latency_seconds_count",
-            name="_FakeSlowIndicator",
-        )
-        == 1
+    point = find_point(
+        _isolate_metrics, "fs.indicator.extend.latency", name="_FakeSlowIndicator"
     )
+    assert point.count == 1
 
 
 @pytest.mark.asyncio
 async def test_slow_indicator_handler_records_latency_on_failure(
-    _isolate_metrics: CollectorRegistry,
+    _isolate_metrics: InMemoryMetricReader,
 ):
     handler = _SlowIndicatorCandleHandler(
         "AAPL",
@@ -256,13 +219,7 @@ async def test_slow_indicator_handler_records_latency_on_failure(
         },
     )
 
-    assert (
-        _read_sample(
-            _isolate_metrics,
-            "fs_indicator_extend_latency_seconds_count",
-            name="_FakeSlowIndicator",
-        )
-        == 1
+    point = find_point(
+        _isolate_metrics, "fs.indicator.extend.latency", name="_FakeSlowIndicator"
     )
-
-
+    assert point.count == 1

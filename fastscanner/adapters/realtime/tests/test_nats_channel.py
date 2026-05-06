@@ -4,6 +4,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from fastscanner.adapters.realtime.nats_channel import NATSChannel, _subject_kind
+from fastscanner.pkg.observability.tests._helpers import (
+    find_point,
+    read_value,
+    snapshot,
+)
 
 
 class MockHandler:
@@ -164,16 +169,6 @@ async def test_unsubscribe_removes_subscription_when_no_handlers(nats_channel):
     mock_subscription.unsubscribe.assert_called_once()
 
 
-def _read_sample(reg, sample_name: str, **labels) -> float:
-    for metric in reg.collect():
-        for sample in metric.samples:
-            if sample.name != sample_name:
-                continue
-            if all(sample.labels.get(k) == v for k, v in labels.items()):
-                return sample.value
-    raise AssertionError(f"sample {sample_name}{labels} not found")
-
-
 def test_subject_kind_classification():
     assert _subject_kind("candles.s.AAPL") == "candles_s"
     assert _subject_kind("candles.min.AAPL") == "candles_min"
@@ -186,9 +181,7 @@ async def test_push_with_flush_increments_publish_counter(
     nats_channel, mock_nats_connect, _isolate_metrics
 ):
     await nats_channel.push("candles.s.AAPL", {"x": 1}, flush=True)
-    assert (
-        _read_sample(_isolate_metrics, "fs_nats_publish_total", kind="candles_s") == 1
-    )
+    assert read_value(_isolate_metrics, "fs.nats.publish", kind="candles_s") == 1
 
 
 @pytest.mark.asyncio
@@ -199,12 +192,9 @@ async def test_push_with_flush_records_error_on_publish_exception(
     mock_nc.publish.side_effect = RuntimeError("boom")
     with pytest.raises(RuntimeError):
         await nats_channel.push("candles.s.AAPL", {"x": 1}, flush=True)
-    assert (
-        _read_sample(
-            _isolate_metrics, "fs_nats_publish_errors_total", kind="candles_s"
-        )
-        == 1
-    )
+    assert read_value(
+        _isolate_metrics, "fs.nats.publish.errors", kind="candles_s"
+    ) == 1
 
 
 @pytest.mark.asyncio
@@ -218,21 +208,19 @@ async def test_flush_records_pending_publish_and_duration(
     ]
     await nats_channel.flush()
 
-    assert (
-        _read_sample(_isolate_metrics, "fs_nats_publish_total", kind="candles_s") == 2
-    )
-    assert (
-        _read_sample(_isolate_metrics, "fs_nats_publish_total", kind="candles_min")
-        == 1
-    )
-    assert _read_sample(_isolate_metrics, "fs_nats_flush_duration_seconds_count") == 1
-    assert _read_sample(_isolate_metrics, "fs_nats_pending_messages") == 0
+    snap = snapshot(_isolate_metrics)
+    assert find_point(snap, "fs.nats.publish", kind="candles_s").value == 2
+    assert find_point(snap, "fs.nats.publish", kind="candles_min").value == 1
+    flush_point = find_point(snap, "fs.nats.flush.duration")
+    assert flush_point.count == 1
+    assert find_point(snap, "fs.nats.pending.messages").value == 0
 
 
 @pytest.mark.asyncio
 async def test_flush_noop_when_empty(nats_channel, _isolate_metrics):
     await nats_channel.flush()
-    assert _read_sample(_isolate_metrics, "fs_nats_flush_duration_seconds_count") == 0
+    with pytest.raises(AssertionError):
+        find_point(_isolate_metrics, "fs.nats.flush.duration")
 
 
 @pytest.mark.asyncio
@@ -241,4 +229,4 @@ async def test_reconnect_callback_increments_counter(
 ):
     await nats_channel._on_reconnected()
     await nats_channel._on_reconnected()
-    assert _read_sample(_isolate_metrics, "fs_nats_reconnect_total") == 2
+    assert read_value(_isolate_metrics, "fs.nats.reconnect") == 2
