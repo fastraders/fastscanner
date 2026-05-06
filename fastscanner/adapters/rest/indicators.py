@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import date, datetime
 from enum import Enum
 from io import StringIO
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 
 from fastscanner.pkg import config
 from fastscanner.pkg.candle import Candle
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.exceptions import UnsubscribeSignal
 from fastscanner.services.indicators.service import IndicatorParams as Params
 from fastscanner.services.indicators.service import (
@@ -23,6 +25,8 @@ from fastscanner.services.indicators.service import (
 
 from .models import ActionType, StatusType
 from .services import get_indicators_service, get_indicators_service_ws
+
+WS_ENDPOINT = "indicator"
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +76,14 @@ WebSocketRequest = Union[SubscriptionRequest, UnsubscriptionRequest]
 
 
 class WebSocketIndicatorHandler(SubscriptionHandler):
-    def __init__(self, websocket: WebSocket, subscription_id: str):
+    def __init__(self, websocket: WebSocket, subscription_id: str, freq: str):
         self._websocket = websocket
         self._subscription_id = subscription_id
+        self._freq = freq
+        try:
+            self._freq_seconds = pd.Timedelta(freq).total_seconds()
+        except (ValueError, TypeError):
+            self._freq_seconds = 0.0
 
     async def handle(self, symbol: str, new_row: Candle) -> Candle:
         message = IndicatorMessage(
@@ -84,21 +93,35 @@ class WebSocketIndicatorHandler(SubscriptionHandler):
             candle=dict(new_row),
         )
 
-        await self._send_message(message)
+        await self._send_message(message, candle_ts=new_row.timestamp)
         return new_row
 
-    async def _send_message(self, message: IndicatorMessage):
+    async def _send_message(
+        self, message: IndicatorMessage, candle_ts: pd.Timestamp | None = None
+    ):
+        start = time.perf_counter()
+        result = "ok"
         try:
             message_json = message.model_dump_json()
             await self._websocket.send_text(message_json)
         except WebSocketDisconnect:
+            result = "disconnect"
             logger.info("WebSocket disconnected")
             raise UnsubscribeSignal("WebSocket disconnected")
         except RuntimeError as re:
+            result = "runtime_error"
             logger.info(f"RuntimeError: {re}")
             raise UnsubscribeSignal(f"RuntimeError: {re}")
         except Exception as e:
+            result = "error"
             logger.exception(e)
+        finally:
+            elapsed = time.perf_counter() - start
+            metrics.ws_message_pushed(WS_ENDPOINT, result, elapsed)
+            if result == "ok" and candle_ts is not None and self._freq_seconds > 0:
+                delay = time.time() - candle_ts.timestamp() - self._freq_seconds
+                if delay >= 0:
+                    metrics.ws_candle_to_client(WS_ENDPOINT, self._freq, delay)
 
 
 @router.post("/calculate", status_code=status.HTTP_200_OK)
@@ -127,10 +150,13 @@ async def _handle_subscribe(
     service: IndicatorsService,
     subscriptions: dict[str, tuple[str, str]],
 ) -> SubscriptionResponse:
-    handler = WebSocketIndicatorHandler(websocket, request.subscription_id)
+    handler = WebSocketIndicatorHandler(
+        websocket, request.subscription_id, request.freq
+    )
 
     indicators_params = [Params(i.type, i.params) for i in request.indicators]
 
+    start = time.perf_counter()
     try:
         subscription_id = await service.subscribe_realtime(
             symbol=request.symbol,
@@ -140,6 +166,9 @@ async def _handle_subscribe(
             _send_events=not _is_persister_subscription(request.subscription_id),
         )
     except Exception as e:
+        elapsed = time.perf_counter() - start
+        metrics.ws_subscribe_latency(WS_ENDPOINT, "error", elapsed)
+        metrics.ws_subscribe_error(WS_ENDPOINT, "service_error")
         logger.exception(e)
         return SubscriptionResponse(
             status=StatusType.ERROR,
@@ -147,6 +176,8 @@ async def _handle_subscribe(
             message=f"Failed to subscribe to {request.symbol}: {e}",
         )
 
+    elapsed = time.perf_counter() - start
+    metrics.ws_subscribe_latency(WS_ENDPOINT, "ok", elapsed)
     subscriptions[request.subscription_id] = (request.symbol, subscription_id)
 
     logger.info(
@@ -193,7 +224,9 @@ async def websocket_realtime_indicators(
     service: IndicatorsService = Depends(get_indicators_service_ws),
 ):
     await websocket.accept()
+    metrics.ws_connection_opened(WS_ENDPOINT)
     subscriptions: dict[str, tuple[str, str]] = {}
+    close_reason = "client_disconnect"
 
     data = ""
     try:
@@ -220,6 +253,7 @@ async def websocket_realtime_indicators(
                     await websocket.send_text(response.model_dump_json())
 
                 else:
+                    metrics.ws_subscribe_error(WS_ENDPOINT, "unknown_action")
                     response = SubscriptionResponse(
                         status=StatusType.ERROR,
                         subscription_id="",
@@ -228,12 +262,15 @@ async def websocket_realtime_indicators(
                     await websocket.send_text(response.model_dump_json())
 
             except WebSocketDisconnect:
+                close_reason = "client_disconnect"
                 logger.info("WebSocket disconnected")
                 break
             except RuntimeError as re:
+                close_reason = "runtime_error"
                 logger.info(f"RuntimeError: {re}")
                 break
             except Exception as e:
+                close_reason = "error"
                 logger.error(f"Error processing WebSocket message: {data}")
                 logger.exception(e)
     finally:
@@ -249,6 +286,7 @@ async def websocket_realtime_indicators(
                 logger.info(f"Cleaned up subscription {subscription_id}")
             except Exception as e:
                 logger.exception(e)
+        metrics.ws_connection_closed(WS_ENDPOINT, close_reason)
 
 
 def _is_persister_subscription(subscription_id: str) -> bool:

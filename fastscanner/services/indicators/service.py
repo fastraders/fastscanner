@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time as _time_module
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from time import perf_counter
@@ -190,6 +191,7 @@ class IndicatorsService:
         self._cached_indicators = []
 
     async def _start_caching(self) -> None:
+        scheduled_wake: datetime | None = None
         while True:
             now = ClockRegistry.clock.now()
             # We receive the latest candle at 20:00 UTC but it can have a bit of delay.
@@ -203,21 +205,34 @@ class IndicatorsService:
                     f"Waiting for pre-market to cache indicators. Now: {now}, next pre-market at: {next_premarket}"
                 )
                 await asyncio.sleep((next_premarket - now).total_seconds())
+                scheduled_wake = None
                 continue
 
             now = ClockRegistry.clock.now()
+            if scheduled_wake is not None:
+                lag = (now - scheduled_wake).total_seconds()
+                metrics.indicator_caching_loop_lag(max(lag, 0.0))
+
             for indicator in self._cached_indicators:
+                col = indicator.column_name()
+                save_start = perf_counter()
                 try:
                     await indicator.save_to_cache()
-                    metrics.indicator_cache_save(indicator.column_name(), "ok")
+                    duration = perf_counter() - save_start
+                    metrics.indicator_cache_save(col, "ok")
+                    metrics.indicator_cache_save_duration(col, duration)
+                    metrics.indicator_cache_last_success(col, _time_module.time())
                 except Exception as e:
-                    metrics.indicator_cache_save(indicator.column_name(), "error")
+                    duration = perf_counter() - save_start
+                    metrics.indicator_cache_save(col, "error")
+                    metrics.indicator_cache_save_duration(col, duration)
                     logger.exception(e)
-                    logger.error(f"Error caching indicator {indicator.column_name()}")
+                    logger.error(f"Error caching indicator {col}")
 
             next_minute = (now + timedelta(minutes=1)).replace(
                 second=self._cache_at_seconds, microsecond=0
             )
+            scheduled_wake = next_minute
             await asyncio.sleep((next_minute - now).total_seconds())
 
     async def unsubscribe_realtime(

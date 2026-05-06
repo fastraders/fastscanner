@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from fastscanner.pkg import config
 from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry
+from fastscanner.pkg.observability import metrics
 
 from ...registry import ApplicationRegistry
 
@@ -403,9 +404,21 @@ class SharesFloatIndicator:
         existing = self._tasks.get(symbol)
         if existing is not None and not existing.done():
             return
-        self._tasks[symbol] = asyncio.create_task(self._inline_fetch(symbol))
+        task = asyncio.create_task(self._inline_fetch(symbol))
+        self._tasks[symbol] = task
+        metrics.indicator_slow_inflight_set(
+            self.type(), sum(1 for t in self._tasks.values() if not t.done())
+        )
+        task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, _task: asyncio.Task) -> None:
+        metrics.indicator_slow_inflight_set(
+            self.type(), sum(1 for t in self._tasks.values() if not t.done())
+        )
 
     async def _inline_fetch(self, symbol: str) -> None:
+        start = time_mod.perf_counter()
+        outcome = "scored"
         try:
             today = self._last_date.get(symbol)
             if today is None:
@@ -416,8 +429,15 @@ class SharesFloatIndicator:
                 self._cache_key(symbol),
                 self._encode_cache(today, value),
             )
+            outcome = "scored" if value is not None else "empty"
+            metrics.indicator_slow_fetch(
+                self.type(), outcome, time_mod.perf_counter() - start
+            )
             logger.info("[shares_float %s] fetched float=%s", symbol, value)
         except Exception:
+            metrics.indicator_slow_fetch(
+                self.type(), "exception", time_mod.perf_counter() - start
+            )
             logger.exception("[shares_float %s] inline fetch failed", symbol)
 
 

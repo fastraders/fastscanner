@@ -2,114 +2,275 @@
   "title": "Fastscanner — REST API",
   "uid": "fastscanner-api",
   "schemaVersion": 42,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
-  "tags": [
-    "fastscanner"
-  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "tags": ["fastscanner"],
   "panels": [
     {
       "id": 1,
-      "title": "Request rate by route",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "title": "Active WebSocket connections",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count[1m]))",
-          "legendFormat": "{{http_route}}",
+          "expr": "sum by (endpoint) (fs_ws_connections_active)",
+          "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps"
-        }
-      }
+      "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
       "id": 2,
-      "title": "P95 latency by route",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "title": "Workers reporting (5m)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (http_route, le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{http_route}}",
+          "expr": "count(count by (service_instance_id) (rate(fs_ws_message_pushed_total{service_role=\"rest_api\"}[5m]) > 0)) or vector(0)",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        }
-      }
+      "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
       "id": 3,
-      "title": "5xx error rate by route",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "title": "Push errors / disconnects (5m)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m]))",
-          "legendFormat": "{{http_route}}",
+          "expr": "sum(rate(fs_ws_message_pushed_total{result!=\"ok\"}[5m]))",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "ops",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 1}
+            ]
+          }
         }
       }
     },
     {
       "id": 4,
-      "title": "Error ratio (5xx / total, 5m)",
+      "title": "Connection churn (5m)",
       "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1e-9)",
+          "expr": "sum(rate(fs_ws_connections_opened_total[5m]))",
+          "legendFormat": "opens/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(fs_ws_connections_closed_total[5m]))",
+          "legendFormat": "closes/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 10,
+      "title": "Candle-to-client delivery delay p95 (by endpoint, freq)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (endpoint, freq, le) (rate(fs_ws_candle_to_client_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} {{freq}} p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (endpoint, freq, le) (rate(fs_ws_candle_to_client_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} {{freq}} p50",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 11,
+      "title": "WebSocket push latency (by endpoint)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (endpoint, le) (rate(fs_ws_message_push_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (endpoint, le) (rate(fs_ws_message_push_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (endpoint, le) (rate(fs_ws_message_push_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 20,
+      "title": "Outbound messages per second (by endpoint, result)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint, result) (rate(fs_ws_message_pushed_total[1m]))",
+          "legendFormat": "{{endpoint}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 21,
+      "title": "Subscribe latency p95 (by endpoint)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (endpoint, result, le) (rate(fs_ws_subscribe_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}} {{result}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 30,
+      "title": "Connection close reasons (per minute)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint, reason) (rate(fs_ws_connections_closed_total[1m])) * 60",
+          "legendFormat": "{{endpoint}} {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}}
+    },
+    {
+      "id": 31,
+      "title": "Subscribe errors (by endpoint, kind)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint, kind) (rate(fs_ws_subscribe_errors_total[5m]))",
+          "legendFormat": "{{endpoint}} {{kind}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 40,
+      "title": "Scanner matches per minute (by scanner_id)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (scanner_id) (rate(fs_ws_scanner_match_emitted_total[1m])) * 60",
+          "legendFormat": "{{scanner_id}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 41,
+      "title": "Indicator extend latency p95 (rest_api workers, by name)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_extend_latency_seconds_bucket{service_role=\"rest_api\"}[5m])))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 50,
+      "title": "HTTP request rate by route (REST endpoints)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{service_role=\"rest_api\"}[1m]))",
+          "legendFormat": "{{http_route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}}
+    },
+    {
+      "id": 51,
+      "title": "HTTP p95 latency by route (REST endpoints)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (http_route, le) (rate(http_server_request_duration_seconds_bucket{service_role=\"rest_api\"}[5m])))",
+          "legendFormat": "{{http_route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 60,
+      "title": "Dragonfly latency p95 (rest_api, by op)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (op, le) (rate(fs_dragonfly_command_latency_seconds_bucket{service_role=\"rest_api\"}[5m])))",
+          "legendFormat": "{{op}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 61,
+      "title": "Dragonfly hit ratio (rest_api)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(fs_dragonfly_command_latency_seconds_count{service_role=\"rest_api\",op=\"get\",outcome=\"hit\"}[5m])) / clamp_min(sum(rate(fs_dragonfly_command_latency_seconds_count{service_role=\"rest_api\",op=\"get\"}[5m])), 1e-9)",
           "refId": "A"
         }
       ],
@@ -119,116 +280,9 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.01
-              },
-              {
-                "color": "red",
-                "value": 0.05
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": 5,
-      "title": "Status code distribution",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count[1m]))",
-          "legendFormat": "{{http_response_status_code}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "title": "P50 / P95 / P99 latency (overall)",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        }
-      }
-    },
-    {
-      "id": 7,
-      "title": "Workers reporting (last 5m)",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 16
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "count(count by (service_instance_id) (rate(http_server_request_duration_seconds_count{service_role=\"rest_api\"}[5m])))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
               {"color": "red", "value": null},
-              {"color": "yellow", "value": 50},
-              {"color": "green", "value": 90}
+              {"color": "yellow", "value": 0.5},
+              {"color": "green", "value": 0.8}
             ]
           }
         }

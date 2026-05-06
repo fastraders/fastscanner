@@ -3,15 +3,23 @@ import logging
 import time
 from contextlib import asynccontextmanager, contextmanager
 
+from fastscanner.pkg.observability import metrics, otel_init
+
 logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
-    def __init__(self, max_requests: int, time_window: float = 1.0):
+    def __init__(
+        self,
+        max_requests: int,
+        time_window: float = 1.0,
+        name: str | None = None,
+    ):
         self._max_requests = max_requests
         self._time_window = time_window
         self._request_timestamps = []
         self._lock = asyncio.Lock()
+        self._name = name
 
     def _wait_time(self) -> float:
         now = time.time()
@@ -47,6 +55,8 @@ class RateLimiter:
             if wait_time > 0:
                 await asyncio.sleep(wait_time)
             self._add_request()
+        if self._name and otel_init.is_initialized():
+            metrics.ratelimit_wait(self._name, max(wait_time, 0.0))
         return None
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

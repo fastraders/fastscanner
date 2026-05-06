@@ -91,6 +91,8 @@ class MassiveAdjustedCollector(_MassiveSplitsLoader):
                     "GET",
                     url,
                     params=params,
+                    metric_source="polygon_rest",
+                    metric_endpoint="splits",
                 )
                 response.raise_for_status()
                 data = response.json()

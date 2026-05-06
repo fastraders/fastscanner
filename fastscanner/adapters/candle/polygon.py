@@ -33,7 +33,7 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
     ):
         self._base_url = base_url
         self._api_key = api_key
-        self._rate_limit = RateLimiter(max_requests_per_sec)
+        self._rate_limit = RateLimiter(max_requests_per_sec, name="polygon_rest")
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
         self._base_dir = os.path.join(config.DATA_BASE_DIR, "data")
 
@@ -85,6 +85,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                         "adjusted": False,
                     },
                     headers={"Accept": "text/csv"},
+                    metric_source="polygon_rest",
+                    metric_endpoint="aggs",
                 )
                 if response.status_code == 404:
                     curr_start = curr_end + timedelta(days=1)
@@ -170,6 +172,8 @@ class PolygonCandlesProvider(MassiveAdjustedMixin):
                     "GET",
                     url,
                     params=params,
+                    metric_source="polygon_rest",
+                    metric_endpoint="reference_tickers",
                 )
                 response.raise_for_status()
                 data = response.json()

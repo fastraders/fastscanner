@@ -37,6 +37,7 @@ class EODHDFundamentalStore:
         self._rate_limiter = RateLimiter(
             max_requests=max_requests_per_min,
             time_window=60,
+            name="eodhd",
         )
 
     async def get(self, symbol: str) -> FundamentalData:
@@ -112,9 +113,28 @@ class EODHDFundamentalStore:
     async def _fetch_json(self, url: str, params: Dict) -> dict:
         async with self._semaphore, self._rate_limiter:
             async with httpx.AsyncClient() as client:
-                response = await async_retry_request(client, "GET", url, params=params)
+                endpoint = self._endpoint_label(url)
+                response = await async_retry_request(
+                    client,
+                    "GET",
+                    url,
+                    params=params,
+                    metric_source="eodhd",
+                    metric_endpoint=endpoint,
+                )
                 response.raise_for_status()
                 return response.json()
+
+    @staticmethod
+    def _endpoint_label(url: str) -> str:
+        path = url.rsplit("?", 1)[0]
+        if "/fundamentals/" in path:
+            return "fundamentals"
+        if "/historical-market-cap/" in path:
+            return "historical_market_cap"
+        if "/calendar/earnings" in path:
+            return "calendar_earnings"
+        return "other"
 
     async def reload(self, symbol: str) -> FundamentalData:
         return await self._fetch(symbol)

@@ -6,6 +6,7 @@ import logging
 import random
 import re
 import shutil
+import time as _time_module
 from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -19,7 +20,10 @@ from fastscanner.pkg import config
 from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry
 from fastscanner.pkg.http import async_retry_request
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.registry import ApplicationRegistry
+
+NEWS_FIRST_TO_PUBLISH_THRESHOLDS = (50, 75, 90)
 
 logger = logging.getLogger(__name__)
 
@@ -147,11 +151,24 @@ class NewsConfidenceIndicator:
         existing = self._tasks.get(symbol)
         if existing is not None and not existing.done():
             return
-        self._tasks[symbol] = asyncio.create_task(self._inline_fetch(symbol))
+        task = asyncio.create_task(self._inline_fetch(symbol))
+        self._tasks[symbol] = task
+        metrics.indicator_slow_inflight_set(
+            self.type(), sum(1 for t in self._tasks.values() if not t.done())
+        )
+        task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, _task: asyncio.Task) -> None:
+        metrics.indicator_slow_inflight_set(
+            self.type(), sum(1 for t in self._tasks.values() if not t.done())
+        )
 
     async def _inline_fetch(self, symbol: str) -> None:
+        start = _time_module.perf_counter()
+        outcome = "scored"
         try:
             await asyncio.sleep(random.uniform(0, 45))
+            fetch_start = _time_module.perf_counter()
             today = ClockRegistry.clock.now().date()
             latest = await self._score_new_headlines_today(symbol)
             prior = self._confidence_today.get(symbol)
@@ -163,7 +180,19 @@ class NewsConfidenceIndicator:
                 self._cache_key(symbol),
                 self._encode_cache(today, merged),
             )
+            if latest is None:
+                outcome = "fail_open"
+            elif latest == 0:
+                outcome = "empty"
+            else:
+                outcome = "scored"
+            metrics.indicator_slow_fetch(
+                self.type(), outcome, _time_module.perf_counter() - fetch_start
+            )
         except Exception:
+            metrics.indicator_slow_fetch(
+                self.type(), "exception", _time_module.perf_counter() - start
+            )
             logger.exception("[news_confidence %s] inline fetch failed", symbol)
 
     async def _score_new_headlines_today(self, symbol: str) -> int | None:
@@ -266,6 +295,7 @@ class NewsConfidenceIndicator:
         pairs; caller decides how to threshold/aggregate. Raises on CLI missing,
         timeout, non-zero exit, or unparseable output."""
         if shutil.which("codex") is None:
+            metrics.codex_invocation("missing", 0.0)
             raise RuntimeError("codex CLI not found in PATH")
 
         items = [{"idx": i, "title": h.title} for i, h in enumerate(headlines)]
@@ -273,6 +303,7 @@ class NewsConfidenceIndicator:
             symbol=symbol.upper(), headlines=json.dumps(items, ensure_ascii=False)
         )
 
+        codex_start = _time_module.perf_counter()
         proc = await asyncio.create_subprocess_exec(
             "codex",
             "exec",
@@ -293,14 +324,26 @@ class NewsConfidenceIndicator:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
+            metrics.codex_invocation("timeout", _time_module.perf_counter() - codex_start)
             raise RuntimeError(f"codex timed out after {CODEX_TIMEOUT}s")
 
         if proc.returncode != 0:
+            metrics.codex_invocation(
+                "exit_nonzero", _time_module.perf_counter() - codex_start
+            )
             err = stderr_b.decode(errors="replace")[:200]
             raise RuntimeError(f"codex exited {proc.returncode}: {err}")
 
         text = stdout_b.decode(errors="replace")
-        scores = self._parse_codex_response(text, n_headlines=len(headlines))
+        try:
+            scores = self._parse_codex_response(text, n_headlines=len(headlines))
+        except Exception:
+            metrics.codex_invocation(
+                "parse_error", _time_module.perf_counter() - codex_start
+            )
+            raise
+
+        metrics.codex_invocation("ok", _time_module.perf_counter() - codex_start)
 
         out: list[tuple[Headline, int]] = []
         for entry in scores:
@@ -308,6 +351,9 @@ class NewsConfidenceIndicator:
             conf = entry["confidence"]
             h = headlines[idx]
             out.append((h, conf))
+            for threshold in NEWS_FIRST_TO_PUBLISH_THRESHOLDS:
+                if conf >= threshold:
+                    metrics.news_first_to_publish(h.source, threshold)
             if conf > CONFIDENCE_THRESHOLD:
                 logger.info(
                     "[news_confidence %s][KEEP %s codex=%d%%] %s",
@@ -359,7 +405,12 @@ class NewsConfidenceIndicator:
         url = f"https://finviz.com/quote.ashx?t={symbol.upper()}&p=d"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await async_retry_request(
-                client, "GET", url, headers={"User-Agent": USER_AGENT}
+                client,
+                "GET",
+                url,
+                headers={"User-Agent": USER_AGENT},
+                metric_source="news",
+                metric_endpoint="finviz",
             )
         if response.status_code != 200:
             return []
@@ -396,7 +447,13 @@ class NewsConfidenceIndicator:
             f"?symbol={symbol.upper()}&from={today_str}&to={today_str}&token={token}"
         )
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            response = await async_retry_request(client, "GET", url)
+            response = await async_retry_request(
+                client,
+                "GET",
+                url,
+                metric_source="news",
+                metric_endpoint="finnhub",
+            )
         if response.status_code != 200:
             return []
         items = response.json()

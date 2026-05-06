@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time as _time
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 
@@ -9,6 +10,7 @@ import pandas as pd
 
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE_STR, ClockRegistry, split_freq
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 from .massive_adjusted import MassiveAdjustedMixin
@@ -164,26 +166,33 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
                         utc=True,
                         format="%Y-%m-%d %H:%M:%S",
                     )
+                    metrics.candle_partition_lookup("hit", freq)
                     return df.set_index(CandleCol.DATETIME).tz_convert(self.tz)
                 df[CandleCol.DATETIME] = pd.to_datetime(
                     df[CandleCol.DATETIME], format="%Y-%m-%d"
                 )
+                metrics.candle_partition_lookup("hit", freq)
                 return df.set_index(CandleCol.DATETIME).tz_localize(self.tz)
             except pd.errors.EmptyDataError:
+                metrics.candle_partition_lookup("empty", freq)
                 return pd.DataFrame(
                     columns=list(CandleCol.RESAMPLE_MAP.keys()),
                     index=pd.DatetimeIndex([], name=CandleCol.DATETIME),
                 ).tz_localize(self.tz)
             except FileNotFoundError:
+                metrics.candle_partition_lookup("miss", freq)
                 if _log_cache_miss:
                     logger.info(
                         f"Cache miss for {symbol} ({freq}) with key {key}. Fetching from store."
                     )
             except Exception as e:
+                metrics.candle_partition_lookup("corrupt", freq)
                 logger.exception(e)
                 logger.error(
                     f"Failed to load cached data for {symbol} ({freq}): {e}. Resetting cache."
                 )
+        else:
+            metrics.candle_partition_lookup("expired", freq)
 
         start, end = self._range_from_key(key, freq)
         yday = today - timedelta(days=1)
@@ -209,7 +218,10 @@ class PartitionedCSVCandlesProvider(MassiveAdjustedMixin):
             df = df.reset_index()
             df[CandleCol.DATETIME] = df[CandleCol.DATETIME].dt.strftime("%Y-%m-%d")  # type: ignore
 
+        outcome = "empty" if df.empty else "written"
+        start = _time.perf_counter()
         df.to_csv(partition_path, index=False)
+        metrics.candle_partition_write(freq, outcome, _time.perf_counter() - start)
 
     def _partition_path(self, symbol: str, key: str, freq: str) -> str:
         return os.path.join(self.CACHE_DIR, symbol, freq, f"{key}.csv")

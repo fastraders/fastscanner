@@ -1,112 +1,39 @@
 {
-  "title": "Fastscanner \u2014 Indicators",
+  "title": "Fastscanner — Indicators",
   "uid": "fastscanner-indicators",
   "schemaVersion": 42,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
-  "tags": [
-    "fastscanner"
-  ],
+  "time": {"from": "now-3h", "to": "now"},
+  "tags": ["fastscanner"],
   "panels": [
     {
       "id": 1,
-      "title": "Indicator extend P95 by name",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_extend_latency_seconds_bucket[5m])))",
-          "legendFormat": "{{name}}",
-          "refId": "A"
-        }
-      ],
+      "title": "Caching loop scheduling lag",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "max(fs_indicator_caching_loop_lag_seconds)", "refId": "A"}],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
         }
       }
     },
     {
       "id": 2,
-      "title": "Indicator extend rate by name",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (name) (rate(fs_indicator_extend_latency_seconds_count[1m]))",
-          "legendFormat": "{{name}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        }
-      }
-    },
-    {
-      "id": 3,
-      "title": "Cache save rate by result",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 10
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (result) (rate(fs_indicator_cache_save_total[1m]))",
-          "legendFormat": "{{result}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "Cache error ratio (5m)",
+      "title": "Cache error rate (5m)",
       "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 10
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "expr": "sum(rate(fs_indicator_cache_save_total{result=\"error\"}[5m])) / clamp_min(sum(rate(fs_indicator_cache_save_total[5m])), 1e-9)",
@@ -119,44 +46,280 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.01
-              },
-              {
-                "color": "red",
-                "value": 0.05
-              }
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.01},
+              {"color": "red", "value": 0.05}
             ]
           }
         }
       }
     },
     {
-      "id": 5,
-      "title": "Active subscriptions by kind",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 10
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "id": 3,
+      "title": "Slow indicator fetches in-flight",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "fs_active_subscriptions",
-          "legendFormat": "{{kind}}",
+          "expr": "sum by (indicator) (fs_indicator_slow_inflight)",
+          "legendFormat": "{{indicator}}",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 4,
+      "title": "Codex calls (5m rate)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(fs_codex_invocations_total[5m])) * 60",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "decimals": 2}}
+    },
+    {
+      "id": 10,
+      "title": "Time since last successful cache save (per indicator)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "time() - fs_indicator_cache_last_success_timestamp",
+          "instant": true,
+          "format": "table",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 120},
+              {"color": "red", "value": 600}
+            ]
+          },
+          "custom": {"displayMode": "color-background"}
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Cache save duration p95 (by indicator)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_cache_save_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 20,
+      "title": "Slow indicator fetch p95 (by indicator)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (indicator, le) (rate(fs_indicator_slow_fetch_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{indicator}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 21,
+      "title": "Slow indicator outcomes per minute",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (indicator, outcome) (rate(fs_indicator_slow_fetch_duration_seconds_count[1m])) * 60",
+          "legendFormat": "{{indicator}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}}
+    },
+    {
+      "id": 30,
+      "title": "Codex duration p95 (by outcome)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (outcome, le) (rate(fs_codex_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{outcome}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 31,
+      "title": "Codex invocations by outcome (per minute)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(fs_codex_invocations_total[1m])) * 60",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}}
+    },
+    {
+      "id": 40,
+      "title": "News provider performance — first-to-publish (>=50)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (source) (rate(fs_news_first_to_publish_total{threshold=\"50\"}[5m])) * 60",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 41,
+      "title": "News provider performance — first-to-publish (>=75)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (source) (rate(fs_news_first_to_publish_total{threshold=\"75\"}[5m])) * 60",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 42,
+      "title": "News provider performance — first-to-publish (>=90)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (source) (rate(fs_news_first_to_publish_total{threshold=\"90\"}[5m])) * 60",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 43,
+      "title": "News provider total scored headlines (24h)",
+      "type": "bargauge",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (source, threshold) (increase(fs_news_first_to_publish_total[24h]))",
+          "legendFormat": "{{source}} >= {{threshold}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 50,
+      "title": "Indicator extend p95 (by name)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_extend_latency_seconds_bucket{service_role=\"caching\"}[5m])))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 51,
+      "title": "Indicator extend errors (5m rate)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (name) (rate(fs_indicator_extend_errors_total[5m]))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 60,
+      "title": "Dragonfly latency p95 (caching, by op)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 52},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (op, le) (rate(fs_dragonfly_command_latency_seconds_bucket{service_role=\"caching\"}[5m])))",
+          "legendFormat": "{{op}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 61,
+      "title": "Dragonfly hit ratio (caching)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 52},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(fs_dragonfly_command_latency_seconds_count{service_role=\"caching\",op=\"get\",outcome=\"hit\"}[5m])) / clamp_min(sum(rate(fs_dragonfly_command_latency_seconds_count{service_role=\"caching\",op=\"get\"}[5m])), 1e-9)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "green", "value": 0.8}
+            ]
+          }
+        }
+      }
     }
   ]
 }

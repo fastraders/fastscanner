@@ -1,4 +1,8 @@
+import time
+
 import redis.asyncio as aioredis
+
+from fastscanner.pkg.observability import metrics
 
 
 class DragonflyCache:
@@ -25,12 +29,30 @@ class DragonflyCache:
         return self._client
 
     async def save(self, key: str, value: str) -> None:
-        await self.client.set(key, value)
+        start = time.perf_counter()
+        outcome = "ok"
+        try:
+            await self.client.set(key, value)
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            metrics.dragonfly_command("set", outcome, time.perf_counter() - start)
 
     async def get(self, key: str) -> str:
-        result = await self.client.get(key)
+        start = time.perf_counter()
+        outcome = "hit"
+        try:
+            result = await self.client.get(key)
+        except Exception:
+            outcome = "error"
+            metrics.dragonfly_command("get", outcome, time.perf_counter() - start)
+            raise
         if result is None:
+            outcome = "miss"
+            metrics.dragonfly_command("get", outcome, time.perf_counter() - start)
             raise KeyError(f"Key {key} not found in cache")
+        metrics.dragonfly_command("get", outcome, time.perf_counter() - start)
         return result
 
     async def close(self) -> None:
