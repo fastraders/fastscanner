@@ -48,7 +48,6 @@ class _Metrics:
         self.nats_flush_duration_seconds = Histogram(
             "fs_nats_flush_duration_seconds",
             "Latency of NATSChannel.flush(), one observation per flush call.",
-            ["kind"],
             buckets=buckets.NATS_FLUSH_SECONDS,
             registry=registry,
         )
@@ -110,8 +109,8 @@ class _Metrics:
     def nats_reconnect(self) -> None:
         self.nats_reconnect_total.inc()
 
-    def nats_flush(self, kind: str, latency_seconds: float) -> None:
-        self.nats_flush_duration_seconds.labels(kind=kind).observe(latency_seconds)
+    def nats_flush(self, latency_seconds: float) -> None:
+        self.nats_flush_duration_seconds.observe(latency_seconds)
 
     def nats_pending(self, depth: int) -> None:
         self.nats_pending_messages.set(depth)
@@ -168,8 +167,8 @@ def nats_reconnect() -> None:
     _get().nats_reconnect()
 
 
-def nats_flush(kind: str, latency_seconds: float) -> None:
-    _get().nats_flush(kind, latency_seconds)
+def nats_flush(latency_seconds: float) -> None:
+    _get().nats_flush(latency_seconds)
 
 
 def nats_pending(depth: int) -> None:

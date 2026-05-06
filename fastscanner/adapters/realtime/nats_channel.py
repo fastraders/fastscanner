@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Any
 
 import nats
@@ -7,9 +8,17 @@ from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 from nats.aio.subscription import Subscription
 
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.indicators.ports import ChannelHandler
 
 logger = logging.getLogger(__name__)
+
+
+def _subject_kind(subject: str) -> str:
+    parts = subject.split(".", 2)
+    if len(parts) >= 2:
+        return f"{parts[0]}_{parts[1]}"
+    return subject
 
 
 class NATSChannel:
@@ -31,16 +40,37 @@ class NATSChannel:
             )
         return self._nc
 
+    async def _on_reconnected(self) -> None:
+        metrics.nats_reconnect()
+        logger.info("NATS reconnected")
+
+    async def _on_disconnected(self) -> None:
+        logger.warning("NATS disconnected")
+
+    async def _on_closed(self) -> None:
+        logger.warning("NATS connection closed")
+
     async def _ensure_connection(self):
         if self._nc is None or self._nc.is_closed:
             logger.info(f"Connecting to NAS Server at {self._servers}")
-            self._nc = await nats.connect(servers=self._servers)
+            self._nc = await nats.connect(
+                servers=self._servers,
+                reconnected_cb=self._on_reconnected,
+                disconnected_cb=self._on_disconnected,
+                closed_cb=self._on_closed,
+            )
             logger.info("Connection to NAS Succesfull")
 
     async def push(self, channel_id: str, data: dict[Any, Any], flush: bool = True):
         if flush:
             await self._ensure_connection()
-            await self.nc.publish(channel_id, json.dumps(data).encode())
+            kind = _subject_kind(channel_id)
+            try:
+                await self.nc.publish(channel_id, json.dumps(data).encode())
+                metrics.nats_publish(kind)
+            except Exception:
+                metrics.nats_publish_error(kind)
+                raise
         else:
             self._pending_messages.append((channel_id, data))
 
@@ -49,11 +79,21 @@ class NATSChannel:
             return
 
         await self._ensure_connection()
+        metrics.nats_pending(len(self._pending_messages))
 
+        start = time.perf_counter()
         for channel_id, data in self._pending_messages:
-            await self.nc.publish(channel_id, json.dumps(data).encode())
+            kind = _subject_kind(channel_id)
+            try:
+                await self.nc.publish(channel_id, json.dumps(data).encode())
+                metrics.nats_publish(kind)
+            except Exception:
+                metrics.nats_publish_error(kind)
+                raise
+        metrics.nats_flush(time.perf_counter() - start)
 
         self._pending_messages.clear()
+        metrics.nats_pending(0)
 
     def _message_handler(self, channel_id: str):
         async def handler(msg: Msg) -> None:

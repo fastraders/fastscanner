@@ -18,7 +18,10 @@ from websockets import ConnectionClosedError
 from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry
+from fastscanner.pkg.observability import metrics
 from fastscanner.services.indicators.ports import Channel
+
+_SYMBOL_CLASS = "Stocks"
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +75,7 @@ class PolygonRealtime:
             max_reconnects=None,  # Unlimited reconnects.
         )
         self._running = True
+        metrics.set_ws_connected(True)
         logger.info("Connecting WebSocket")
 
         self._ws_task = asyncio.create_task(self._client.connect(self.handle_messages))
@@ -89,6 +93,7 @@ class PolygonRealtime:
             logger.warning(f"Client was disconnected: {e}")
         finally:
             self._running = False
+            metrics.set_ws_connected(False)
             logger.info("WebSocket stopped.")
 
     def subscribe_all(self):
@@ -208,6 +213,7 @@ class PolygonRealtime:
                     "volume": msg.volume,
                 }
                 parsed_msgs.append(record)
+                metrics.candle_received(_SYMBOL_CLASS)
                 channel_id = (
                     f"{self._event_type_to_channel[msg.event_type]}{msg.symbol}"
                 )

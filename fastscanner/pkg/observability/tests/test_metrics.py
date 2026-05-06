@@ -47,18 +47,13 @@ def test_nats_reconnect(fresh_registry: CollectorRegistry):
 
 
 def test_nats_flush_histogram(fresh_registry: CollectorRegistry):
-    metrics.nats_flush("candles_s", 0.0007)
-    metrics.nats_flush("candles_s", 0.003)
-    assert _read_sample(
-        fresh_registry, "fs_nats_flush_duration_seconds_count", kind="candles_s"
-    ) == 2
-    bucket_500us = _read_sample(
-        fresh_registry,
-        "fs_nats_flush_duration_seconds_bucket",
-        kind="candles_s",
-        le="0.001",
+    metrics.nats_flush(0.0007)
+    metrics.nats_flush(0.003)
+    assert _read_sample(fresh_registry, "fs_nats_flush_duration_seconds_count") == 2
+    bucket_1ms = _read_sample(
+        fresh_registry, "fs_nats_flush_duration_seconds_bucket", le="0.001"
     )
-    assert bucket_500us == 1
+    assert bucket_1ms == 1
 
 
 def test_nats_pending_gauge(fresh_registry: CollectorRegistry):
