@@ -271,7 +271,7 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(fs_candles_received_total[1m]))",
+          "expr": "last_over_time(fs_candles_received_total[20s]) - last_over_time(fs_candles_received_total[20s] offset 1m)",
           "legendFormat": "candles/min",
           "interval": "1m",
           "refId": "A"
