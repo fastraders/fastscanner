@@ -61,3 +61,12 @@ TRADES_DATA_DIR = os.environ["TRADES_DATA_DIR"]
 PERSISTER_SUBSCRIPTION_PREFIX = "persister_"
 # e.g., 10 means caching at 10th second of each minute
 CACHE_AT_SECONDS = int(os.getenv("CACHE_AT_SECONDS", "10"))
+
+# Observability
+PROMETHEUS_MULTIPROC_DIR = os.environ.get(
+    "PROMETHEUS_MULTIPROC_DIR", "/tmp/fs-prom"
+)
+METRICS_HOST = os.environ.get("METRICS_HOST", "127.0.0.1")
+METRICS_PORT_WRITER = int(os.environ.get("METRICS_PORT_WRITER", "9101"))
+METRICS_PORT_CACHING = int(os.environ.get("METRICS_PORT_CACHING", "9102"))
+METRICS_JANITOR_INTERVAL_S = int(os.environ.get("METRICS_JANITOR_INTERVAL_S", "60"))
