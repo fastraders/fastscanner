@@ -1,0 +1,20 @@
+[Unit]
+Description=Prometheus NATS Exporter (fastscanner)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/prometheus-nats-exporter \
+  -addr 127.0.0.1 \
+  -port 7777 \
+  -varz -connz -subz -routez \
+  http://127.0.0.1:8222 \
+  http://127.0.0.1:8223
+TimeoutStopSec=10
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Prometheus Metrics Server (fastscanner)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/home/mmoheeka/Projects/fastscanner/deploy/observability/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --storage.tsdb.retention.time=30d \
+  --web.listen-address=127.0.0.1:9090
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutStopSec=30
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+[Install]
+WantedBy=multi-user.target

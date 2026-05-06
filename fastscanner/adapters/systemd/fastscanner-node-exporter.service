@@ -1,0 +1,18 @@
+[Unit]
+Description=Prometheus Node Exporter (fastscanner host metrics)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/node_exporter \
+  --web.listen-address=127.0.0.1:9100 \
+  --collector.systemd \
+  --collector.processes
+TimeoutStopSec=10
+Restart=on-failure
+
+User=mmoheeka
+Group=fastrader
+
+[Install]
+WantedBy=multi-user.target

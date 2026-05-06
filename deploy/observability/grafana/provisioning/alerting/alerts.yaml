@@ -1,0 +1,180 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: fastscanner
+    folder: Fastscanner Alerts
+    interval: 1m
+    rules:
+      - uid: realtime-drought
+        title: RealtimeDrought
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                (sum(rate(fs_candles_received_total[2m])) == 0)
+                and on() (fs_market_is_open == 1)
+                and on() (fs_daily_reset_in_progress == 0)
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: "No candles ingested for >60s during market hours"
+          description: "rate(fs_candles_received_total[2m]) is zero while market_is_open=1 and daily_reset_in_progress=0"
+        labels:
+          severity: critical
+
+      - uid: polygon-ws-down
+        title: PolygonWSDown
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 60, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                (fs_polygon_ws_connected == 0)
+                and on() (fs_daily_reset_in_progress == 0)
+        noDataState: OK
+        execErrState: Error
+        for: 30s
+        annotations:
+          summary: "Polygon WebSocket disconnected outside the daily-reset window"
+        labels:
+          severity: critical
+
+      - uid: indicator-lat-high
+        title: IndicatorLatHigh
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                histogram_quantile(0.95, sum by (le) (rate(fs_indicator_extend_latency_seconds_bucket[5m]))) > 0.5
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "P95 indicator extend latency above 500ms for 5min"
+        labels:
+          severity: warning
+
+      - uid: cache-save-errors
+        title: CacheSaveErrors
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                sum(rate(fs_indicator_cache_save_total{result="error"}[5m])) > (1/60)
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Indicator cache save errors above 1/min for 5min"
+        labels:
+          severity: warning
+
+      - uid: api-error-spike
+        title: APIErrorSpike
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                sum(rate(fs_http_request_latency_seconds_count{code=~"5.."}[5m])) > (5/60)
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "HTTP 5xx error rate above 5/min"
+        labels:
+          severity: warning
+
+      - uid: process-down
+        title: ProcessDown
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                up{job=~"writer|caching|rest"} == 0
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Fastscanner process {{ $labels.job }} has been down for 2min"
+        labels:
+          severity: critical
+
+      - uid: nats-exporter-down
+        title: NATSExporterDown
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                up{job="nats-exporter"} == 0
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "NATS exporter is down — NATS-server-side metrics are blind"
+          description: "Note: this alert covers the exporter only. If the exporter dies, both NATS nodes appear absent in metrics. Cross-check with NATS log/journalctl."
+        labels:
+          severity: critical
+
+      - uid: nats-backlog-growing
+        title: NATSBacklogGrowing
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              editorMode: code
+              expr: |-
+                fs_nats_pending_messages > 1000
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: "Realtime writer's NATS pending queue >1000 for 1min — writer falling behind"
+        labels:
+          severity: warning

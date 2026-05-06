@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: fastscanner
+    orgId: 1
+    folder: Fastscanner
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/fastscanner-provisioning/dashboards/json
+      foldersFromFilesStructure: false
