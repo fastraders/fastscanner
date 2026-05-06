@@ -146,9 +146,6 @@ class IndicatorsService:
                     },
                 )
                 self._slow_indicator_subscriptions.add(sub_handler.id())
-                metrics.set_active_subscriptions(
-                    "slow_indicator_fanout", len(self._slow_indicator_subscriptions)
-                )
         self._subscription_to_channel[sub_handler.id()] = stream_key
         metrics.set_active_subscriptions(
             "indicator_fanout", len(self._subscription_to_channel)
@@ -255,9 +252,6 @@ class IndicatorsService:
                     },
                 )
                 self._slow_indicator_subscriptions.discard(subscription_id)
-                metrics.set_active_subscriptions(
-                    "slow_indicator_fanout", len(self._slow_indicator_subscriptions)
-                )
         await self.channel.unsubscribe(stream_key, subscription_id)
         self._subscription_to_channel.pop(subscription_id, None)
         metrics.set_active_subscriptions(
@@ -288,7 +282,6 @@ class IndicatorsService:
         self._slow_indicator_subscriptions.clear()
         self._subscription_to_channel.clear()
         metrics.set_active_subscriptions("indicator_fanout", 0)
-        metrics.set_active_subscriptions("slow_indicator_fanout", 0)
 
 
 class SubscriptionHandler(Protocol):
@@ -315,10 +308,12 @@ class CandleChannelHandler:
     async def _handle(self, symbol: str, new_row: Candle) -> None:
         for ind in self._indicators:
             start = perf_counter()
-            new_row = await ind.extend_realtime(symbol, new_row)
-            metrics.indicator_extend_latency(
-                type(ind).__name__, perf_counter() - start
-            )
+            try:
+                new_row = await ind.extend_realtime(symbol, new_row)
+            except Exception:
+                metrics.indicator_extend_error(ind.column_name())
+                raise
+            metrics.indicator_extend_latency(ind.column_name(), perf_counter() - start)
         try:
             await self._handler.handle(symbol, new_row)
         except UnsubscribeSignal:

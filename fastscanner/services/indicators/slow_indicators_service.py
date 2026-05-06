@@ -58,7 +58,6 @@ class SlowIndicatorsService:
             )
         self._handlers.clear()
         self._subscribers.clear()
-        metrics.set_active_subscriptions("slow_indicator_fanout", 0)
 
     def _bindings_count(self) -> int:
         return sum(len(types) for types in self._subscribers.values())
@@ -78,7 +77,6 @@ class SlowIndicatorsService:
         new_active = set(types_for_symbol.keys())
         if new_active != prev_active:
             await self._sync_handler(symbol)
-        metrics.set_active_subscriptions("slow_indicator_fanout", self._bindings_count())
 
     async def _remove_subscription(self, subscriber_id: str) -> None:
         affected: set[str] = set()
@@ -94,7 +92,6 @@ class SlowIndicatorsService:
                 self._subscribers.pop(symbol, None)
         for symbol in affected:
             await self._sync_handler(symbol)
-        metrics.set_active_subscriptions("slow_indicator_fanout", self._bindings_count())
 
     async def _sync_handler(self, symbol: str) -> None:
         active_types = sorted(self._subscribers.get(symbol, {}).keys())
@@ -140,6 +137,7 @@ class _SlowIndicatorCandleHandler:
             try:
                 await ind.extend_realtime(self._symbol, new_row)
             except Exception:
+                metrics.indicator_extend_error(type(ind).__name__)
                 logger.exception(
                     "[slow_indicators] %s.extend_realtime failed for %s",
                     ind.type(),

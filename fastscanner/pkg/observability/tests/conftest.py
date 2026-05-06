@@ -28,6 +28,10 @@ def fresh_registry() -> CollectorRegistry:
 
 @pytest.fixture(autouse=True)
 def reset_observability_state():
+    _purge_default_registry()
+    registry._reset_for_test()
+    metrics._instance = None
+    os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
     yield
     _purge_default_registry()
     registry._reset_for_test()

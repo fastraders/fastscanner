@@ -30,18 +30,24 @@ def init_metrics(role: Role, multiproc_dir: str | None = None) -> CollectorRegis
         return _state.scrape_registry
 
     if role == "rest_api":
-        from fastscanner.pkg import config
-
-        target_dir = multiproc_dir or config.PROMETHEUS_MULTIPROC_DIR
-        Path(target_dir).mkdir(parents=True, exist_ok=True)
-        os.environ["PROMETHEUS_MULTIPROC_DIR"] = target_dir
-        scrape_registry = CollectorRegistry()
-        multiprocess.MultiProcessCollector(scrape_registry)
-        _state.scrape_registry = scrape_registry
-        _state.multiproc_dir = target_dir
-        logger.info(
-            "metrics: multiprocess mode initialized (dir=%s)", target_dir
-        )
+        env_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+        target_dir = multiproc_dir or env_dir
+        if target_dir is None:
+            logger.warning(
+                "metrics: role='rest_api' but PROMETHEUS_MULTIPROC_DIR not set; "
+                "scrape registry will be empty. systemd unit must set this env var "
+                "BEFORE Python starts so prometheus_client picks multiprocess mode."
+            )
+            _state.scrape_registry = CollectorRegistry()
+        else:
+            Path(target_dir).mkdir(parents=True, exist_ok=True)
+            scrape_registry = CollectorRegistry()
+            multiprocess.MultiProcessCollector(scrape_registry, path=target_dir)
+            _state.scrape_registry = scrape_registry
+            _state.multiproc_dir = target_dir
+            logger.info(
+                "metrics: multiprocess mode initialized (dir=%s)", target_dir
+            )
     else:
         _state.scrape_registry = REGISTRY
         logger.info("metrics: single-process mode for role=%s", role)

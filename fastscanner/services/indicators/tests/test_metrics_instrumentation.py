@@ -82,10 +82,62 @@ async def test_candle_channel_handler_records_extend_latency(
         _read_sample(
             _isolate_metrics,
             "fs_indicator_extend_latency_seconds_count",
-            name="_FakeFastIndicator",
+            name="ATR",
         )
-        == 2
+        == 1
     )
+    assert (
+        _read_sample(
+            _isolate_metrics,
+            "fs_indicator_extend_latency_seconds_count",
+            name="ADV",
+        )
+        == 1
+    )
+
+
+class _RaisingFastIndicator(_FakeIndicator):
+    async def extend_realtime(self, symbol, new_row):
+        raise RuntimeError("boom")
+
+
+@pytest.mark.asyncio
+async def test_candle_channel_handler_records_extend_error(
+    _isolate_metrics: CollectorRegistry,
+):
+    handler = CandleChannelHandler(
+        [_RaisingFastIndicator("BAD")], _SilentHandler(), "1min", AsyncMock()
+    )
+
+    with pytest.raises(RuntimeError):
+        await handler._handle("AAPL", _make_candle())
+
+    assert (
+        _read_sample(
+            _isolate_metrics,
+            "fs_indicator_extend_errors_total",
+            name="BAD",
+        )
+        == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_candle_channel_handler_no_error_on_success(
+    _isolate_metrics: CollectorRegistry,
+):
+    handler = CandleChannelHandler(
+        [_FakeFastIndicator("OK")], _SilentHandler(), "1min", AsyncMock()
+    )
+
+    await handler._handle("AAPL", _make_candle())
+
+    with pytest.raises(AssertionError):
+        _read_sample(
+            _isolate_metrics,
+            "fs_indicator_extend_errors_total",
+            name="OK",
+        )
 
 
 @pytest.mark.asyncio
@@ -214,38 +266,3 @@ async def test_slow_indicator_handler_records_latency_on_failure(
     )
 
 
-@pytest.mark.asyncio
-async def test_slow_service_updates_bindings_gauge(
-    _isolate_metrics: CollectorRegistry,
-):
-    channel = AsyncMock()
-    service = SlowIndicatorsService(
-        channel=channel,
-        indicators=[_FakeSlowIndicator("NewsConfidenceIndicator")],
-        subscribe_channel="slow_sub",
-        unsubscribe_channel="slow_unsub",
-    )
-
-    await service._add_subscription("sub-1", "AAPL", ["NewsConfidenceIndicator"])
-    assert (
-        _read_sample(
-            _isolate_metrics, "fs_active_subscriptions", kind="slow_indicator_fanout"
-        )
-        == 1
-    )
-
-    await service._add_subscription("sub-2", "MSFT", ["NewsConfidenceIndicator"])
-    assert (
-        _read_sample(
-            _isolate_metrics, "fs_active_subscriptions", kind="slow_indicator_fanout"
-        )
-        == 2
-    )
-
-    await service._remove_subscription("sub-1")
-    assert (
-        _read_sample(
-            _isolate_metrics, "fs_active_subscriptions", kind="slow_indicator_fanout"
-        )
-        == 1
-    )

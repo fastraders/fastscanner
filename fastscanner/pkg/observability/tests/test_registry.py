@@ -27,7 +27,6 @@ def test_init_rest_api_creates_multiproc_collector(tmp_path: Path):
     assert reg is not REGISTRY
     assert registry.is_multiproc() is True
     assert registry.multiproc_dir() == str(tmp_path)
-    assert os.environ["PROMETHEUS_MULTIPROC_DIR"] == str(tmp_path)
 
 
 def test_init_rest_api_creates_dir_if_missing(tmp_path: Path):

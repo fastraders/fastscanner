@@ -4,12 +4,11 @@ from prometheus_client import REGISTRY, CollectorRegistry, Counter, Gauge, Histo
 
 from fastscanner.pkg.observability import buckets
 
-CacheSaveResult = Literal["ok", "error", "miss"]
+CacheSaveResult = Literal["ok", "error"]
 SubscriptionKind = Literal[
     "websocket_indicator",
     "scanner_wildcard",
     "indicator_fanout",
-    "slow_indicator_fanout",
 ]
 
 
@@ -43,6 +42,12 @@ class _Metrics:
             "fs_indicator_cache_save_total",
             "Indicator cache save attempts.",
             ["name", "result"],
+            registry=registry,
+        )
+        self.indicator_extend_errors_total = Counter(
+            "fs_indicator_extend_errors_total",
+            "Indicator extend_realtime exceptions, by indicator name.",
+            ["name"],
             registry=registry,
         )
         self.nats_flush_duration_seconds = Histogram(
@@ -138,6 +143,9 @@ class _Metrics:
     def indicator_cache_save(self, name: str, result: CacheSaveResult) -> None:
         self.indicator_cache_save_total.labels(name=name, result=result).inc()
 
+    def indicator_extend_error(self, name: str) -> None:
+        self.indicator_extend_errors_total.labels(name=name).inc()
+
     def http_request(self, route: str, code: int, latency_seconds: float) -> None:
         self.http_request_latency_seconds.labels(
             route=route, code=str(code)
@@ -202,6 +210,10 @@ def indicator_extend_latency(name: str, latency_seconds: float) -> None:
 
 def indicator_cache_save(name: str, result: CacheSaveResult) -> None:
     _get().indicator_cache_save(name, result)
+
+
+def indicator_extend_error(name: str) -> None:
+    _get().indicator_extend_error(name)
 
 
 def http_request(route: str, code: int, latency_seconds: float) -> None:

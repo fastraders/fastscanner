@@ -6,9 +6,11 @@ After=network-online.target ntp.service
 WorkingDirectory=/home/mmoheeka/Projects/fastscanner
 PrivateTmp=true
 Type=simple
+ExecStartPre=/bin/sh -c "rm -rf /tmp/fs-prom; mkdir -p /tmp/fs-prom"
 ExecStart=/home/mmoheeka/.local/bin/poetry run python -m fastscanner.adapters.rest.main
 ExecReload=/bin/kill -s HUP $MAINPID
 Environment="PATH=/home/mmoheeka/.nvm/versions/node/v22.22.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PROMETHEUS_MULTIPROC_DIR=/tmp/fs-prom"
 
 # The nats-server uses SIGUSR2 to trigger Lame Duck Mode (LDM) shutdown
 # https://docs.nats.io/running-a-nats-service/nats_admin/lame_duck_mode

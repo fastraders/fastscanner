@@ -17,6 +17,12 @@ from fastscanner.adapters.realtime.redis_channel import RedisChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, LocalClock
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import (
+    PrometheusMiddleware,
+    init_metrics,
+    mark_worker_dead,
+    metrics_endpoint,
+)
 from fastscanner.services.indicators.service import IndicatorsService
 from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.service import ScannerService
@@ -35,16 +41,21 @@ class State(TypedDict):
 async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     indicators_service, scanner_service = init()
 
-    yield {
-        "indicators": indicators_service,
-        "scanner": scanner_service,
-    }
-
-    await indicators_service.stop()
+    try:
+        yield {
+            "indicators": indicators_service,
+            "scanner": scanner_service,
+        }
+    finally:
+        await indicators_service.stop()
+        mark_worker_dead()
 
 
 load_logging_config()
+init_metrics(role="rest_api")
 app = FastAPI(docs_url="/api/docs", redoc_url="/api/redoc", lifespan=lifespan)
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics_endpoint)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(indicators_router)
