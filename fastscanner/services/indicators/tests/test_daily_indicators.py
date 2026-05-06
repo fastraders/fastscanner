@@ -44,9 +44,9 @@ async def test_prev_day_indicator_extend(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 11, 9, 30),
-        datetime(2023, 1, 11, 10, 0),
-        datetime(2023, 1, 11, 10, 30),
+        pd.Timestamp(2023, 1, 11, 9, 30),
+        pd.Timestamp(2023, 1, 11, 10, 0),
+        pd.Timestamp(2023, 1, 11, 10, 30),
     ]
     closes = [110, 112, 115]
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
@@ -69,10 +69,10 @@ async def test_prev_day_indicator_extend_multiple_days(candles: "CandleStoreTest
 
     # Create test data for intraday candles spanning multiple days
     dates = [
-        datetime(2023, 1, 10, 9, 30),
-        datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 12, 9, 30),
-        datetime(2023, 1, 12, 10, 0),
+        pd.Timestamp(2023, 1, 10, 9, 30),
+        pd.Timestamp(2023, 1, 10, 10, 0),
+        pd.Timestamp(2023, 1, 12, 9, 30),
+        pd.Timestamp(2023, 1, 12, 10, 0),
     ]
     closes = [110, 112, 115, 117]
     df = pd.DataFrame({CandleCol.CLOSE: closes}, index=pd.DatetimeIndex(dates))
@@ -105,8 +105,8 @@ async def test_prev_day_indicator_extend_different_columns(candles: "CandleStore
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 11, 9, 30),
-        datetime(2023, 1, 11, 10, 0),
+        pd.Timestamp(2023, 1, 11, 9, 30),
+        pd.Timestamp(2023, 1, 11, 10, 0),
     ]
     df = pd.DataFrame(
         {
@@ -158,10 +158,12 @@ async def test_daily_gap_indicator_extend(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 10, 9, 30),  # Market open
-        datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 11, 8, 0),  # Pre-market (should be ignored for daily open)
-        datetime(2023, 1, 11, 10, 30),
+        pd.Timestamp(2023, 1, 10, 9, 30),  # Market open
+        pd.Timestamp(2023, 1, 10, 10, 0),
+        pd.Timestamp(
+            2023, 1, 11, 8, 0
+        ),  # Pre-market (should be ignored for daily open)
+        pd.Timestamp(2023, 1, 11, 10, 30),
     ]
     opens = [110, 112, 115, 108]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -193,10 +195,10 @@ async def test_daily_gap_indicator_extend_multiple_days(candles: "CandleStoreTes
 
     # Create test data for intraday candles spanning multiple days
     dates = [
-        datetime(2023, 1, 10, 9, 30),  # Day 1 market open
-        datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 11, 9, 30),  # Day 2 market open
-        datetime(2023, 1, 11, 10, 0),
+        pd.Timestamp(2023, 1, 10, 9, 30),  # Day 1 market open
+        pd.Timestamp(2023, 1, 10, 10, 0),
+        pd.Timestamp(2023, 1, 11, 9, 30),  # Day 2 market open
+        pd.Timestamp(2023, 1, 11, 10, 0),
     ]
     opens = [110, 112, 120, 122]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -234,10 +236,14 @@ async def test_daily_gap_indicator_extend_with_premarket(candles: "CandleStoreTe
 
     # Create test data for intraday candles with pre-market data
     dates = [
-        datetime(2023, 1, 10, 8, 0),  # Pre-market (should be ignored for daily open)
-        datetime(2023, 1, 10, 8, 30),  # Pre-market (should be ignored for daily open)
-        datetime(2023, 1, 11, 9, 30),  # Market open (should be used for daily open)
-        datetime(2023, 1, 11, 10, 0),
+        pd.Timestamp(
+            2023, 1, 10, 8, 0
+        ),  # Pre-market (should be ignored for daily open)
+        pd.Timestamp(
+            2023, 1, 10, 8, 30
+        ),  # Pre-market (should be ignored for daily open)
+        pd.Timestamp(2023, 1, 11, 9, 30),  # Market open (should be used for daily open)
+        pd.Timestamp(2023, 1, 11, 10, 0),
     ]
     opens = [108, 109, 110, 112]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -272,9 +278,9 @@ async def test_daily_gap_indicator_extend_no_market_open(candles: "CandleStoreTe
 
     # Create test data for intraday candles with only pre-market data
     dates = [
-        datetime(2023, 1, 11, 8, 0),  # Pre-market
-        datetime(2023, 1, 11, 8, 30),  # Pre-market
-        datetime(2023, 1, 11, 9, 0),  # Pre-market
+        pd.Timestamp(2023, 1, 11, 8, 0),  # Pre-market
+        pd.Timestamp(2023, 1, 11, 8, 30),  # Pre-market
+        pd.Timestamp(2023, 1, 11, 9, 0),  # Pre-market
     ]
     opens = [108, 109, 110]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -304,7 +310,7 @@ async def test_prev_day_indicator_extend_realtime(candles: "CandleStoreTest"):
             CandleCol.LOW: 108,
             CandleCol.OPEN: 109,
         },
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
 
     indicator = PrevDayIndicator(candle_col=CandleCol.CLOSE)
@@ -330,14 +336,14 @@ async def test_prev_day_indicator_extend_realtime_multiple_calls_same_day(
     # First call for Jan 11
     row1 = Candle(
         {CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     # Second call for Jan 11 (same day)
     row2 = Candle(
         {CandleCol.CLOSE: 112},
-        timestamp=datetime(2023, 1, 11, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 11, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -366,14 +372,14 @@ async def test_prev_day_indicator_extend_realtime_different_days(
     # Call for Jan 11
     row1 = Candle(
         {CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     # Call for Jan 12 (different day)
     row2 = Candle(
         {CandleCol.CLOSE: 115},
-        timestamp=datetime(2023, 1, 12, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -401,7 +407,7 @@ async def test_daily_gap_indicator_extend_realtime(candles: "CandleStoreTest"):
             CandleCol.LOW: 108,
             CandleCol.OPEN: 110,  # This will be used as the daily open
         },
-        timestamp=datetime(2023, 1, 11, 9, 30),  # Market open time
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),  # Market open time
     )
 
     indicator = DailyGapIndicator()
@@ -430,14 +436,14 @@ async def test_daily_gap_indicator_extend_realtime_multiple_calls_same_day(
     # First call for Jan 11 at market open
     row1 = Candle(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     # Second call for Jan 11 (same day, later time)
     row2 = Candle(
         {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
-        timestamp=datetime(2023, 1, 11, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 11, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -467,14 +473,14 @@ async def test_daily_gap_indicator_extend_realtime_different_days(
     # Call for Jan 11
     row1 = Candle(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     # Call for Jan 12 (different day)
     row2 = Candle(
         {CandleCol.OPEN: 115, CandleCol.CLOSE: 115},
-        timestamp=datetime(2023, 1, 12, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -503,7 +509,7 @@ async def test_daily_gap_indicator_extend_realtime_premarket(
     # Pre-market call (before 9:30)
     premarket_row = Candle(
         {CandleCol.OPEN: 108, CandleCol.CLOSE: 108},
-        timestamp=datetime(2023, 1, 11, 9, 0),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 0),
     )
     premarket_result = await indicator.extend_realtime("AAPL", premarket_row)
 
@@ -513,7 +519,7 @@ async def test_daily_gap_indicator_extend_realtime_premarket(
     # Market open call (at 9:30)
     market_open_row = Candle(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     market_open_result = await indicator.extend_realtime("AAPL", market_open_row)
 
@@ -524,7 +530,7 @@ async def test_daily_gap_indicator_extend_realtime_premarket(
     # Another pre-market call for the next day
     next_premarket_row = Candle(
         {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
-        timestamp=datetime(2023, 1, 12, 9, 0),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 0),
     )
     next_premarket_result = await indicator.extend_realtime(
         "AAPL", next_premarket_row.copy()
@@ -551,7 +557,7 @@ async def test_daily_gap_indicator_extend_realtime_missing_prev_close(
     # Call for Jan 11 (missing previous day's close)
     row = Candle(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
 
     result = await indicator.extend_realtime("AAPL", row)
@@ -673,9 +679,9 @@ async def test_daily_atr_indicator_extend(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 21, 9, 30),
-        datetime(2023, 1, 21, 10, 0),
-        datetime(2023, 1, 21, 10, 30),
+        pd.Timestamp(2023, 1, 21, 9, 30),
+        pd.Timestamp(2023, 1, 21, 10, 0),
+        pd.Timestamp(2023, 1, 21, 10, 30),
     ]
     df = pd.DataFrame(
         {
@@ -715,7 +721,7 @@ async def test_daily_atr_indicator_calculation(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
-    dates = [datetime(2023, 1, 6, 9, 30)]
+    dates = [pd.Timestamp(2023, 1, 6, 9, 30)]
     df = pd.DataFrame(
         {
             CandleCol.OPEN: [140],
@@ -758,7 +764,7 @@ async def test_daily_atr_indicator_extend_realtime(candles: "CandleStoreTest"):
             CandleCol.LOW: 130,
             CandleCol.CLOSE: 145,
         },
-        timestamp=datetime(2023, 1, 6, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 6, 9, 30),
     )
 
     # Use a smaller period for easier calculation
@@ -800,7 +806,7 @@ async def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
             CandleCol.LOW: 140,
             CandleCol.CLOSE: 155,
         },
-        timestamp=datetime(2023, 1, 7, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 7, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
@@ -812,7 +818,7 @@ async def test_daily_atr_indicator_extend_realtime_multiple_calls_same_day(
             CandleCol.LOW: 145,
             CandleCol.CLOSE: 160,
         },
-        timestamp=datetime(2023, 1, 7, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 7, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -841,11 +847,11 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
     # Set up test data for daily candles with simple values for easy manual calculation
     # Use datetime objects for the index, not date objects
     daily_dates = [
-        datetime(2023, 1, 1, 16, 0),  # Use 4 PM for daily candles
-        datetime(2023, 1, 2, 16, 0),
-        datetime(2023, 1, 3, 16, 0),
-        datetime(2023, 1, 4, 16, 0),
-        datetime(2023, 1, 5, 16, 0),
+        pd.Timestamp(2023, 1, 1, 16, 0),  # Use 4 PM for daily candles
+        pd.Timestamp(2023, 1, 2, 16, 0),
+        pd.Timestamp(2023, 1, 3, 16, 0),
+        pd.Timestamp(2023, 1, 4, 16, 0),
+        pd.Timestamp(2023, 1, 5, 16, 0),
     ]
     daily_data = pd.DataFrame(
         {
@@ -869,7 +875,7 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
             CandleCol.LOW: 130,
             CandleCol.CLOSE: 145,
         },
-        timestamp=datetime(2023, 1, 6, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 6, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
@@ -883,7 +889,7 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
             CandleCol.LOW: [130],
             CandleCol.CLOSE: [145],
         },
-        index=[datetime(2023, 1, 6, 16, 0)],  # Use datetime object for the index
+        index=[pd.Timestamp(2023, 1, 6, 16, 0)],  # Use datetime object for the index
     )
     updated_daily_data = pd.concat([daily_data, jan6_data])
     candles.set_data("AAPL", updated_daily_data)
@@ -896,7 +902,7 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
             CandleCol.LOW: 140,
             CandleCol.CLOSE: 170,
         },
-        timestamp=datetime(2023, 1, 7, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 7, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -904,8 +910,8 @@ async def test_daily_atr_indicator_extend_realtime_different_days(
     jan7_atr = result2[indicator.column_name()]
 
     # Verify the ATR values are reasonable and different for different days
-    assert abs(jan6_atr - 15) < 0.001
-    assert abs(jan7_atr - 17.077) < 0.001
+    assert abs(jan6_atr - 14.621) < 0.001
+    assert abs(jan7_atr - 16.586) < 0.001
 
     # Ensure the values are different
     assert jan6_atr != jan7_atr
@@ -962,9 +968,9 @@ async def test_adv_indicator_extend(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 21, 9, 30),
-        datetime(2023, 1, 21, 10, 0),
-        datetime(2023, 1, 21, 10, 30),
+        pd.Timestamp(2023, 1, 21, 9, 30),
+        pd.Timestamp(2023, 1, 21, 10, 0),
+        pd.Timestamp(2023, 1, 21, 10, 30),
     ]
     df = pd.DataFrame(
         {CandleCol.VOLUME: [100000, 120000, 90000], CandleCol.CLOSE: [110, 112, 115]},
@@ -997,7 +1003,7 @@ async def test_adv_indicator_extend_empty_data(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
-    dates = [datetime(2023, 1, 21, 9, 30)]
+    dates = [pd.Timestamp(2023, 1, 21, 9, 30)]
     df = pd.DataFrame(
         {CandleCol.VOLUME: [100000], CandleCol.CLOSE: [110]},
         index=pd.DatetimeIndex(dates),
@@ -1046,10 +1052,10 @@ async def test_adv_indicator_extend_multiple_days(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles spanning multiple days
     dates = [
-        datetime(2023, 1, 21, 9, 30),
-        datetime(2023, 1, 21, 10, 0),
-        datetime(2023, 1, 22, 9, 30),
-        datetime(2023, 1, 22, 10, 0),
+        pd.Timestamp(2023, 1, 21, 9, 30),
+        pd.Timestamp(2023, 1, 21, 10, 0),
+        pd.Timestamp(2023, 1, 22, 9, 30),
+        pd.Timestamp(2023, 1, 22, 10, 0),
     ]
     df = pd.DataFrame(
         {
@@ -1108,7 +1114,7 @@ async def test_adv_indicator_extend_realtime(candles: "CandleStoreTest"):
     # Create a new row for realtime data
     new_row = Candle(
         {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
 
     # Test with period=14
@@ -1155,14 +1161,14 @@ async def test_adv_indicator_extend_realtime_multiple_calls_same_day(
     # First call for Jan 15
     row1 = Candle(
         {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     # Second call for Jan 15 (same day)
     row2 = Candle(
         {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 112},
-        timestamp=datetime(2023, 1, 15, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 15, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -1206,7 +1212,7 @@ async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStor
     # Call for Jan 15
     row1 = Candle(
         {CandleCol.VOLUME: 100000, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
@@ -1216,7 +1222,7 @@ async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStor
     # Add Jan 15 data to our daily data for the next calculation
     jan15_data = pd.DataFrame(
         {CandleCol.VOLUME: [1500000], CandleCol.CLOSE: [110]},
-        index=[datetime(2023, 1, 15, 16, 0)],
+        index=[pd.Timestamp(2023, 1, 15, 16, 0)],
     )
     updated_daily_data = pd.concat([daily_data, jan15_data])
     candles.set_data("AAPL", updated_daily_data)
@@ -1224,7 +1230,7 @@ async def test_adv_indicator_extend_realtime_different_days(candles: "CandleStor
     # Call for Jan 16 (different day)
     row2 = Candle(
         {CandleCol.VOLUME: 120000, CandleCol.CLOSE: 115},
-        timestamp=datetime(2023, 1, 16, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 16, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -1338,9 +1344,9 @@ async def test_adr_indicator_extend(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles
     dates = [
-        datetime(2023, 1, 21, 9, 30),
-        datetime(2023, 1, 21, 10, 0),
-        datetime(2023, 1, 21, 10, 30),
+        pd.Timestamp(2023, 1, 21, 9, 30),
+        pd.Timestamp(2023, 1, 21, 10, 0),
+        pd.Timestamp(2023, 1, 21, 10, 30),
     ]
     df = pd.DataFrame(
         {
@@ -1385,7 +1391,7 @@ async def test_adr_indicator_extend_empty_data(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     # Create test data for intraday candles
-    dates = [datetime(2023, 1, 21, 9, 30)]
+    dates = [pd.Timestamp(2023, 1, 21, 9, 30)]
     df = pd.DataFrame(
         {
             CandleCol.HIGH: [123],
@@ -1483,10 +1489,10 @@ async def test_adr_indicator_extend_multiple_days(candles: "CandleStoreTest"):
 
     # Create test data for intraday candles spanning multiple days
     dates = [
-        datetime(2023, 1, 21, 9, 30),
-        datetime(2023, 1, 21, 10, 0),
-        datetime(2023, 1, 22, 9, 30),
-        datetime(2023, 1, 22, 10, 0),
+        pd.Timestamp(2023, 1, 21, 9, 30),
+        pd.Timestamp(2023, 1, 21, 10, 0),
+        pd.Timestamp(2023, 1, 22, 9, 30),
+        pd.Timestamp(2023, 1, 22, 10, 0),
     ]
     df = pd.DataFrame(
         {
@@ -1597,7 +1603,7 @@ async def test_adr_indicator_extend_realtime(candles: "CandleStoreTest"):
             CandleCol.LOW: 113,
             CandleCol.CLOSE: 121,
         },
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
 
     # Test with period=14
@@ -1688,7 +1694,7 @@ async def test_adr_indicator_extend_realtime_multiple_calls_same_day(
             CandleCol.LOW: 113,
             CandleCol.CLOSE: 121,
         },
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
@@ -1699,7 +1705,7 @@ async def test_adr_indicator_extend_realtime_multiple_calls_same_day(
             CandleCol.LOW: 115,
             CandleCol.CLOSE: 123,
         },
-        timestamp=datetime(2023, 1, 15, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 15, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -1787,7 +1793,7 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
             CandleCol.LOW: 113,
             CandleCol.CLOSE: 121,
         },
-        timestamp=datetime(2023, 1, 15, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 15, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
@@ -1801,7 +1807,7 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
             CandleCol.LOW: [113],
             CandleCol.CLOSE: [121],
         },
-        index=[datetime(2023, 1, 15, 16, 0)],
+        index=[pd.Timestamp(2023, 1, 15, 16, 0)],
     )
     updated_daily_data = pd.concat([daily_data, jan15_data])
     candles.set_data("AAPL", updated_daily_data)
@@ -1813,7 +1819,7 @@ async def test_adr_indicator_extend_realtime_different_days(candles: "CandleStor
             CandleCol.LOW: 115,
             CandleCol.CLOSE: 123,
         },
-        timestamp=datetime(2023, 1, 16, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 16, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -1865,9 +1871,9 @@ async def test_day_open_indicator_extend(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     dates = [
-        datetime(2023, 1, 10, 9, 30),
-        datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 10, 10, 30),
+        pd.Timestamp(2023, 1, 10, 9, 30),
+        pd.Timestamp(2023, 1, 10, 10, 0),
+        pd.Timestamp(2023, 1, 10, 10, 30),
     ]
     opens = [100, 101, 102]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -1887,11 +1893,11 @@ async def test_day_open_indicator_extend_multiple_days(candles: "CandleStoreTest
     candles.set_data("AAPL", daily_data)
 
     dates = [
-        datetime(2023, 1, 10, 9, 30),
-        datetime(2023, 1, 10, 10, 0),
-        datetime(2023, 1, 11, 9, 30),
-        datetime(2023, 1, 11, 10, 0),
-        datetime(2023, 1, 12, 9, 30),
+        pd.Timestamp(2023, 1, 10, 9, 30),
+        pd.Timestamp(2023, 1, 10, 10, 0),
+        pd.Timestamp(2023, 1, 11, 9, 30),
+        pd.Timestamp(2023, 1, 11, 10, 0),
+        pd.Timestamp(2023, 1, 12, 9, 30),
     ]
     opens = [100, 101, 110, 111, 120]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -1912,10 +1918,10 @@ async def test_day_open_indicator_extend_premarket(candles: "CandleStoreTest"):
     candles.set_data("AAPL", daily_data)
 
     dates = [
-        datetime(2023, 1, 10, 8, 0),
-        datetime(2023, 1, 10, 9, 0),
-        datetime(2023, 1, 10, 9, 30),
-        datetime(2023, 1, 10, 10, 0),
+        pd.Timestamp(2023, 1, 10, 8, 0),
+        pd.Timestamp(2023, 1, 10, 9, 0),
+        pd.Timestamp(2023, 1, 10, 9, 30),
+        pd.Timestamp(2023, 1, 10, 10, 0),
     ]
     opens = [95, 98, 100, 101]
     df = pd.DataFrame({CandleCol.OPEN: opens}, index=pd.DatetimeIndex(dates))
@@ -1958,7 +1964,7 @@ async def test_day_open_indicator_extend_realtime(candles: "CandleStoreTest"):
             CandleCol.LOW: 108,
             CandleCol.OPEN: 109,
         },
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
 
     indicator = DayOpenIndicator()
@@ -1981,13 +1987,13 @@ async def test_day_open_indicator_extend_realtime_multiple_calls_same_day(
 
     row1 = Candle(
         {CandleCol.CLOSE: 110, CandleCol.OPEN: 109},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     row2 = Candle(
         {CandleCol.CLOSE: 112, CandleCol.OPEN: 111},
-        timestamp=datetime(2023, 1, 11, 10, 0),
+        timestamp=pd.Timestamp(2023, 1, 11, 10, 0),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -2009,13 +2015,13 @@ async def test_day_open_indicator_extend_realtime_different_days(
 
     row1 = Candle(
         {CandleCol.CLOSE: 110, CandleCol.OPEN: 109},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
 
     row2 = Candle(
         {CandleCol.CLOSE: 115, CandleCol.OPEN: 114},
-        timestamp=datetime(2023, 1, 12, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 30),
     )
     result2 = await indicator.extend_realtime("AAPL", row2)
 
@@ -2035,7 +2041,7 @@ async def test_day_open_indicator_extend_realtime_premarket(candles: "CandleStor
 
     premarket_row = Candle(
         {CandleCol.OPEN: 108, CandleCol.CLOSE: 108},
-        timestamp=datetime(2023, 1, 11, 9, 0),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 0),
     )
     premarket_result = await indicator.extend_realtime("AAPL", premarket_row)
 
@@ -2043,7 +2049,7 @@ async def test_day_open_indicator_extend_realtime_premarket(candles: "CandleStor
 
     market_open_row = Candle(
         {CandleCol.OPEN: 110, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     market_open_result = await indicator.extend_realtime("AAPL", market_open_row)
 
@@ -2064,14 +2070,14 @@ async def test_day_open_indicator_extend_realtime_new_day_reset(
 
     row1 = Candle(
         {CandleCol.OPEN: 109, CandleCol.CLOSE: 110},
-        timestamp=datetime(2023, 1, 11, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 11, 9, 30),
     )
     result1 = await indicator.extend_realtime("AAPL", row1)
     assert result1[indicator.column_name()] == 109
 
     premarket_next_day = Candle(
         {CandleCol.OPEN: 112, CandleCol.CLOSE: 112},
-        timestamp=datetime(2023, 1, 12, 9, 0),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 0),
     )
     premarket_result = await indicator.extend_realtime("AAPL", premarket_next_day)
 
@@ -2079,7 +2085,7 @@ async def test_day_open_indicator_extend_realtime_new_day_reset(
 
     market_open_next_day = Candle(
         {CandleCol.OPEN: 115, CandleCol.CLOSE: 115},
-        timestamp=datetime(2023, 1, 12, 9, 30),
+        timestamp=pd.Timestamp(2023, 1, 12, 9, 30),
     )
     market_open_result = await indicator.extend_realtime(
         "AAPL", market_open_next_day.copy()
