@@ -19,6 +19,7 @@ from fastscanner.adapters.realtime.void_channel import VoidChannel
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 from fastscanner.services.indicators.lib import Indicator
 from fastscanner.services.indicators.lib.candle import PositionInRangeIndicator
 from fastscanner.services.indicators.lib.daily import (
@@ -96,6 +97,7 @@ async def _run_async(
     end_date: date,
     freq: str,
 ):
+    init_metrics(role="scanner")
     # We set the clock to a fixed date to ensure that adjustments are done correctly
     ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(

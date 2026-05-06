@@ -9,12 +9,14 @@ import uvloop
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 
 async def main():
+    init_metrics(role="eodhd_provider")
     fetcher = EODHDFundamentalStore(config.EOD_HD_BASE_URL, config.EOD_HD_API_KEY)
     symbol = "AAPL"
 

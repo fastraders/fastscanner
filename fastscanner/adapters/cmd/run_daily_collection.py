@@ -15,12 +15,14 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 
 async def _collect_batch(symbols: list[str]) -> None:
+    init_metrics(role="daily_collection")
     ClockRegistry.set(FixedClock(LocalClock().now()))
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
@@ -60,6 +62,7 @@ def _run_batch(batch: list[str]) -> None:
 
 
 async def collect_daily_data(only_active: bool = False) -> None:
+    init_metrics(role="daily_collection")
     logger.error("Starting daily data collection")
     ClockRegistry.set(FixedClock(LocalClock().now()))
     provider = PolygonCandlesProvider(

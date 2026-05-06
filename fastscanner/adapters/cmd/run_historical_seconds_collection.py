@@ -8,12 +8,14 @@ from fastscanner.adapters.candle.polygon_trades import PolygonCandlesFromTradesC
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 
 async def run():
+    init_metrics(role="historical_seconds_collection")
     now = LocalClock().now()
     ClockRegistry.set(FixedClock(now))
     collector = PolygonCandlesFromTradesCollector(

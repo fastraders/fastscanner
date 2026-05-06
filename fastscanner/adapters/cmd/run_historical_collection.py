@@ -14,6 +14,7 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import ClockRegistry, FixedClock, LocalClock
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 
 load_logging_config()
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ async def _collect(
 
 
 async def _collect_batch(symbols: list[str], now: datetime) -> None:
+    init_metrics(role="historical_collection")
     ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(
         config.POLYGON_BASE_URL,
@@ -85,6 +87,7 @@ def _run_batch(batch: tuple[list[str], datetime]) -> None:
 
 
 async def run_data_collect():
+    init_metrics(role="historical_collection")
     now = LocalClock().now()
     ClockRegistry.set(FixedClock(now))
     polygon = PolygonCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)

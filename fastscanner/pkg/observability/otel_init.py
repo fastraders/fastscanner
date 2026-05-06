@@ -1,6 +1,6 @@
+import atexit
 import logging
 import os
-from typing import Literal
 
 from opentelemetry import metrics as otel_metrics
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -14,7 +14,10 @@ from opentelemetry.sdk.resources import Resource
 
 logger = logging.getLogger(__name__)
 
-Role = Literal["rest_api", "writer", "caching", "test"]
+# Role identifies which entry-point/script emitted the metrics; surfaces in
+# Prometheus as the `service_role` label. Free-form string so all run_*.py
+# scripts can declare their own without a central registry.
+Role = str
 
 _OTLP_ENDPOINT_ENV = "OTEL_EXPORTER_OTLP_ENDPOINT"
 _DEFAULT_OTLP_ENDPOINT = "http://localhost:4317"
@@ -25,6 +28,7 @@ class _ProviderState:
     provider: MeterProvider | None = None
     in_memory_reader: InMemoryMetricReader | None = None
     role: Role | None = None
+    atexit_registered: bool = False
 
 
 _state = _ProviderState()
@@ -57,6 +61,9 @@ def setup_meter_provider(role: Role, *, in_memory: bool = False) -> MeterProvide
     otel_metrics.set_meter_provider(provider)
     _state.provider = provider
     _state.role = role
+    if not _state.atexit_registered and not in_memory:
+        atexit.register(shutdown)
+        _state.atexit_registered = True
     logger.info("otel: MeterProvider initialized (role=%s, in_memory=%s)", role, in_memory)
     return provider
 

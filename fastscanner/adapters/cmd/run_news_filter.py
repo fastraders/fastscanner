@@ -17,6 +17,8 @@ import sys
 import textwrap
 from pathlib import Path
 
+from fastscanner.pkg.observability import init_metrics
+
 NEWS_DIR = Path(__file__).parent / "news"
 HEADLINES_CSV = NEWS_DIR / "headlines.csv"
 OLD_PROMPT_FILE = NEWS_DIR / "old_prompt.txt"
@@ -265,6 +267,7 @@ def _print_report(
 
 
 async def _main() -> None:
+    init_metrics(role="news_filter")
     if shutil.which("codex") is None:
         print("Error: codex CLI not found in PATH", file=sys.stderr)
         sys.exit(1)

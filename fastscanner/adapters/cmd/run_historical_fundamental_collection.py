@@ -5,6 +5,7 @@ from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.adapters.fundamental.eodhd import EODHDFundamentalStore
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 from fastscanner.services.exceptions import NotFound
 
 load_logging_config()
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 async def run_data_collect():
+    init_metrics(role="historical_fundamental_collection")
     eodhd = EODHDFundamentalStore(
         config.EOD_HD_BASE_URL,
         config.EOD_HD_API_KEY,

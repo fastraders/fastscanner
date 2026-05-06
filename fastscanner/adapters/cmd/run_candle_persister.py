@@ -14,6 +14,7 @@ from fastscanner.client.candle import CandleClient, CandleMessage
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 from fastscanner.services.indicators.ports import CandleCol
 
 load_logging_config()
@@ -230,6 +231,7 @@ class UnsubscribeHandler:
 
 
 async def main():
+    init_metrics(role="candle_persister")
     nats_channel = NATSChannel(servers=config.NATS_SERVER)
     candle_client = CandleClient(host=config.SERVER_HOST, port=config.SERVER_PORT)
     persister = CandlePersister(candle_client)

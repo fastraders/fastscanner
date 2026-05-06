@@ -13,6 +13,7 @@ from fastscanner.adapters.candle.partitioned_csv import PartitionedCSVCandlesPro
 from fastscanner.adapters.candle.polygon import PolygonCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.clock import LOCAL_TIMEZONE, ClockRegistry, FixedClock, LocalClock
+from fastscanner.pkg.observability import init_metrics
 from fastscanner.services.indicators.ports import CandleCol, CandleStore
 
 logging.getLogger().setLevel(logging.INFO)
@@ -441,6 +442,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    init_metrics(role="candles_integrity_check")
     ClockRegistry.set(FixedClock(LocalClock().now()))
 
     check_date_val = None

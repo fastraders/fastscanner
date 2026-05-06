@@ -10,12 +10,14 @@ import uvloop
 from fastscanner.adapters.candle.parquet import ParquetCandlesProvider
 from fastscanner.pkg import config
 from fastscanner.pkg.logging import load_logging_config
+from fastscanner.pkg.observability import init_metrics
 
 load_logging_config()
 logger = logging.getLogger(__name__)
 
 
 async def main():
+    init_metrics(role="data_provider")
     provider = ParquetCandlesProvider(config.POLYGON_BASE_URL, config.POLYGON_API_KEY)
     start_dt = date(2023, 1, 1)
     end_dt = date(2023, 12, 1)
