@@ -152,7 +152,10 @@ async def main():
         f"Daily pre-warm task started for {len(prewarmable_indicators)} indicators"
     )
 
-    sub_id = await indicators_service.cache_indicators(indicators_with_cache)
+    non_prewarmable_indicators = [
+        ind for ind in indicators_with_cache if ind not in prewarmable_indicators
+    ]
+    sub_id = await indicators_service.cache_indicators(non_prewarmable_indicators)
     logger.info(f"Subscribed to all symbols. Starting caching loop...")
     try:
         while True:
