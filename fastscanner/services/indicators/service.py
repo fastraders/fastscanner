@@ -134,6 +134,9 @@ class IndicatorsService:
         indicator_instances = [
             IndicatorsLibrary.instance().get(i.type_, i.params) for i in indicators
         ]
+        await asyncio.gather(
+            *(self._load_cached_indicator(i, symbol) for i in indicator_instances)
+        )
 
         _, unit = split_freq(freq)
         unit_to_channel = {
@@ -177,6 +180,22 @@ class IndicatorsService:
         # Configures the handler to receive messages from the channel
         await self.channel.subscribe(stream_key, sub_handler)
         return sub_handler.id()
+
+    async def _load_cached_indicator(self, i: Indicator, symbol: str) -> None:
+        if not isinstance(i, Cacheable):
+            return
+        col = i.column_name()
+        try:
+            await i.load_from_cache(symbol)
+            metrics.indicator_cache_load(col, "ok")
+        except KeyError:
+            metrics.indicator_cache_load(col, "miss")
+            logger.debug("Cache miss loading indicator %s for %s", col, symbol)
+        except Exception:
+            metrics.indicator_cache_load(col, "error")
+            logger.exception(
+                "Error loading cached indicator %s for %s", col, symbol
+            )
 
     async def cache_indicators(
         self,

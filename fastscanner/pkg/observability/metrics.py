@@ -11,6 +11,7 @@ from opentelemetry.metrics import (
 from fastscanner.pkg.observability import buckets, otel_init
 
 CacheSaveResult = Literal["ok", "error"]
+CacheLoadResult = Literal["ok", "miss", "error"]
 SubscriptionKind = Literal[
     "websocket_indicator",
     "scanner_wildcard",
@@ -43,6 +44,10 @@ class _Metrics:
         self.indicator_cache_save_total: Counter = meter.create_counter(
             name="fs.indicator.cache.save",
             description="Indicator cache save attempts.",
+        )
+        self.indicator_cache_load_total: Counter = meter.create_counter(
+            name="fs.indicator.cache.load",
+            description="Indicator cache load attempts, by indicator name and result.",
         )
         self.indicator_extend_errors_total: Counter = meter.create_counter(
             name="fs.indicator.extend.errors",
@@ -335,6 +340,9 @@ class _Metrics:
     def indicator_cache_save(self, name: str, result: CacheSaveResult) -> None:
         self.indicator_cache_save_total.add(1, {"name": name, "result": result})
 
+    def indicator_cache_load(self, name: str, result: CacheLoadResult) -> None:
+        self.indicator_cache_load_total.add(1, {"name": name, "result": result})
+
     def external_request(
         self, source: str, endpoint: str, code: int, latency_seconds: float
     ) -> None:
@@ -549,6 +557,10 @@ def indicator_extend_error(name: str) -> None:
 
 def indicator_cache_save(name: str, result: CacheSaveResult) -> None:
     _get().indicator_cache_save(name, result)
+
+
+def indicator_cache_load(name: str, result: CacheLoadResult) -> None:
+    _get().indicator_cache_load(name, result)
 
 
 def external_request(

@@ -377,7 +377,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\",outcome=~\"exception|fail_open\"}[1h])) / clamp_min(sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\"}[1h])), 1)",
+          "expr": "sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\",outcome=~\"exception\"}[1h])) / clamp_min(sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\"}[1h])), 1)",
           "refId": "A"
         }
       ],

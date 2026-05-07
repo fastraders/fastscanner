@@ -180,9 +180,7 @@ class NewsConfidenceIndicator:
                 self._cache_key(symbol),
                 self._encode_cache(today, merged),
             )
-            if latest is None:
-                outcome = "fail_open"
-            elif latest == 0:
+            if latest is None or latest == 0:
                 outcome = "empty"
             else:
                 outcome = "scored"
@@ -231,12 +229,12 @@ class NewsConfidenceIndicator:
         headlines = self._round_robin_truncate(per_source, MAX_HEADLINES_PER_SYMBOL)
 
         if not headlines:
-            return 0
+            return None
 
         seen = self._seen_headlines.setdefault(symbol, set())
         new_headlines = [h for h in headlines if h.title not in seen]
         if not new_headlines:
-            return 0
+            return None
 
         try:
             scored = await self._score_with_codex(symbol, new_headlines)
@@ -252,7 +250,7 @@ class NewsConfidenceIndicator:
         seen.update(h.title for h in new_headlines)
 
         if not scored:
-            return 0
+            return None
         max_score = max(conf for _h, conf in scored)
         kept = sum(1 for _h, conf in scored if conf > CONFIDENCE_THRESHOLD)
         logger.info(
@@ -324,7 +322,9 @@ class NewsConfidenceIndicator:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            metrics.codex_invocation("timeout", _time_module.perf_counter() - codex_start)
+            metrics.codex_invocation(
+                "timeout", _time_module.perf_counter() - codex_start
+            )
             raise RuntimeError(f"codex timed out after {CODEX_TIMEOUT}s")
 
         if proc.returncode != 0:
