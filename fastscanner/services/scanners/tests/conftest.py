@@ -11,6 +11,7 @@ from fastscanner.adapters.rest.main import app
 from fastscanner.adapters.rest.scanner import get_scanner_service
 from fastscanner.pkg.candle import Candle
 from fastscanner.pkg.clock import ClockRegistry, FixedClock
+from fastscanner.pkg.observability import metrics, otel_init, registry
 from fastscanner.services.indicators.ports import (
     Cache,
     CandleCol,
@@ -21,6 +22,16 @@ from fastscanner.services.registry import ApplicationRegistry
 from fastscanner.services.scanners.lib import ScannersLibrary
 from fastscanner.services.scanners.ports import ScannerParams
 from fastscanner.services.scanners.service import ScannerService, SubscriptionHandler
+
+
+@pytest.fixture(autouse=True)
+def _isolate_metrics():
+    otel_init.shutdown()
+    metrics._reset_for_test()
+    registry.init_metrics(role="test", in_memory=True)
+    yield otel_init.in_memory_reader()
+    otel_init.shutdown()
+    metrics._reset_for_test()
 
 
 class DummyScanner:

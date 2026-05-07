@@ -108,16 +108,22 @@ the headline clearly indicates:
   CLINICAL / BIOTECH (positive RESULTS only, not applications):
     - Positive Phase 2, Phase 2b, Phase 3, or Phase 3b results
     - Positive cancer-related trial results
-    - Major breakthrough indications with positive results,
-      including:
+    - Positive preclinical / in vivo cancer-model results with
+      explicit efficacy above 85% -> 90-100 (TIER-DEFINING).
+      This includes survival, tumor elimination, complete response,
+      tumor regression, or tumor growth inhibition. Results stating
+      100% survival, complete tumor elimination, complete remission,
+      or all treated subjects tumor-free must score in the 90s.
+    - Major breakthrough indications with positive results ->
+      90-100 (TIER-DEFINING), including:
         * Cancer cures
-        * Alzheimer's disease treatments or cures
+        * Alzheimer's disease highly effective treatments or cures
         * Anti-aging / de-aging
         * ALS, Parkinson's, Huntington's cures
         * Cures for genetic diseases (sickle cell, cystic fibrosis,
           muscular dystrophy)
         * HIV cures (not just treatments)
-        * Type 1 diabetes cures (not just management)
+        * Type 1 & 2 diabetes cures (not just management)
         * Spinal cord injury reversal / paralysis treatments
         * Blindness or deafness reversal
         * Universal vaccines (cancer vaccine, universal flu vaccine)
@@ -356,8 +362,13 @@ CLINICAL / BIOTECH RESULTS (BIOTECH-SPECIFIC):
   - Positive Phase 2, Phase 2b, Phase 3, or Phase 3b results
     -> 90-100 (TIER-DEFINING)
   - Positive cancer-related trial results -> 90-100 (TIER-DEFINING)
+  - Positive preclinical / in vivo cancer-model results with
+    explicit efficacy above 85% -> 90-100 (TIER-DEFINING)
+  - Positive preclinical / in vivo cancer-model results stating
+    100% survival, complete tumor elimination, complete remission,
+    or all treated subjects tumor-free -> 95-100
   - Major breakthrough indications with positive results
-    -> 75-89 (HIGH). Do NOT bump to 90+. Includes:
+    -> 90-100 (TIER-DEFINING). Includes:
         * Cancer cures
         * Alzheimer's disease treatments or cures
         * Anti-aging / de-aging
