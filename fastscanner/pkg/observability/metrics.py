@@ -1,8 +1,10 @@
-from typing import Literal
+from typing import Iterable, Literal
 
 from opentelemetry.metrics import (
+    CallbackOptions,
     Counter,
     Histogram,
+    Observation,
     UpDownCounter,
     _Gauge,
     get_meter,
@@ -239,16 +241,18 @@ class _Metrics:
                 buckets.PREWARM_DURATION_SECONDS[:-1]
             ),
         )
-        self.indicator_prewarm_last_success_ts: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.indicator.prewarm.last.success.timestamp",
             description=(
                 "Unix epoch seconds of the last successful pre-warm completion "
                 "(after the per-day completion marker was written)."
             ),
+            callbacks=[self._observe_prewarm_last_success_ts],
         )
-        self.indicator_prewarm_last_failed_symbols: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.indicator.prewarm.last.failed.symbols",
             description="Failed (symbol, indicator) pairs in the most recent pre-warm run.",
+            callbacks=[self._observe_prewarm_last_failed_symbols],
         )
         self.indicator_prewarm_inflight: _Gauge = meter.create_gauge(
             name="fs.indicator.prewarm.inflight",
@@ -274,41 +278,59 @@ class _Metrics:
             ),
         )
 
-        self.first_candle_delay_seconds: _Gauge = meter.create_gauge(
+        # Writer-side state-tracking gauges. The OTel sync `_Gauge` does not
+        # re-emit on subsequent collects without a fresh `set()`, and the
+        # otel-collector's prometheus exporter drops series after
+        # `metric_expiration: 5m`. Using ObservableGauge with internal state
+        # makes the callback re-emit the last known value on every export.
+        self._first_candle_delay_state: float | None = None
+        self._candle_arrival_spread_state: float | None = None
+        self._polygon_ws_connected_state: int | None = None
+        self._market_is_open_state: int | None = None
+        self._daily_reset_in_progress_state: int | None = None
+        self._prewarm_last_success_ts_state: float | None = None
+        self._prewarm_last_failed_symbols_state: int | None = None
+
+        meter.create_observable_gauge(
             name="fs.first.candle.delay",
             unit="s",
             description=(
                 "Wall-clock seconds past the bar end when the FIRST candle for the "
                 "most recently observed minute arrived from Polygon."
             ),
+            callbacks=[self._observe_first_candle_delay],
         )
-        self.candle_arrival_spread_seconds: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.candle.arrival.spread",
             unit="s",
             description=(
                 "Seconds between the first and last candle arrival for the most "
                 "recently completed minute bar."
             ),
+            callbacks=[self._observe_candle_arrival_spread],
         )
         self.nats_pending_messages: _Gauge = meter.create_gauge(
             name="fs.nats.pending.messages",
             description="Depth of NATSChannel._pending_messages at flush boundary.",
         )
-        self.polygon_ws_connected: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.polygon.ws.connected",
             description="1 if the Polygon WebSocket is connected; 0 otherwise.",
+            callbacks=[self._observe_polygon_ws_connected],
         )
         self.active_subscriptions: _Gauge = meter.create_gauge(
             name="fs.active.subscriptions",
             description="Active subscription count by kind.",
         )
-        self.market_is_open: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.market.is.open",
             description="1 if the equity market is currently open; 0 otherwise.",
+            callbacks=[self._observe_market_is_open],
         )
-        self.daily_reset_in_progress: _Gauge = meter.create_gauge(
+        meter.create_observable_gauge(
             name="fs.daily.reset.in.progress",
             description="1 while the realtime writer is performing scheduled daily reset.",
+            callbacks=[self._observe_daily_reset_in_progress],
         )
 
     def candle_received(self, symbol_class: str) -> None:
@@ -472,10 +494,10 @@ class _Metrics:
         self.indicator_prewarm_symbols_total.add(1, {"outcome": outcome})
 
     def indicator_prewarm_last_success(self, ts_seconds: float) -> None:
-        self.indicator_prewarm_last_success_ts.set(ts_seconds)
+        self._prewarm_last_success_ts_state = ts_seconds
 
     def indicator_prewarm_failed_symbols(self, count: int) -> None:
-        self.indicator_prewarm_last_failed_symbols.set(count)
+        self._prewarm_last_failed_symbols_state = count
 
     def indicator_prewarm_inflight_set(self, count: int) -> None:
         self.indicator_prewarm_inflight.set(count)
@@ -490,22 +512,78 @@ class _Metrics:
         )
 
     def set_first_candle_delay(self, delay_seconds: float) -> None:
-        self.first_candle_delay_seconds.set(delay_seconds)
+        self._first_candle_delay_state = delay_seconds
 
     def set_candle_arrival_spread(self, spread_seconds: float) -> None:
-        self.candle_arrival_spread_seconds.set(spread_seconds)
+        self._candle_arrival_spread_state = spread_seconds
 
     def set_ws_connected(self, connected: bool) -> None:
-        self.polygon_ws_connected.set(1 if connected else 0)
+        self._polygon_ws_connected_state = 1 if connected else 0
 
     def set_active_subscriptions(self, kind: SubscriptionKind, count: int) -> None:
         self.active_subscriptions.set(count, {"kind": kind})
 
     def set_market_open(self, is_open: bool) -> None:
-        self.market_is_open.set(1 if is_open else 0)
+        self._market_is_open_state = 1 if is_open else 0
 
     def set_daily_reset(self, in_progress: bool) -> None:
-        self.daily_reset_in_progress.set(1 if in_progress else 0)
+        self._daily_reset_in_progress_state = 1 if in_progress else 0
+
+    # ---- ObservableGauge callbacks ----
+    # Each callback re-emits the last value set on every export interval, so
+    # gauges set on rare events (connect, daily reset, prewarm completion) do
+    # not age out of the otel-collector prometheus exporter (5 min expiration).
+    # Returning [] when never set yields a Prometheus "no data" point, which is
+    # the desired signal for "this gauge has never been observed".
+
+    def _observe_first_candle_delay(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._first_candle_delay_state is None:
+            return []
+        return [Observation(self._first_candle_delay_state)]
+
+    def _observe_candle_arrival_spread(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._candle_arrival_spread_state is None:
+            return []
+        return [Observation(self._candle_arrival_spread_state)]
+
+    def _observe_polygon_ws_connected(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._polygon_ws_connected_state is None:
+            return []
+        return [Observation(self._polygon_ws_connected_state)]
+
+    def _observe_market_is_open(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._market_is_open_state is None:
+            return []
+        return [Observation(self._market_is_open_state)]
+
+    def _observe_daily_reset_in_progress(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._daily_reset_in_progress_state is None:
+            return []
+        return [Observation(self._daily_reset_in_progress_state)]
+
+    def _observe_prewarm_last_success_ts(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._prewarm_last_success_ts_state is None:
+            return []
+        return [Observation(self._prewarm_last_success_ts_state)]
+
+    def _observe_prewarm_last_failed_symbols(
+        self, options: CallbackOptions
+    ) -> Iterable[Observation]:
+        if self._prewarm_last_failed_symbols_state is None:
+            return []
+        return [Observation(self._prewarm_last_failed_symbols_state)]
 
 
 _instance: _Metrics | None = None

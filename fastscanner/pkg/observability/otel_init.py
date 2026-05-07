@@ -43,7 +43,16 @@ def setup_meter_provider(role: Role, *, in_memory: bool = False) -> MeterProvide
             )
         return _state.provider
 
-    resource = Resource.create({"service.name": "fastscanner", "service.role": role})
+    resource = Resource.create(
+        {
+            "service.name": "fastscanner",
+            "service.role": role,
+            # `rest_api` runs ~90 uvicorn workers; without a per-process
+            # discriminator, every worker pushes the same series tuple and the
+            # otel-collector's prometheus exporter clobbers them last-write-wins.
+            "service.instance.id": f"{role}-{os.getpid()}",
+        }
+    )
 
     if in_memory:
         reader: PeriodicExportingMetricReader | InMemoryMetricReader = (

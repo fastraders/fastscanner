@@ -198,9 +198,10 @@ class NewsConfidenceIndicator:
 
         Returns:
             int 0-100: max score across this batch of new headlines.
-            0:        no headlines retrieved or no headlines new since last call.
-            None:     Codex CLI missing, timed out, errored, or returned no
-                      valid entries (fail-open with explicit unknown).
+            None:     no headlines retrieved, no new headlines since last call,
+                      or Codex CLI missing/timed out/errored/returned no valid
+                      entries (fail-open with explicit unknown — we have no
+                      information to score, not a definitive zero).
         """
         today_str = ClockRegistry.clock.now().strftime("%Y-%m-%d")
         sources: tuple[tuple[str, Any], ...] = (

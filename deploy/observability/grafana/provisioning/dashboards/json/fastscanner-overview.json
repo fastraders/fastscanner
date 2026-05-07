@@ -58,7 +58,7 @@
       "type": "stat",
       "gridPos": {"h": 4, "w": 5, "x": 9, "y": 1},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "avg_over_time(fs_first_candle_delay[5m])", "refId": "A"}],
+      "targets": [{"expr": "avg_over_time(fs_first_candle_delay_seconds[5m])", "refId": "A"}],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
@@ -79,7 +79,7 @@
       "type": "stat",
       "gridPos": {"h": 4, "w": 5, "x": 14, "y": 1},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "avg_over_time(fs_candle_arrival_spread[5m])", "refId": "A"}],
+      "targets": [{"expr": "avg_over_time(fs_candle_arrival_spread_seconds[5m])", "refId": "A"}],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
@@ -138,7 +138,7 @@
       "gridPos": {"h": 4, "w": 6, "x": 6, "y": 6},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
-        {"expr": "sum(increase(fs_ws_message_pushed_total{result!=\"ok\"}[5m]))", "refId": "A"}
+        {"expr": "sum(increase(fs_ws_message_pushed_total{result!=\"ok\"}[5m])) or vector(0)", "refId": "A"}
       ],
       "fieldConfig": {
         "defaults": {
@@ -162,7 +162,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(http_server_request_duration_seconds_count{service_role=\"rest_api\",http_response_status_code=~\"5..\"}[5m]))",
+          "expr": "sum(increase(http_server_request_duration_seconds_count{service_role=\"rest_api\",http_response_status_code=~\"5..\"}[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -273,7 +273,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_indicator_cache_save_total{result=\"error\"}[1h]))",
+          "expr": "sum(increase(fs_indicator_cache_save_total{result=\"error\"}[1h])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -299,7 +299,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "time() - fs_indicator_cache_last_success_timestamp",
+          "expr": "time() - max by (name) (fs_indicator_cache_last_success_timestamp)",
           "instant": true,
           "format": "table",
           "refId": "A"
@@ -533,17 +533,29 @@
     },
     {
       "id": 51,
-      "title": "Symbols processed in last run",
+      "title": "Symbols processed in last 24h",
       "type": "stat",
       "gridPos": {"h": 4, "w": 6, "x": 6, "y": 48},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_daily_symbols_processed_total[24h]))",
+          "expr": "sum(increase(fs_daily_symbols_processed_total[24h])) or vector(0)",
           "refId": "A"
         }
       ],
-      "fieldConfig": {"defaults": {"unit": "none"}}
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 100}
+            ]
+          }
+        }
+      }
     },
     {
       "id": 52,
@@ -553,7 +565,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_daily_symbols_processed_total{outcome=\"failed\"}[24h]))",
+          "expr": "sum(increase(fs_daily_symbols_processed_total{outcome=\"failed\"}[24h])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -614,7 +626,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_external_requests_total{source=\"polygon_rest\",code=~\"5..|429\"}[1h])) / clamp_min(sum(increase(fs_external_requests_total{source=\"polygon_rest\"}[1h])), 1)",
+          "expr": "(sum(increase(fs_external_requests_total{source=\"polygon_rest\",code=~\"5..|429\"}[1h])) or vector(0)) / clamp_min(sum(increase(fs_external_requests_total{source=\"polygon_rest\"}[1h])), 1)",
           "refId": "A"
         }
       ],
@@ -640,7 +652,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(fs_codex_invocations_total{outcome=\"ok\"}[1h])) / clamp_min(sum(increase(fs_codex_invocations_total[1h])), 1)",
+          "expr": "sum(increase(fs_codex_invocations_total{outcome=\"ok\"}[1h])) / clamp_min(sum(increase(fs_codex_invocations_total{outcome=~\"ok|error|timeout\"}[1h])), 1)",
           "refId": "A"
         }
       ],
@@ -660,20 +672,23 @@
     },
     {
       "id": 62,
-      "title": "News provider HTTP error rate (1h, by source)",
-      "type": "stat",
+      "title": "News provider HTTP error rate (1h, by endpoint)",
+      "type": "bargauge",
       "gridPos": {"h": 4, "w": 8, "x": 16, "y": 53},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (endpoint) (increase(fs_external_requests_total{source=\"news\",code!~\"2..\"}[1h])) / clamp_min(sum by (endpoint) (increase(fs_external_requests_total{source=\"news\"}[1h])), 1)",
+          "expr": "(sum by (endpoint) (increase(fs_external_requests_total{source=\"news\",code=~\"4..|5..\"}[1h])) or vector(0)) / clamp_min(sum by (endpoint) (increase(fs_external_requests_total{source=\"news\"}[1h])), 1)",
           "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
       ],
+      "options": {"orientation": "horizontal", "displayMode": "gradient"},
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "min": 0,
+          "max": 1,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -708,6 +723,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "noValue": "never run",
+          "mappings": [
+            {"type": "special", "options": {"match": "null", "result": {"color": "red", "text": "never run"}}}
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -745,7 +764,7 @@
     {
       "id": 72,
       "title": "Pre-warm runs by outcome (24h)",
-      "type": "stat",
+      "type": "bargauge",
       "gridPos": {"h": 4, "w": 8, "x": 16, "y": 58},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
@@ -755,7 +774,78 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": {"defaults": {"unit": "none"}}
+      "options": {"orientation": "horizontal", "displayMode": "gradient"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "error"},
+              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+            },
+            {
+              "matcher": {"id": "byName", "options": "partial"},
+              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 900,
+      "title": "Indicator cache loads (rest_api)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 62},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 80,
+      "title": "Indicator cache loads (by name & result)",
+      "description": "Pre-warmable indicators are loaded from cache instead of re-extending. This panel exposes that path; complements the indicator-extend panel which only sees non-prewarmable extends.",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 16, "x": 0, "y": 63},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (name, result) (rate(fs_indicator_cache_load_total{service_role=\"rest_api\"}[5m]))",
+          "legendFormat": "{{name}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 81,
+      "title": "Cache load error rate (5m)",
+      "type": "stat",
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 63},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "(sum(increase(fs_indicator_cache_load_total{service_role=\"rest_api\",result=\"error\"}[5m])) or vector(0)) / clamp_min(sum(increase(fs_indicator_cache_load_total{service_role=\"rest_api\"}[5m])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.01},
+              {"color": "red", "value": 0.05}
+            ]
+          }
+        }
+      }
     }
   ]
 }

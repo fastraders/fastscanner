@@ -414,7 +414,7 @@ async def test_producer_writes_null_when_codex_fails_with_no_prior():
 
 
 @pytest.mark.asyncio
-async def test_score_returns_zero_when_no_headlines():
+async def test_score_returns_none_when_no_headlines():
     indicator = NewsConfidenceIndicator()
     with patch.object(
         indicator, "_finviz_headlines", new=AsyncMock(return_value=[])
@@ -427,7 +427,7 @@ async def test_score_returns_zero_when_no_headlines():
     ), patch.object(
         indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
     ):
-        assert await indicator._score_new_headlines_today("AAPL") == 0
+        assert await indicator._score_new_headlines_today("AAPL") is None
 
 
 @pytest.mark.asyncio
