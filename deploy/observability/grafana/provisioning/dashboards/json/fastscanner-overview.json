@@ -1,0 +1,689 @@
+{
+  "title": "Fastscanner — Operational Overview",
+  "uid": "fastscanner-overview",
+  "schemaVersion": 42,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "tags": ["fastscanner", "overview"],
+  "panels": [
+    {
+      "type": "row",
+      "id": 100,
+      "title": "Live ingest (writer)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 1,
+      "title": "Polygon WebSocket",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "max(fs_polygon_ws_connected)", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Candles received last 5m",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 5, "x": 4, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(fs_candles_received_total[5m]))", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 100}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "First-candle delay (avg 5m)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 5, "x": 9, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "avg_over_time(fs_first_candle_delay[5m])", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 2},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Last - first candle spread (avg 5m)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 5, "x": 14, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "avg_over_time(fs_candle_arrival_spread[5m])", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Market open",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 5, "x": 19, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "max(fs_market_is_open)", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "CLOSED", "color": "blue"}, "1": {"text": "OPEN", "color": "green"}}}
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 200,
+      "title": "REST API",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 10,
+      "title": "Active WS connections",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (fs_ws_connections_active)",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "WS push errors last 5m",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(increase(fs_ws_message_pushed_total{result!=\"ok\"}[5m]))", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "HTTP 5xx last 5m",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(http_server_request_duration_seconds_count{service_role=\"rest_api\",http_response_status_code=~\"5..\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Indicator extend p95 (rest_api)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_indicator_extend_latency_seconds_bucket{service_role=\"rest_api\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.05},
+              {"color": "red", "value": 0.25}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Indicator extend p95 (rest_api, by name)",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_extend_latency_seconds_bucket{service_role=\"rest_api\"}[5m])))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 15,
+      "title": "WS push latency p95 (by endpoint)",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (endpoint, le) (rate(fs_ws_message_push_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "type": "row",
+      "id": 300,
+      "title": "Indicator cache freshness",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "title": "Caching loop lag",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "max(fs_indicator_caching_loop_lag_seconds)", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Cache save errors last 1h",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_indicator_cache_save_total{result=\"error\"}[1h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Time since last successful cache save (per indicator)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "time() - fs_indicator_cache_last_success_timestamp",
+          "instant": true,
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 120},
+              {"color": "red", "value": 600}
+            ]
+          },
+          "custom": {"displayMode": "color-background", "align": "left"}
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "Cache save duration p95 (by indicator)",
+      "type": "timeseries",
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 22},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_indicator_cache_save_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "type": "row",
+      "id": 400,
+      "title": "Slow indicators (news + shares_float)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 30,
+      "title": "News confidence — fetch p95",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_indicator_slow_fetch_duration_seconds_bucket{indicator=\"news_confidence\"}[10m])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 60}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 31,
+      "title": "News confidence — error rate (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\",outcome=~\"exception|fail_open\"}[1h])) / clamp_min(sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"news_confidence\"}[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 0.3}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 32,
+      "title": "Shares float — fetch p95",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_indicator_slow_fetch_duration_seconds_bucket{indicator=\"shares_float\"}[10m])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 60}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "Shares float — error rate (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"shares_float\",outcome=\"exception\"}[1h])) / clamp_min(sum(increase(fs_indicator_slow_fetch_duration_seconds_count{indicator=\"shares_float\"}[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 0.3}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "Slow indicator outcomes per hour (24h)",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 31},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (indicator, outcome) (increase(fs_indicator_slow_fetch_duration_seconds_count[1h]))",
+          "legendFormat": "{{indicator}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}}
+    },
+    {
+      "type": "row",
+      "id": 500,
+      "title": "Scanner activity",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 38},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 40,
+      "title": "Scanner matches today (24h, by scanner_id)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 39},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (scanner_id) (increase(fs_ws_scanner_match_emitted_total[24h]))",
+          "instant": true,
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 41,
+      "title": "News provider scores last 24h (>=50)",
+      "type": "bargauge",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 39},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (source) (increase(fs_news_first_to_publish_total{threshold=\"50\"}[24h]))",
+          "legendFormat": "{{source}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "type": "row",
+      "id": 600,
+      "title": "Daily collection (last run)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 47},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 50,
+      "title": "Daily collection ran in last 24h",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 48},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "clamp_max(sum(increase(fs_daily_symbols_processed_total[24h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "MISSED", "color": "red"}, "1": {"text": "OK", "color": "green"}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "id": 51,
+      "title": "Symbols processed in last run",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 48},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_daily_symbols_processed_total[24h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
+    },
+    {
+      "id": 52,
+      "title": "Symbols failed in last run",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 48},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_daily_symbols_processed_total{outcome=\"failed\"}[24h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 50},
+              {"color": "red", "value": 200}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 53,
+      "title": "Polygon errors last 24h (by kind)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 48},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (kind) (increase(fs_external_request_errors_total{source=\"polygon_rest\"}[24h]))",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 100}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 700,
+      "title": "External providers (1h)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 52},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 60,
+      "title": "Polygon REST error rate (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 53},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_external_requests_total{source=\"polygon_rest\",code=~\"5..|429\"}[1h])) / clamp_min(sum(increase(fs_external_requests_total{source=\"polygon_rest\"}[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.01},
+              {"color": "red", "value": 0.05}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 61,
+      "title": "Codex success rate (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 53},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(fs_codex_invocations_total{outcome=\"ok\"}[1h])) / clamp_min(sum(increase(fs_codex_invocations_total[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.7},
+              {"color": "green", "value": 0.9}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 62,
+      "title": "News provider HTTP error rate (1h, by source)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 53},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (increase(fs_external_requests_total{source=\"news\",code!~\"2..\"}[1h])) / clamp_min(sum by (endpoint) (increase(fs_external_requests_total{source=\"news\"}[1h])), 1)",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.05},
+              {"color": "red", "value": 0.2}
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

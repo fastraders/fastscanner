@@ -97,7 +97,6 @@ async def _run_async(
     end_date: date,
     freq: str,
 ):
-    init_metrics(role="scanner")
     # We set the clock to a fixed date to ensure that adjustments are done correctly
     ClockRegistry.set(LocalClock())
     polygon = PolygonCandlesProvider(

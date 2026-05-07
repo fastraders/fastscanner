@@ -124,11 +124,10 @@ async def websocket_realtime_scanner(
         except WebSocketDisconnect:
             close_reason = "client_disconnect"
             return
-        except Exception as e:
+        except Exception:
             close_reason = "handshake_invalid"
             metrics.ws_subscribe_error(WS_ENDPOINT, "validation")
-            logger.exception(e)
-            return
+            raise
 
         processed_params = _parse_known_parameters(request.params)
         scanner_params = ScannerParams(type_=request.type, params=processed_params)
@@ -145,13 +144,12 @@ async def websocket_realtime_scanner(
                 handler=handler,
                 freq=request.freq,
             )
-        except Exception as e:
+        except Exception:
             elapsed = time_clock.perf_counter() - sub_start
             metrics.ws_subscribe_latency(WS_ENDPOINT, "error", elapsed)
             metrics.ws_subscribe_error(WS_ENDPOINT, "service_error")
             close_reason = "subscribe_failed"
-            logger.exception(e)
-            return
+            raise
         elapsed = time_clock.perf_counter() - sub_start
         metrics.ws_subscribe_latency(WS_ENDPOINT, "ok", elapsed)
         subscribed = True

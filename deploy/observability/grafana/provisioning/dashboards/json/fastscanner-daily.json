@@ -2,108 +2,34 @@
   "title": "Fastscanner — Daily Collection",
   "uid": "fastscanner-daily",
   "schemaVersion": 42,
-  "version": 1,
-  "refresh": "30s",
-  "time": {"from": "now-6h", "to": "now"},
+  "version": 2,
+  "refresh": "1m",
+  "time": {"from": "now-7d", "to": "now"},
   "tags": ["fastscanner"],
   "panels": [
     {
       "id": 1,
-      "title": "Workers active",
+      "title": "Symbols processed (last run)",
       "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(fs_daily_worker_active)",
+          "expr": "sum(increase(fs_daily_symbols_processed_total{outcome=\"ok\"}[24h]))",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"color": "red", "value": null},
-              {"color": "green", "value": 1}
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": 2,
-      "title": "Symbols processed (5m rate)",
-      "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum(rate(fs_daily_symbols_processed_total[5m])) * 60",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "none", "decimals": 1}}
-    },
-    {
-      "id": 3,
-      "title": "% complete",
-      "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "1 - sum(fs_daily_symbols_remaining) / clamp_min(sum(fs_daily_symbols_total), 1)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"color": "red", "value": null},
-              {"color": "yellow", "value": 0.5},
-              {"color": "green", "value": 0.95}
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "Symbols remaining",
-      "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "sum(fs_daily_symbols_remaining)", "refId": "A"}],
       "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
-      "id": 5,
-      "title": "ETA (seconds)",
+      "id": 2,
+      "title": "Symbols failed (last run)",
       "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(fs_daily_symbols_remaining) / clamp_min(sum(rate(fs_daily_symbols_processed_total[5m])), 1e-9)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "s"}}
-    },
-    {
-      "id": 6,
-      "title": "Total failures",
-      "type": "stat",
-      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum(fs_daily_symbols_processed_total{outcome=\"failed\"})",
+          "expr": "sum(increase(fs_daily_symbols_processed_total{outcome=\"failed\"}[24h]))",
           "refId": "A"
         }
       ],
@@ -114,163 +40,139 @@
             "mode": "absolute",
             "steps": [
               {"color": "green", "value": null},
-              {"color": "yellow", "value": 10},
-              {"color": "red", "value": 100}
+              {"color": "yellow", "value": 50},
+              {"color": "red", "value": 200}
             ]
           }
         }
       }
     },
     {
-      "id": 10,
-      "title": "Symbols processed per minute (by worker)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "id": 3,
+      "title": "Collection happened in last 24h?",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (service_instance_id) (rate(fs_daily_symbols_processed_total[1m])) * 60",
-          "legendFormat": "{{service_instance_id}}",
+          "expr": "clamp_max(sum(increase(fs_daily_symbols_processed_total[24h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "MISSED", "color": "red"}, "1": {"text": "RAN", "color": "green"}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Per-symbol p95 duration (last 24h)",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_daily_symbol_duration_seconds_bucket[24h])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 10,
+      "title": "Symbols processed per day (last 7 days)",
+      "type": "barchart",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(fs_daily_symbols_processed_total[1d]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "options": {"xField": "Time"},
+      "fieldConfig": {
+        "defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}
+      }
+    },
+    {
+      "id": 11,
+      "title": "Failures by kind (last 7 days, daily)",
+      "type": "barchart",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (kind) (increase(fs_daily_symbol_failures_total[1d]))",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "options": {"xField": "Time"},
+      "fieldConfig": {
+        "defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}
+      }
+    },
+    {
+      "id": 20,
+      "title": "Polygon REST request total (24h, by endpoint)",
+      "type": "table",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (endpoint, code) (increase(fs_external_requests_total{service_role=\"daily_collection\",source=\"polygon_rest\"}[24h]))",
+          "format": "table",
+          "instant": true,
           "refId": "A"
         }
       ],
       "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
-      "id": 11,
-      "title": "Per-symbol duration (p50 / p95 / p99)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(fs_daily_symbol_duration_seconds_bucket[5m])))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(fs_daily_symbol_duration_seconds_bucket[5m])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(fs_daily_symbol_duration_seconds_bucket[5m])))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "s"}}
-    },
-    {
-      "id": 20,
-      "title": "Polygon REST p95 latency by endpoint",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (endpoint, le) (rate(fs_external_request_latency_seconds_bucket{service_role=\"daily_collection\",source=\"polygon_rest\"}[5m])))",
-          "legendFormat": "{{endpoint}} p95",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "s"}}
-    },
-    {
       "id": 21,
-      "title": "Polygon REST request rate by endpoint + status",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "title": "Polygon REST p95 latency by endpoint (last 24h)",
+      "type": "stat",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 14},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (endpoint, code) (rate(fs_external_requests_total{service_role=\"daily_collection\",source=\"polygon_rest\"}[1m]))",
-          "legendFormat": "{{endpoint}} {{code}}",
+          "expr": "histogram_quantile(0.95, sum by (endpoint, le) (rate(fs_external_request_latency_seconds_bucket{service_role=\"daily_collection\",source=\"polygon_rest\"}[24h])))",
+          "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": {"defaults": {"unit": "ops"}}
+      "fieldConfig": {"defaults": {"unit": "s"}}
     },
     {
       "id": 30,
-      "title": "Rate-limiter wait p95",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "title": "Cache lookup outcomes (last 24h)",
+      "type": "stat",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 21},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_ratelimit_wait_seconds_bucket{service_role=\"daily_collection\"}[5m])))",
-          "legendFormat": "{{name}} p95",
+          "expr": "sum by (result) (increase(fs_candle_partition_cache_lookup_total{service_role=\"daily_collection\"}[24h]))",
+          "legendFormat": "{{result}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": {"defaults": {"unit": "s"}}
+      "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
       "id": 31,
-      "title": "Polygon REST request errors (by kind)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum by (kind) (rate(fs_external_request_errors_total{service_role=\"daily_collection\",source=\"polygon_rest\"}[5m]))",
-          "legendFormat": "{{kind}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "ops"}}
-    },
-    {
-      "id": 40,
-      "title": "Cache lookups per minute (by result, freq)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum by (result, freq) (rate(fs_candle_partition_cache_lookup_total{service_role=\"daily_collection\"}[1m])) * 60",
-          "legendFormat": "{{freq}} {{result}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "none", "custom": {"stacking": {"mode": "normal"}}}}
-    },
-    {
-      "id": 41,
-      "title": "Cache hit ratio",
+      "title": "Partitions written (last 24h, by freq + outcome)",
       "type": "stat",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 21},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(rate(fs_candle_partition_cache_lookup_total{service_role=\"daily_collection\",result=\"hit\"}[5m])) / clamp_min(sum(rate(fs_candle_partition_cache_lookup_total{service_role=\"daily_collection\"}[5m])), 1e-9)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"color": "red", "value": null},
-              {"color": "yellow", "value": 0.4},
-              {"color": "green", "value": 0.8}
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": 50,
-      "title": "Partitions written per minute (by freq)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum by (freq, outcome) (rate(fs_candle_partition_write_total{service_role=\"daily_collection\"}[1m])) * 60",
+          "expr": "sum by (freq, outcome) (increase(fs_candle_partition_write_total{service_role=\"daily_collection\"}[24h]))",
           "legendFormat": "{{freq}} {{outcome}}",
           "refId": "A"
         }
@@ -278,14 +180,29 @@
       "fieldConfig": {"defaults": {"unit": "none"}}
     },
     {
-      "id": 51,
-      "title": "CSV write latency p95 (by freq)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+      "id": 40,
+      "title": "Rate-limiter wait p95 (last 24h)",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 28},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (freq, le) (rate(fs_candle_partition_write_duration_seconds_bucket{service_role=\"daily_collection\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (name, le) (rate(fs_ratelimit_wait_seconds_bucket{service_role=\"daily_collection\"}[24h])))",
+          "legendFormat": "{{name}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 41,
+      "title": "CSV write p95 (last 24h, by freq)",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (freq, le) (rate(fs_candle_partition_write_duration_seconds_bucket{service_role=\"daily_collection\"}[24h])))",
           "legendFormat": "{{freq}} p95",
           "refId": "A"
         }
@@ -293,34 +210,54 @@
       "fieldConfig": {"defaults": {"unit": "s"}}
     },
     {
-      "id": 60,
-      "title": "Failures by kind (5m rate)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
+      "type": "row",
+      "id": 900,
+      "title": "Live (only useful while collection is running)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "collapsed": true,
+      "panels": [
         {
-          "expr": "sum by (kind) (rate(fs_daily_symbol_failures_total[5m]))",
-          "legendFormat": "{{kind}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "ops", "custom": {"stacking": {"mode": "normal"}}}}
-    },
-    {
-      "id": 61,
-      "title": "Symbols processed (cumulative, by outcome)",
-      "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
+          "id": 90,
+          "title": "Workers active",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 34},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum(fs_daily_worker_active)", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "none"}}
+        },
         {
-          "expr": "sum by (outcome) (fs_daily_symbols_processed_total)",
-          "legendFormat": "{{outcome}}",
-          "refId": "A"
+          "id": 91,
+          "title": "Symbols remaining (across workers)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 34},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum(fs_daily_symbols_remaining)", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "none"}}
+        },
+        {
+          "id": 92,
+          "title": "Total symbols this run",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 34},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum(fs_daily_symbols_total)", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "none"}}
+        },
+        {
+          "id": 93,
+          "title": "% complete (live)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 34},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {
+              "expr": "1 - sum(fs_daily_symbols_remaining) / clamp_min(sum(fs_daily_symbols_total), 1)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {"defaults": {"unit": "percentunit"}}
         }
-      ],
-      "fieldConfig": {"defaults": {"unit": "none"}}
+      ]
     }
   ]
 }
