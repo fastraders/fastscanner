@@ -684,6 +684,78 @@
           }
         }
       }
+    },
+    {
+      "type": "row",
+      "id": 800,
+      "title": "Daily pre-warm (3:00 ET)",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 57},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 70,
+      "title": "Pre-warm last completion",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 58},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "time() - max(fs_indicator_prewarm_last_success_timestamp)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 86400},
+              {"color": "red", "value": 129600}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 71,
+      "title": "Pre-warm failed (last run)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 58},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "max(fs_indicator_prewarm_last_failed_symbols)", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 50}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 72,
+      "title": "Pre-warm runs by outcome (24h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 58},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(fs_indicator_prewarm_runs_total[24h]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}}
     }
   ]
 }

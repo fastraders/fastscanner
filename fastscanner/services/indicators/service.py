@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import Any, Awaitable, Callable, Iterable, Protocol
 from uuid import uuid4
 
+import numpy as np
 import pandas as pd
 
 from fastscanner.pkg.candle import Candle, CandleBuffer
@@ -15,7 +16,22 @@ from fastscanner.pkg.observability import metrics
 from fastscanner.services.exceptions import UnsubscribeSignal
 
 from .lib import Cacheable, CacheableIndicator, Indicator, IndicatorsLibrary
-from .ports import Cache, CandleStore, Channel, FundamentalDataStore
+from .ports import Cache, CandleCol, CandleStore, Channel, FundamentalDataStore
+
+
+PREWARM_TIME = time(3, 0)
+PREWARM_DEFAULT_CONCURRENCY = 50
+
+
+class SymbolSource(Protocol):
+    async def active_symbols(self) -> list[str]: ...
+
+
+@dataclass
+class _PreWarmStats:
+    succeeded: int
+    failed: int
+    elapsed_s: float
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +78,13 @@ class IndicatorsService:
         self._cached_indicators: list[CacheableIndicator] = []
         self._cache_at_seconds = cache_at_seconds
         self._caching_task: asyncio.Task[None] | None = None
+        # Daily pre-warm state
+        self._prewarm_task: asyncio.Task[None] | None = None
+        self._prewarm_indicators: list[CacheableIndicator] = []
+        self._prewarm_symbols_source: SymbolSource | None = None
+        self._prewarm_concurrency: int = PREWARM_DEFAULT_CONCURRENCY
+        self._prewarm_at: time = PREWARM_TIME
+        self._prewarm_inflight: int = 0
 
     async def calculate_from_params(
         self,
@@ -235,6 +258,147 @@ class IndicatorsService:
             scheduled_wake = next_minute
             await asyncio.sleep((next_minute - now).total_seconds())
 
+    async def start_daily_prewarm(
+        self,
+        symbols_source: SymbolSource,
+        indicators: Iterable[CacheableIndicator],
+        concurrency: int = PREWARM_DEFAULT_CONCURRENCY,
+        run_at: time = PREWARM_TIME,
+    ) -> None:
+        """Start the daily pre-warm scheduler.
+
+        Indicators passed here MUST be safe with a NaN OHLCV candle: their
+        extend_realtime cold-path may read only the candle's timestamp.
+
+        On startup, if the per-day completion marker is absent, runs once
+        immediately. Otherwise sleeps until the next scheduled time.
+        """
+        if self._prewarm_task is not None:
+            return
+        self._prewarm_symbols_source = symbols_source
+        self._prewarm_indicators = list(indicators)
+        self._prewarm_concurrency = concurrency
+        self._prewarm_at = run_at
+        self._prewarm_task = asyncio.create_task(self._prewarm_loop())
+
+    async def stop_daily_prewarm(self) -> None:
+        if self._prewarm_task is None:
+            return
+        self._prewarm_task.cancel()
+        try:
+            await self._prewarm_task
+        except asyncio.CancelledError:
+            pass
+        self._prewarm_task = None
+        self._prewarm_symbols_source = None
+        self._prewarm_indicators = []
+
+    async def _prewarm_loop(self) -> None:
+        try:
+            if not await self._is_prewarmed_today():
+                await self._run_prewarm_once()
+            while True:
+                now = ClockRegistry.clock.now()
+                next_run = ClockRegistry.clock.next_datetime_at(self._prewarm_at)
+                await asyncio.sleep((next_run - now).total_seconds())
+                await self._run_prewarm_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[daily_prewarm] loop crashed")
+            raise
+
+    async def _is_prewarmed_today(self) -> bool:
+        today = ClockRegistry.clock.today()
+        try:
+            raw = await self._cache.get(_prewarm_marker_key(today))
+        except KeyError:
+            return False
+        return bool(raw)
+
+    async def _run_prewarm_once(self) -> "_PreWarmStats":
+        if self._prewarm_symbols_source is None:
+            raise RuntimeError("prewarm symbols_source not set")
+
+        start_ts = ClockRegistry.clock.now()
+        today = start_ts.date()
+        symbols = await self._prewarm_symbols_source.active_symbols()
+        logger.info(
+            "[daily_prewarm] start: %d symbols x %d indicators @ %s",
+            len(symbols),
+            len(self._prewarm_indicators),
+            today.isoformat(),
+        )
+
+        fake_candle = _build_fake_prewarm_candle(today, self._prewarm_at)
+        sem = asyncio.Semaphore(self._prewarm_concurrency)
+        self._prewarm_inflight = 0
+        metrics.indicator_prewarm_inflight_set(0)
+
+        async def _one(symbol: str, indicator: CacheableIndicator) -> bool:
+            async with sem:
+                self._prewarm_inflight += 1
+                metrics.indicator_prewarm_inflight_set(self._prewarm_inflight)
+                try:
+                    await indicator.extend_realtime(symbol, fake_candle.copy())
+                    metrics.indicator_prewarm_symbol("ok")
+                    return True
+                except Exception:
+                    logger.exception(
+                        "[daily_prewarm] %s.%s failed for %s",
+                        type(indicator).__name__,
+                        indicator.column_name(),
+                        symbol,
+                    )
+                    metrics.indicator_prewarm_symbol("error")
+                    return False
+                finally:
+                    self._prewarm_inflight -= 1
+                    metrics.indicator_prewarm_inflight_set(self._prewarm_inflight)
+
+        tasks = [
+            _one(symbol, indicator)
+            for symbol in symbols
+            for indicator in self._prewarm_indicators
+        ]
+        results = await asyncio.gather(*tasks)
+        succeeded = sum(results)
+        failed = len(results) - succeeded
+        metrics.indicator_prewarm_failed_symbols(failed)
+
+        for indicator in self._prewarm_indicators:
+            try:
+                await indicator.save_to_cache()
+            except Exception:
+                logger.exception(
+                    "[daily_prewarm] save_to_cache failed for %s",
+                    indicator.column_name(),
+                )
+                # Skip marker so the next start re-runs.
+                elapsed = (ClockRegistry.clock.now() - start_ts).total_seconds()
+                metrics.indicator_prewarm_run("error", elapsed)
+                logger.error(
+                    "[daily_prewarm] aborted before marker: succeeded=%d failed=%d elapsed=%.2fs",
+                    succeeded,
+                    failed,
+                    elapsed,
+                )
+                return _PreWarmStats(succeeded, failed, elapsed)
+
+        await self._cache.save(_prewarm_marker_key(today), "1")
+        elapsed = (ClockRegistry.clock.now() - start_ts).total_seconds()
+        outcome = "partial" if failed else "ok"
+        metrics.indicator_prewarm_run(outcome, elapsed)
+        metrics.indicator_prewarm_last_success(_time_module.time())
+        logger.info(
+            "[daily_prewarm] done: succeeded=%d failed=%d elapsed=%.2fs outcome=%s",
+            succeeded,
+            failed,
+            elapsed,
+            outcome,
+        )
+        return _PreWarmStats(succeeded, failed, elapsed)
+
     async def unsubscribe_realtime(
         self,
         subscription_id: str,
@@ -274,6 +438,7 @@ class IndicatorsService:
         )
 
     async def stop(self):
+        await self.stop_daily_prewarm()
         for sub_id, channel in self._subscription_to_channel.items():
             _, unit, symbol = channel.split(".", 2)
             await self.channel.unsubscribe(channel, sub_id)
@@ -297,6 +462,32 @@ class IndicatorsService:
         self._slow_indicator_subscriptions.clear()
         self._subscription_to_channel.clear()
         metrics.set_active_subscriptions("indicator_fanout", 0)
+
+
+def _prewarm_marker_key(d: date) -> str:
+    return f"prewarm:completed:{d.isoformat()}"
+
+
+def _build_fake_prewarm_candle(today: date, at: time) -> Candle:
+    ts = pd.Timestamp(
+        year=today.year,
+        month=today.month,
+        day=today.day,
+        hour=at.hour,
+        minute=at.minute,
+        second=at.second,
+        tz=LOCAL_TIMEZONE_STR,
+    )
+    return Candle(
+        {
+            CandleCol.OPEN: np.nan,
+            CandleCol.HIGH: np.nan,
+            CandleCol.LOW: np.nan,
+            CandleCol.CLOSE: np.nan,
+            CandleCol.VOLUME: np.nan,
+        },
+        timestamp=ts,
+    )
 
 
 class SubscriptionHandler(Protocol):

@@ -12,12 +12,6 @@ from fastscanner.services.indicators.lib.candle import (
 )
 from fastscanner.services.indicators.lib.candle import CumulativeOperation as CumOp
 from fastscanner.services.indicators.lib.candle import GapIndicator, ShiftIndicator
-from fastscanner.services.indicators.lib.daily import (
-    ADRIndicator,
-    ADVIndicator,
-    DailyATRIndicator,
-    PrevDayIndicator,
-)
 from fastscanner.services.indicators.lib.fundamental import (
     DaysSinceIPOIndicator,
     MarketCapIndicator,
@@ -200,8 +194,8 @@ class SmallCapUpScanner:
             new_row["triggered_alert"] = pd.NA
             return new_row, False
 
-        new_row = await self._market_cap.extend_realtime(symbol, new_row)
-        new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
+        # new_row = await self._market_cap.extend_realtime(symbol, new_row)
+        # new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
 
@@ -213,8 +207,8 @@ class SmallCapUpScanner:
             new_row["triggered_alert"] = pd.NA
             return new_row, False
 
-        market_cap_value = new_row[self._market_cap.column_name()]
-        days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
+        # market_cap_value = new_row[self._market_cap.column_name()]
+        # days_since_ipo_value = new_row[self._days_since_ipo.column_name()]
         cum_vol_val = new_row[self._cum_volume.column_name()]
         gap_val = new_row[self._gap.column_name()]
 
@@ -228,21 +222,21 @@ class SmallCapUpScanner:
             new_row["triggered_alert"] = pd.NA
             return new_row, False
 
-        market_cap_passes = (
-            not pd.isna(market_cap_value)
-            and self._min_market_cap <= market_cap_value <= self._max_market_cap
-        ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
-        days_since_ipo_passes = (
-            self._min_days_since_ipo is None
-            or pd.isna(days_since_ipo_value)
-            or days_since_ipo_value >= self._min_days_since_ipo
-        )
+        # market_cap_passes = (
+        #     not pd.isna(market_cap_value)
+        #     and self._min_market_cap <= market_cap_value <= self._max_market_cap
+        # ) or (pd.isna(market_cap_value) and self._include_null_market_cap)
+        # days_since_ipo_passes = (
+        #     self._min_days_since_ipo is None
+        #     or pd.isna(days_since_ipo_value)
+        #     or days_since_ipo_value >= self._min_days_since_ipo
+        # )
 
         passes_filter = (
             self._min_price <= new_row[C.CLOSE] <= self._max_price
             and cum_vol_val >= self._min_volume
-            and market_cap_passes
-            and days_since_ipo_passes
+            # and market_cap_passes
+            # and days_since_ipo_passes
             and gap_val >= self._min_gap
         )
         if not passes_filter:

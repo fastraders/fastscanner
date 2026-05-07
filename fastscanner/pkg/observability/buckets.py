@@ -164,3 +164,16 @@ SLOW_FETCH_SECONDS = (
     float("inf"),
 )
 
+PREWARM_DURATION_SECONDS = (
+    10.0,
+    30.0,
+    60.0,
+    90.0,
+    120.0,
+    180.0,
+    300.0,
+    600.0,
+    1800.0,
+    float("inf"),
+)
+

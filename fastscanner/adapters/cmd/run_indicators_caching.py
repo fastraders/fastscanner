@@ -98,18 +98,18 @@ async def main():
     ApplicationRegistry.set_indicators(indicators_service)
 
     indicators_with_cache: list[CacheableIndicator] = [
-        ADVIndicator(period=14),
-        ADRIndicator(period=14),
-        MarketCapIndicator(),
-        DailyRollingIndicator(n_days=20, operation="min", candle_col=CandleCol.LOW),
-        DailyRollingIndicator(n_days=20, operation="max", candle_col=CandleCol.HIGH),
-        DaysFromEarningsIndicator(),
-        PremarketCumulativeIndicator(CandleCol.VOLUME, "sum"),
+        # ADVIndicator(period=14),
+        # ADRIndicator(period=14),
+        # MarketCapIndicator(),
+        # DailyRollingIndicator(n_days=20, operation="min", candle_col=CandleCol.LOW),
+        # DailyRollingIndicator(n_days=20, operation="max", candle_col=CandleCol.HIGH),
+        # DaysFromEarningsIndicator(),
+        # PremarketCumulativeIndicator(CandleCol.VOLUME, "sum"),
         CumulativeDailyVolumeIndicator(),
-        DailyATRIndicator(14),
+        # DailyATRIndicator(14),
         PrevDayIndicator(CandleCol.CLOSE),
-        DayOpenIndicator(),
-        DaysSinceIPOIndicator(),
+        # DayOpenIndicator(),
+        # DaysSinceIPOIndicator(),
         CumulativeIndicator(CandleCol.HIGH, CumOp.MAX),
     ]
     logger.info(f"Loading {len(indicators_with_cache)} indicators from cache.")
@@ -131,12 +131,34 @@ async def main():
     await slow_indicators_service.start()
     logger.info("Slow indicators service started")
 
+    prewarmable_classes = (
+        ADVIndicator,
+        ADRIndicator,
+        MarketCapIndicator,
+        DailyRollingIndicator,
+        DaysFromEarningsIndicator,
+        DailyATRIndicator,
+        PrevDayIndicator,
+        DaysSinceIPOIndicator,
+    )
+    prewarmable_indicators = [
+        ind for ind in indicators_with_cache if isinstance(ind, prewarmable_classes)
+    ]
+    await indicators_service.start_daily_prewarm(
+        symbols_source=polygon,
+        indicators=prewarmable_indicators,
+    )
+    logger.info(
+        f"Daily pre-warm task started for {len(prewarmable_indicators)} indicators"
+    )
+
     sub_id = await indicators_service.cache_indicators(indicators_with_cache)
     logger.info(f"Subscribed to all symbols. Starting caching loop...")
     try:
         while True:
             await asyncio.sleep(20.1242)  # Sleep a random time to avoid thundering herd
     finally:
+        await indicators_service.stop_daily_prewarm()
         await slow_indicators_service.stop()
         await indicators_service.stop_caching(sub_id)
         await cache.close()

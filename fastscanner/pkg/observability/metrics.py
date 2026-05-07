@@ -218,6 +218,38 @@ class _Metrics:
             description="In-flight slow-indicator background fetches, by indicator type.",
         )
 
+        self.indicator_prewarm_runs_total: Counter = meter.create_counter(
+            name="fs.indicator.prewarm.runs",
+            description="Daily indicator pre-warm runs, by outcome (ok|partial|error).",
+        )
+        self.indicator_prewarm_symbols_total: Counter = meter.create_counter(
+            name="fs.indicator.prewarm.symbols",
+            description="Per-symbol per-indicator pre-warm calls, by outcome (ok|error).",
+        )
+        self.indicator_prewarm_duration_seconds: Histogram = meter.create_histogram(
+            name="fs.indicator.prewarm.duration",
+            unit="s",
+            description="Wall-clock duration of one daily pre-warm run.",
+            explicit_bucket_boundaries_advisory=list(
+                buckets.PREWARM_DURATION_SECONDS[:-1]
+            ),
+        )
+        self.indicator_prewarm_last_success_ts: _Gauge = meter.create_gauge(
+            name="fs.indicator.prewarm.last.success.timestamp",
+            description=(
+                "Unix epoch seconds of the last successful pre-warm completion "
+                "(after the per-day completion marker was written)."
+            ),
+        )
+        self.indicator_prewarm_last_failed_symbols: _Gauge = meter.create_gauge(
+            name="fs.indicator.prewarm.last.failed.symbols",
+            description="Failed (symbol, indicator) pairs in the most recent pre-warm run.",
+        )
+        self.indicator_prewarm_inflight: _Gauge = meter.create_gauge(
+            name="fs.indicator.prewarm.inflight",
+            description="In-flight extend_realtime calls during the active pre-warm run.",
+        )
+
         self.codex_invocations_total: Counter = meter.create_counter(
             name="fs.codex.invocations",
             description="Codex CLI invocations from the news pipeline, by outcome.",
@@ -422,6 +454,24 @@ class _Metrics:
     def indicator_slow_inflight_set(self, indicator: str, count: int) -> None:
         self.indicator_slow_inflight.set(count, {"indicator": indicator})
 
+    def indicator_prewarm_run(self, outcome: str, duration_seconds: float) -> None:
+        self.indicator_prewarm_runs_total.add(1, {"outcome": outcome})
+        self.indicator_prewarm_duration_seconds.record(
+            duration_seconds, {"outcome": outcome}
+        )
+
+    def indicator_prewarm_symbol(self, outcome: str) -> None:
+        self.indicator_prewarm_symbols_total.add(1, {"outcome": outcome})
+
+    def indicator_prewarm_last_success(self, ts_seconds: float) -> None:
+        self.indicator_prewarm_last_success_ts.set(ts_seconds)
+
+    def indicator_prewarm_failed_symbols(self, count: int) -> None:
+        self.indicator_prewarm_last_failed_symbols.set(count)
+
+    def indicator_prewarm_inflight_set(self, count: int) -> None:
+        self.indicator_prewarm_inflight.set(count)
+
     def codex_invocation(self, outcome: str, duration_seconds: float) -> None:
         self.codex_invocations_total.add(1, {"outcome": outcome})
         self.codex_duration_seconds.record(duration_seconds, {"outcome": outcome})
@@ -593,6 +643,26 @@ def indicator_slow_fetch(
 
 def indicator_slow_inflight_set(indicator: str, count: int) -> None:
     _get().indicator_slow_inflight_set(indicator, count)
+
+
+def indicator_prewarm_run(outcome: str, duration_seconds: float) -> None:
+    _get().indicator_prewarm_run(outcome, duration_seconds)
+
+
+def indicator_prewarm_symbol(outcome: str) -> None:
+    _get().indicator_prewarm_symbol(outcome)
+
+
+def indicator_prewarm_last_success(ts_seconds: float) -> None:
+    _get().indicator_prewarm_last_success(ts_seconds)
+
+
+def indicator_prewarm_failed_symbols(count: int) -> None:
+    _get().indicator_prewarm_failed_symbols(count)
+
+
+def indicator_prewarm_inflight_set(count: int) -> None:
+    _get().indicator_prewarm_inflight_set(count)
 
 
 def codex_invocation(outcome: str, duration_seconds: float) -> None:
