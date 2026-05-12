@@ -36,6 +36,7 @@ HTTP_TIMEOUT = 10.0
 CODEX_TIMEOUT = 90.0
 MAX_HEADLINES_PER_SYMBOL = 50
 CONFIDENCE_THRESHOLD = 50  # used for KEEP/DROP log lines only; not a filter
+FETCH_CUTOFF_SECONDS = 2 * 60 * 60
 
 
 @dataclasses.dataclass(frozen=True)
@@ -67,6 +68,7 @@ class NewsConfidenceIndicator:
         self._date: dict[str, date] = {}  # per-symbol day boundary
         self._tasks: dict[str, asyncio.Task] = {}  # in-flight fire-and-forget
         self._seen_headlines: dict[str, set[str]] = {}  # symbol → already-scored titles
+        self._subscribed_at: dict[str, datetime] = {}
 
     @classmethod
     def type(cls) -> str:
@@ -80,8 +82,16 @@ class NewsConfidenceIndicator:
         return f"indicator:news_confidence:{symbol}"
 
     @staticmethod
-    def _encode_cache(today: date, value: int | None) -> str:
-        return json.dumps({"date": today.isoformat(), "value": value})
+    def _encode_cache(
+        today: date, value: int | None, subscribed_at: datetime | None
+    ) -> str:
+        return json.dumps(
+            {
+                "date": today.isoformat(),
+                "value": value,
+                "subscribed_at": subscribed_at.isoformat() if subscribed_at else None,
+            }
+        )
 
     @staticmethod
     def _decode_cache(raw: str, today: date) -> int | None:
@@ -103,6 +113,27 @@ class NewsConfidenceIndicator:
         return int(value)
 
     @staticmethod
+    def _decode_subscribed_at(raw: str, today: date) -> datetime | None:
+        """Return cached subscribed_at iff payload's date matches today and the
+        field parses as ISO-8601. Stale-date, missing field, or malformed all
+        map to None."""
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("date") != today.isoformat():
+            return None
+        value = payload.get("subscribed_at")
+        if not isinstance(value, str):
+            return None
+        try:
+            return ClockRegistry.clock.from_isoformat(value)
+        except ValueError:
+            return None
+
+    @staticmethod
     def _max_merge(a: int | None, b: int | None) -> int | None:
         if a is None and b is None:
             return None
@@ -122,6 +153,7 @@ class NewsConfidenceIndicator:
             self._date[symbol] = today
             self._confidence_today.pop(symbol, None)
             self._seen_headlines.pop(symbol, None)
+            self._subscribed_at.pop(symbol, None)
 
         if self._caching:
             # Producer: kick off background fetch; report current in-mem max.
@@ -147,6 +179,21 @@ class NewsConfidenceIndicator:
             return None
         return self._decode_cache(raw, today)
 
+    async def _load_subscribed_at(self, symbol: str, today: date) -> datetime:
+        """Return cached subscribed_at for today, or `now` if no valid cached
+        value exists (missing key, KeyError, stale day, malformed payload).
+        Caller persists the returned value via the regular cache.save in
+        _inline_fetch — this helper does not write."""
+        try:
+            raw = await ApplicationRegistry.cache.get(self._cache_key(symbol))
+        except KeyError:
+            raw = None
+        if raw:
+            cached = self._decode_subscribed_at(raw, today)
+            if cached is not None:
+                return cached
+        return ClockRegistry.clock.now()
+
     def _spawn_fetch(self, symbol: str) -> None:
         existing = self._tasks.get(symbol)
         if existing is not None and not existing.done():
@@ -167,9 +214,19 @@ class NewsConfidenceIndicator:
         start = _time_module.perf_counter()
         outcome = "scored"
         try:
+            today = ClockRegistry.clock.now().date()
+
+            subscribed_at = self._subscribed_at.get(symbol)
+            if subscribed_at is None:
+                subscribed_at = await self._load_subscribed_at(symbol, today)
+            self._subscribed_at[symbol] = subscribed_at
+
+            elapsed = (ClockRegistry.clock.now() - subscribed_at).total_seconds()
+            if elapsed > FETCH_CUTOFF_SECONDS:
+                return
+
             await asyncio.sleep(random.uniform(0, 45))
             fetch_start = _time_module.perf_counter()
-            today = ClockRegistry.clock.now().date()
             latest = await self._score_new_headlines_today(symbol)
             prior = self._confidence_today.get(symbol)
             merged = self._max_merge(prior, latest)
@@ -178,7 +235,7 @@ class NewsConfidenceIndicator:
             # day N+1 see a stale date and correctly fall through to None.
             await ApplicationRegistry.cache.save(
                 self._cache_key(symbol),
-                self._encode_cache(today, merged),
+                self._encode_cache(today, merged, subscribed_at),
             )
             if latest is None or latest == 0:
                 outcome = "empty"
