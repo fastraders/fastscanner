@@ -5,6 +5,7 @@ from datetime import date, time
 import pandas as pd
 
 from fastscanner.pkg.candle import Candle
+from fastscanner.services.indicators.lib.daily import PrevDayIndicator
 from fastscanner.services.indicators.lib.candle import (
     ATRIndicator,
     CumulativeDailyVolumeIndicator,
@@ -16,6 +17,7 @@ from fastscanner.services.indicators.lib.fundamental import (
     DaysSinceIPOIndicator,
     MarketCapIndicator,
 )
+
 from fastscanner.services.indicators.ports import CandleCol as C
 from fastscanner.services.registry import ApplicationRegistry
 
@@ -54,6 +56,7 @@ class SmallCapUpScanner:
         self._cum_volume = CumulativeDailyVolumeIndicator()
         self._gap = GapIndicator(C.HIGH)
         self._cum_high = CumulativeIndicator(C.HIGH, CumOp.MAX)
+        self._prev_day_close = PrevDayIndicator(C.CLOSE)
         # The order of the periods defines the priority of the alerts.
 
         # smallcap shorts
@@ -196,6 +199,7 @@ class SmallCapUpScanner:
 
         # new_row = await self._market_cap.extend_realtime(symbol, new_row)
         # new_row = await self._days_since_ipo.extend_realtime(symbol, new_row)
+        new_row = await self._prev_day_close.extend_realtime(symbol, new_row)
         new_row = await self._cum_volume.extend_realtime(symbol, new_row)
         new_row = await self._gap.extend_realtime(symbol, new_row)
 
