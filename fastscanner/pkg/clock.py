@@ -48,12 +48,6 @@ class ClockWrapper(Clock):
             tzinfo=self._tzinfo,
         )
 
-    def from_isoformat(self, value: str) -> datetime:
-        parsed = datetime.fromisoformat(value)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=self._tzinfo)
-        return parsed.astimezone(self._tzinfo)
-
     def time_now(self) -> time:
         return self._clock.now().time()
 

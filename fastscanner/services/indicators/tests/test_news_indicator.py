@@ -81,67 +81,16 @@ async def test_extend_returns_na_column():
 
 def test_encode_cache_format():
     raw = NewsConfidenceIndicator._encode_cache(
-        datetime(2026, 4, 29).date(), 73, None
+        datetime(2026, 4, 29).date(), 73
     )
-    assert json.loads(raw) == {
-        "date": "2026-04-29",
-        "value": 73,
-        "subscribed_at": None,
-    }
+    assert json.loads(raw) == {"date": "2026-04-29", "value": 73}
 
 
 def test_encode_cache_with_none_value():
     raw = NewsConfidenceIndicator._encode_cache(
-        datetime(2026, 4, 29).date(), None, None
+        datetime(2026, 4, 29).date(), None
     )
-    assert json.loads(raw) == {
-        "date": "2026-04-29",
-        "value": None,
-        "subscribed_at": None,
-    }
-
-
-def test_encode_cache_includes_subscribed_at():
-    ts = datetime(2026, 4, 29, 9, 31, tzinfo=EST)
-    raw = NewsConfidenceIndicator._encode_cache(
-        datetime(2026, 4, 29).date(), 73, ts
-    )
-    assert json.loads(raw) == {
-        "date": "2026-04-29",
-        "value": 73,
-        "subscribed_at": ts.isoformat(),
-    }
-
-
-def test_decode_subscribed_at_returns_value_for_today():
-    today = datetime(2026, 4, 29).date()
-    ts = datetime(2026, 4, 29, 9, 31, tzinfo=EST)
-    raw = NewsConfidenceIndicator._encode_cache(today, 50, ts)
-    assert NewsConfidenceIndicator._decode_subscribed_at(raw, today) == ts
-
-
-def test_decode_subscribed_at_returns_none_for_stale_date():
-    today = datetime(2026, 4, 30).date()
-    ts = datetime(2026, 4, 29, 9, 31, tzinfo=EST)
-    raw = NewsConfidenceIndicator._encode_cache(
-        datetime(2026, 4, 29).date(), 50, ts
-    )
-    assert NewsConfidenceIndicator._decode_subscribed_at(raw, today) is None
-
-
-def test_decode_subscribed_at_returns_none_when_field_missing():
-    today = datetime(2026, 4, 29).date()
-    raw = _payload("2026-04-29", 50)
-    assert NewsConfidenceIndicator._decode_subscribed_at(raw, today) is None
-
-
-def test_decode_subscribed_at_returns_none_for_malformed():
-    today = datetime(2026, 4, 29).date()
-    assert NewsConfidenceIndicator._decode_subscribed_at("not json", today) is None
-    raw = json.dumps(
-        {"date": "2026-04-29", "value": 50, "subscribed_at": "not-a-datetime"}
-    )
-    assert NewsConfidenceIndicator._decode_subscribed_at(raw, today) is None
+    assert json.loads(raw) == {"date": "2026-04-29", "value": None}
 
 
 def test_decode_cache_returns_value_for_today():
@@ -461,124 +410,6 @@ async def test_producer_writes_null_when_codex_fails_with_no_prior():
     assert json.loads(saved_value)["value"] is None
 
 
-# --- subscribed_at + fetch cutoff ---
-
-
-@pytest.mark.asyncio
-async def test_inline_fetch_records_subscribed_at_on_first_sighting():
-    """First _inline_fetch call records subscribed_at = now in memory and
-    persists it to cache alongside the score."""
-    indicator = NewsConfidenceIndicator(caching=True)
-    mock_cache = AsyncMock()
-    mock_cache.get = AsyncMock(side_effect=KeyError("miss"))
-    mock_cache.save = AsyncMock()
-    ApplicationRegistry.cache = mock_cache
-
-    with patch.object(
-        indicator, "_score_new_headlines_today", new=AsyncMock(return_value=42)
-    ), patch(
-        "fastscanner.services.indicators.lib.news.random.uniform", return_value=0
-    ):
-        await indicator._inline_fetch("AAPL")
-
-    now = ClockRegistry.clock.now()
-    assert indicator._subscribed_at["AAPL"] == now
-    saved_value = mock_cache.save.call_args.args[1]
-    payload = json.loads(saved_value)
-    assert payload["value"] == 42
-    assert payload["subscribed_at"] == now.isoformat()
-
-
-@pytest.mark.asyncio
-async def test_inline_fetch_loads_subscribed_at_from_cache_on_restart():
-    """Fresh indicator instance recovers subscribed_at from cache (simulates
-    a producer restart mid-day)."""
-    indicator = NewsConfidenceIndicator(caching=True)
-    earlier = datetime(2026, 4, 29, 9, 31, tzinfo=EST)
-    cached_payload = json.dumps(
-        {
-            "date": "2026-04-29",
-            "value": 50,
-            "subscribed_at": earlier.isoformat(),
-        }
-    )
-    mock_cache = AsyncMock()
-    mock_cache.get = AsyncMock(return_value=cached_payload)
-    mock_cache.save = AsyncMock()
-    ApplicationRegistry.cache = mock_cache
-
-    with patch.object(
-        indicator, "_score_new_headlines_today", new=AsyncMock(return_value=70)
-    ), patch(
-        "fastscanner.services.indicators.lib.news.random.uniform", return_value=0
-    ):
-        await indicator._inline_fetch("AAPL")
-
-    assert indicator._subscribed_at["AAPL"] == earlier
-    saved_value = mock_cache.save.call_args.args[1]
-    assert json.loads(saved_value)["subscribed_at"] == earlier.isoformat()
-
-
-@pytest.mark.asyncio
-async def test_inline_fetch_skips_scoring_after_cutoff():
-    """If cached subscribed_at is older than FETCH_CUTOFF_SECONDS, _inline_fetch
-    returns early without invoking the scoring pipeline or writing to cache."""
-    indicator = NewsConfidenceIndicator(caching=True)
-    # FixedClock is pinned at 2026-04-29 10:30 EST. Cache an at-7:00 EST
-    # subscription (3h 30m earlier — past the 2h cutoff).
-    expired = datetime(2026, 4, 29, 7, 0, tzinfo=EST)
-    cached_payload = json.dumps(
-        {
-            "date": "2026-04-29",
-            "value": 80,
-            "subscribed_at": expired.isoformat(),
-        }
-    )
-    mock_cache = AsyncMock()
-    mock_cache.get = AsyncMock(return_value=cached_payload)
-    mock_cache.save = AsyncMock()
-    score = AsyncMock(return_value=99)
-    ApplicationRegistry.cache = mock_cache
-
-    with patch.object(
-        indicator, "_score_new_headlines_today", new=score
-    ), patch(
-        "fastscanner.services.indicators.lib.news.random.uniform", return_value=0
-    ):
-        await indicator._inline_fetch("AAPL")
-
-    score.assert_not_called()
-    mock_cache.save.assert_not_called()
-    assert indicator._subscribed_at["AAPL"] == expired
-
-
-@pytest.mark.asyncio
-async def test_day_rollover_clears_subscribed_at():
-    """Crossing the per-symbol day boundary in extend_realtime must drop the
-    in-memory subscribed_at so it doesn't survive into the next day."""
-    indicator = NewsConfidenceIndicator(caching=True)
-    mock_cache = AsyncMock()
-    mock_cache.get = AsyncMock(side_effect=KeyError("miss"))
-    mock_cache.save = AsyncMock()
-    ApplicationRegistry.cache = mock_cache
-
-    with patch.object(
-        indicator, "_score_new_headlines_today", new=AsyncMock(return_value=10)
-    ), patch(
-        "fastscanner.services.indicators.lib.news.random.uniform", return_value=0
-    ):
-        await indicator.extend_realtime("AAPL", _make_candle_on_date(2026, 4, 29))
-        # Let the spawned task run so subscribed_at gets recorded.
-        import asyncio
-
-        await asyncio.sleep(0.05)
-        assert "AAPL" in indicator._subscribed_at
-
-        await indicator.extend_realtime("AAPL", _make_candle_on_date(2026, 4, 30))
-
-    assert "AAPL" not in indicator._subscribed_at
-
-
 # --- _score_new_headlines_today ---
 
 
@@ -695,6 +526,50 @@ async def test_source_exception_does_not_break_other_sources():
     ):
         result = await indicator._score_new_headlines_today("XYZ")
     assert result == 72
+
+
+# --- finnhub polling cadence (every other minute) ---
+
+
+@pytest.mark.asyncio
+async def test_finnhub_polled_on_even_minute():
+    """Default fixture pins clock to 10:30 EST (even minute) → finnhub runs."""
+    indicator = NewsConfidenceIndicator()
+    finnhub = AsyncMock(return_value=[])
+    with patch.object(
+        indicator, "_finviz_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=finnhub
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ):
+        await indicator._score_new_headlines_today("XYZ")
+    finnhub.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_finnhub_skipped_on_odd_minute():
+    """Override clock to an odd minute (10:31) → finnhub is not called."""
+    ClockRegistry.set(FixedClock(datetime(2026, 4, 29, 10, 31, tzinfo=EST)))
+    indicator = NewsConfidenceIndicator()
+    finnhub = AsyncMock(return_value=[])
+    with patch.object(
+        indicator, "_finviz_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_finnhub_headlines", new=finnhub
+    ), patch.object(
+        indicator, "_yahoo_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_seeking_alpha_headlines", new=AsyncMock(return_value=[])
+    ), patch.object(
+        indicator, "_marketwatch_headlines", new=AsyncMock(return_value=[])
+    ):
+        await indicator._score_new_headlines_today("XYZ")
+    finnhub.assert_not_called()
 
 
 # --- round-robin truncation (source-fair sampling) ---
